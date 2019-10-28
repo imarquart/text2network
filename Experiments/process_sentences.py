@@ -1,10 +1,13 @@
 import torch
 import numpy as np
 import tables
+from Experiments.get_bert_tensor import get_bert_tensor
 
-from transformers import BertTokenizer
-from transformers import BertForMaskedLM
-from transformers import BertConfig
+#from transformers import BertTokenizer
+#from transformers import BertForMaskedLM
+#from transformers import BertConfig
+
+
 
 filepath = 'data_file.h5'
 # Load models
@@ -30,32 +33,61 @@ text_2 = "Angela Merkel is still chancellor of Germany."
 texts = [text_1, text_2]
 
 
-class Seq_Particle(tables.IsDescription):
-    seq_id = tables.UInt32Col()
-    token_ids = tables.UInt32Col(shape=[1, MAX_SEQ_LENGTH])
-    token_dist = tables.Float32Col(shape=(MAX_SEQ_LENGTH, DICT_SIZE))
-    seq_size=tables.UInt32Col()
 
 
-class Token_Seq_Particle(tables.IsDescription):
-    token_id = tables.UInt32Col()
-    seq_id = tables.UInt32Col()
-    seq_size = tables.UInt32Col()
-    pos_id = tables.UInt32Col()
-    token_ids = tables.UInt32Col(shape=[1, MAX_SEQ_LENGTH])
-    token_dist = tables.Float32Col(shape=(MAX_SEQ_LENGTH, DICT_SIZE))
+def process_sentences(tokenizer, bert, texts, seq_ids, filepath, MAX_SEQ_LENGTH, batch_size):
+    """
+    Extracts probability distributions from texts and saves them in pyTables database
+    in three formats:
 
+    Sequence Data: Tensor for each sequence including distribution for each word.
 
-class Token_Particle(tables.IsDescription):
-    token_id = tables.UInt32Col()
-    seq_id = tables.UInt32Col()
-    pos_id = tables.UInt32Col()
-    seq_size = tables.UInt32Col()
-    own_dist = tables.Float32Col(shape=(1, DICT_SIZE))
-    context_dist = tables.Float32Col(shape=(1, DICT_SIZE))
+    Token-Sequence Data: One entry for each token in each sequence, including all distributions of
+    the sequence (duplication). Allows indexing by token.
 
+    Token Data: One entry for each token in each sequence, but only includes fields for
+    distribution of focal token, and and aggregation (average) of all contextual tokens.
 
-def process_sentences(tokenizer, bert, texts, seq_ids, filepath, batch_size):
+    Parameters
+        tokenizer : BERT tokenizer (pyTorch)
+
+        bert : BERT model
+
+        texts : List of sentences (n sequences of length k_i, where k_i<= MAX_SEQ_LENGTH)
+
+        seq_ids : List of IDs to pass for each sequence
+
+        filepath : Path to HDF5 PyTables file
+
+        MAX_SEQ_LENGTH : maximal length of sequences
+
+        batch_size : Batch size to use for sending texts to BERT (e.g. via GPU)
+
+    Returns
+
+    """
+
+    class Seq_Particle(tables.IsDescription):
+        seq_id = tables.UInt32Col()
+        token_ids = tables.UInt32Col(shape=[1, MAX_SEQ_LENGTH])
+        token_dist = tables.Float32Col(shape=(MAX_SEQ_LENGTH, DICT_SIZE))
+        seq_size = tables.UInt32Col()
+
+    class Token_Seq_Particle(tables.IsDescription):
+        token_id = tables.UInt32Col()
+        seq_id = tables.UInt32Col()
+        seq_size = tables.UInt32Col()
+        pos_id = tables.UInt32Col()
+        token_ids = tables.UInt32Col(shape=[1, MAX_SEQ_LENGTH])
+        token_dist = tables.Float32Col(shape=(MAX_SEQ_LENGTH, DICT_SIZE))
+
+    class Token_Particle(tables.IsDescription):
+        token_id = tables.UInt32Col()
+        seq_id = tables.UInt32Col()
+        pos_id = tables.UInt32Col()
+        seq_size = tables.UInt32Col()
+        own_dist = tables.Float32Col(shape=(1, DICT_SIZE))
+        context_dist = tables.Float32Col(shape=(1, DICT_SIZE))
 
     try:
         data_file = tables.open_file(filepath, mode="a", title="Data File")
@@ -85,8 +117,6 @@ def process_sentences(tokenizer, bert, texts, seq_ids, filepath, batch_size):
     # for batch etc
 
     token_id, batch_size,batch_label,bert_tensor = get_bert_tensor(tokenizer, bert, texts, MAX_SEQ_LENGTH)
-
-
 
     for label_id in np.unique(batch_label):
 

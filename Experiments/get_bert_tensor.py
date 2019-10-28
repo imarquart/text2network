@@ -3,6 +3,30 @@ import numpy as np
 from torch.nn.utils.rnn import pad_sequence
 
 def get_bert_tensor(tokenizer, bert,texts,MAX_SEQ_LENGTH,return_max=False):
+    """
+    Extracts tensors of probability distributions for each word in sentence from BERT.
+    This is done by running BERT separately for each token, masking the focal token.
+
+    Parameters
+        tokenizer : BERT tokenizer (pyTorch)
+
+        bert : BERT model
+
+        texts : List of sentences (n sequences of length k_i, where k_i<= MAX_SEQ_LENGTH)
+
+        MAX_SEQ_LENGTH : maximal length of sequences
+
+        return_max : only returns ID of most likely token
+
+    Returns
+        token_id : List of tokens (length: sum(k_i))
+
+        batch_size : Size of each batch without padding (length: n)
+
+        batch_label : Batch assignment for each token (length: sum(k_i))
+
+        predictions : Tensor of logits for each token (dimension: sum(k_i)*vocab-length)
+    """
     # DONE: Filter out non-needed rows where no masked token exist
     # TODO: Check punctuation
     # TODO: CPU / TPU pushing

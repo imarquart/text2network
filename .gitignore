@@ -132,3 +132,5 @@ dmypy.json
 *.db-wal
 
 models/
+
+data/
