@@ -12,13 +12,13 @@ output_vocab_file='D:/NLP/BERT-NLP/BERT-NLP/models/bert-base-uncased-vocab.txt'
 output_model_file = "D:/NLP/BERT-NLP/BERT-NLP/models/bert-base-uncased-pytorch_model.bin"
 output_config_file = "D:/NLP/BERT-NLP/BERT-NLP/models/bert-base-uncased-config.json"
 
-tokenizer = BertTokenizer.from_pretrained(output_vocab_file)
-config = BertConfig.from_json_file(output_config_file)
-bert = BertForMaskedLM.from_pretrained(output_model_file,config=config)
+#tokenizer = BertTokenizer.from_pretrained(output_vocab_file)
+#config = BertConfig.from_json_file(output_config_file)
+#bert = BertForMaskedLM.from_pretrained(output_model_file,config=config)
 
 # With online access
-#tokenizer = torch.hub.load('huggingface/pytorch-transformers', 'tokenizer','bert-base-uncased')  # Download vocabulary from S3 and cache.
-#bert = torch.hub.load('huggingface/pytorch-transformers', 'modelWithLMHead', 'bert-base-uncased')
+tokenizer = torch.hub.load('huggingface/pytorch-transformers', 'tokenizer','bert-base-uncased')  # Download vocabulary from S3 and cache.
+bert = torch.hub.load('huggingface/pytorch-transformers', 'modelWithLMHead', 'bert-base-uncased')
 
 
 MAX_SEQ_LENGTH = 40
