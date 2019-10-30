@@ -2,6 +2,7 @@ import torch
 import numpy as np
 import tables
 from Experiments.text_dataset import text_dataset
+from Experiments.text_dataset_simple import text_dataset_simple
 from Experiments.text_dataset import text_dataset_collate
 from Experiments.get_bert_tensor import get_bert_tensor
 from torch.utils.data import Dataset, DataLoader
@@ -89,7 +90,8 @@ def process_sentences(tokenizer, bert, text_file, filepath, MAX_SEQ_LENGTH, batc
 
     batch_size=20
 
-    # Initialize text dataset
+
+    #%% Initialize text dataset
     dataset = text_dataset(text_file, tokenizer, MAX_SEQ_LENGTH)
 
     import time
@@ -102,21 +104,7 @@ def process_sentences(tokenizer, bert, text_file, filepath, MAX_SEQ_LENGTH, batc
     dataset.close()
     print("--- %s seconds ---" % (time.time() - start_time))
 
-    # Initialize text dataset
-    dataset = text_dataset(text_file, tokenizer, MAX_SEQ_LENGTH)
-
-    import time
-    start_time = time.time()
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=16, pin_memory=False,
-                            collate_fn=text_dataset_collate)
-
-    for i, batch in enumerate(dataloader):
-        predictions = get_bert_tensor(bert,batch[0],tokenizer.pad_token_id,tokenizer.mask_token_id,return_max=True)
-        #print(tokenizer.convert_ids_to_tokens(predictions.numpy()))
-
-    dataset.close()
-    print("--- %s seconds ---" % (time.time() - start_time))
-
+    # %%
     for label_id in np.unique(batch_label):
 
         #%% Sequence Table
@@ -166,36 +154,3 @@ def process_sentences(tokenizer, bert, text_file, filepath, MAX_SEQ_LENGTH, batc
     data_file.flush()
     data_file.close()
 
-# from transformers import BertTokenizer
-# from transformers import BertForMaskedLM
-# from transformers import BertConfig
-
-filepath = '/home/ingo/PhD/BERT-NLP/data/data_file.h5'
-# Load models
-output_vocab_file = 'D:/NLP/BERT-NLP/BERT-NLP/models/bert-base-uncased-vocab.txt'
-output_model_file = "D:/NLP/BERT-NLP/BERT-NLP/models/bert-base-uncased-pytorch_model.bin"
-output_config_file = "D:/NLP/BERT-NLP/BERT-NLP/models/bert-base-uncased-config.json"
-
-# tokenizer = BertTokenizer.from_pretrained(output_vocab_file)
-# config = BertConfig.from_json_file(output_config_file)
-# bert = BertForMaskedLM.from_pretrained(output_model_file,config=config)
-
-# With online access
-tokenizer = torch.hub.load('huggingface/pytorch-transformers', 'tokenizer',
-                               'bert-base-uncased')  # Download vocabulary from S3 and cache.
-bert = torch.hub.load('huggingface/pytorch-transformers', 'modelWithLMHead', 'bert-base-uncased')
-
-MAX_SEQ_LENGTH = 40
-DICT_SIZE = tokenizer.vocab_size
-
-# Enter sentence without punctuation (uncomment)
-text_1 = "Barack Obama is the president of the United States."
-text_2 = "Angela Merkel is still chancellor of Germany."
-texts = [text_1, text_2]
-
-text_file='/home/ingo/PhD/BERT-NLP/data/texts.h5'
-
-#h5file = tables.open_file("tutorial1.h5", mode="r", title="Test file")
-
-#table = h5file.root.detector.readout
-#test = [x['own_dist'] for x in table.iterrows()]
