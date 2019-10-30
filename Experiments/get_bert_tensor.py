@@ -2,7 +2,7 @@ import torch
 import numpy as np
 from torch.nn.utils.rnn import pad_sequence
 
-def get_bert_tensor(tokenizer, bert,texts,MAX_SEQ_LENGTH,return_max=False):
+def get_bert_tensor(bert,tokens,pad_token_id,mask_token_id,return_max=False):
     """
     Extracts tensors of probability distributions for each word in sentence from BERT.
     This is done by running BERT separately for each token, masking the focal token.
@@ -12,96 +12,58 @@ def get_bert_tensor(tokenizer, bert,texts,MAX_SEQ_LENGTH,return_max=False):
 
         bert : BERT model
 
-        texts : List of sentences (n sequences of length k_i, where k_i<= MAX_SEQ_LENGTH)
+        tokens : tensor of sequences
 
-        MAX_SEQ_LENGTH : maximal length of sequences
+        pad/mask_id : Token id's from tokenizer
 
         return_max : only returns ID of most likely token
 
     Returns
-        token_id : List of tokens (length: sum(k_i))
-
-        batch_size : Size of each batch without padding (length: n)
-
-        batch_label : Batch assignment for each token (length: sum(k_i))
 
         predictions : Tensor of logits for each token (dimension: sum(k_i)*vocab-length)
     """
-    # DONE: Filter out non-needed rows where no masked token exist
-    # TODO: Check punctuation
     # TODO: CPU / TPU pushing
-    # DONE: Return token_id list
 
-    # We use lists of tensors first because we want to pad sequences, at the same time add dimensions
+    # We use lists of tensors first
     list_tokens=[]
     list_segments=[]
     list_labels=[]
     list_eye=[]
-    token_id=[]
-    # Our labels for the batches will stay lists
-    batch_label=[]
-    batch_size=[]
 
-    # First we tokenize each sentence
-    for text in texts:
-        indexed_tokens = tokenizer.encode(text, add_special_tokens=True)
-        inputs = torch.tensor([indexed_tokens], requires_grad=False)
-        inputs =inputs.squeeze(dim=0).squeeze()
-        list_tokens.append(inputs)
-        # Also save list of tokens
-        token_id.append(inputs[1:-1])
-
-    # Use pad_sequence to stack tokens
-    tokens = pad_sequence(list_tokens, batch_first=True,padding_value=tokenizer.pad_token_id)
-    # How long are the resulting sequences?
-    seq_length=tokens.shape[1]
-
-    # Unload token list
-    list_tokens=[]
-
-
+    max_seq_length=tokens.shape[1]
     # Create a batch for each token in sentence
     for idx,text in enumerate(tokens):
 
+        # Check how many non-zero tokens are in this text (including special tokens)
+        seq_length=sum((text != pad_token_id).int()).item()
         # We repeat the input text for each actual word in sentence
         # -2 because we do not run BERT for <CLS> and <SEP>
         inputs  = text.repeat(seq_length- 2, 1)
 
         # We do the same for the segments, which are just zero
-        segments_tensor = torch.zeros(seq_length, dtype=torch.int64)
-        segments_tensor = segments_tensor.repeat(seq_length - 2, 1)
+        segments_tensor = torch.zeros(seq_length-2, max_seq_length, dtype=torch.int64)
 
         # Create the basis version of our labels
         labels_tensor = inputs.clone()
 
         # Create Masking matrix
-        # First, how many tokens to mask initially?
+        # First, how many tokens to mask?
         nr_mask_tokens = seq_length - 2
-        # Create eye matrix
-        eye_matrix = torch.eye(seq_length, dtype=torch.bool)[1:-1, :]
-        # Take out padding tokens
-        eye_matrix[inputs == 0] = 0
-        # Take out <SEP> tokens
-        eye_matrix[inputs == tokenizer.sep_token_id] = 0
-        # Recalculate correct number of masking steps
-        nr_mask_tokens=eye_matrix.int().sum().item()
+        # Create square eye matrix of max_sequence length
+        # But cut both the first token, as well as passing tokens as rows
+        eye_matrix = torch.eye(max_seq_length, dtype=torch.bool)[1:seq_length-1, :]
+
         # We Mask diagonal tokens
-        inputs[eye_matrix] = tokenizer.convert_tokens_to_ids(tokenizer.mask_token)
+        inputs[eye_matrix] = mask_token_id
         # Set all other labels to -1
         labels_tensor[~eye_matrix] = -1
-
-        # Save batch id's and labels
-        batch_idx=np.repeat(idx, nr_mask_tokens)
-        batch_label=np.append(batch_label,batch_idx)
-        batch_size=np.int64(np.append(batch_size,nr_mask_tokens))
 
         # Append lists
         list_tokens.append(inputs)
         list_segments.append(segments_tensor)
         list_labels.append(labels_tensor)
-        list_eye.append(eye_matrix)
+        list_eye.append(eye_matrix.int())
 
-    batch_label=np.int64(batch_label)
 
     tokens = torch.tensor([], requires_grad=False)
     segments = torch.tensor([], requires_grad=False)
@@ -119,7 +81,6 @@ def get_bert_tensor(tokenizer, bert,texts,MAX_SEQ_LENGTH,return_max=False):
     del list_segments
     del list_eye
 
-
     with torch.no_grad():
         loss, predictions = bert(tokens, masked_lm_labels=labels, token_type_ids=segments)
 
@@ -129,9 +90,9 @@ def get_bert_tensor(tokenizer, bert,texts,MAX_SEQ_LENGTH,return_max=False):
     #predictions = softmax(predictions)
 
     # Only return predictions of masked words (gives one per word for each sentence)
-    predictions = predictions[eyes, :]
+    predictions = predictions[eyes.bool(), :]
 
     if return_max==True:
         predictions=torch.argmax(predictions, dim=1)
 
-    return token_id,batch_size,batch_label,predictions
+    return predictions

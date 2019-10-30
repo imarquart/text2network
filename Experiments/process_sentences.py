@@ -1,9 +1,12 @@
 import torch
 import numpy as np
 import tables
+from Experiments.text_dataset import text_dataset
+from Experiments.text_dataset import text_dataset_collate
 from Experiments.get_bert_tensor import get_bert_tensor
+from torch.utils.data import Dataset, DataLoader
 
-def process_sentences(tokenizer, bert, texts, seq_ids, filepath, MAX_SEQ_LENGTH, batch_size):
+def process_sentences(tokenizer, bert, text_file, filepath, MAX_SEQ_LENGTH, batch_size):
     """
     Extracts probability distributions from texts and saves them in pyTables database
     in three formats:
@@ -84,7 +87,35 @@ def process_sentences(tokenizer, bert, texts, seq_ids, filepath, MAX_SEQ_LENGTH,
     # TODO: Parallelize
     # for batch etc
 
-    token_id, batch_size,batch_label,bert_tensor = get_bert_tensor(tokenizer, bert, texts, MAX_SEQ_LENGTH)
+    batch_size=20
+
+    # Initialize text dataset
+    dataset = text_dataset(text_file, tokenizer, MAX_SEQ_LENGTH)
+
+    import time
+    start_time = time.time()
+    for i in range(0, dataset.nitems-batch_size, batch_size):
+        batch = dataset[i,i+batch_size]
+        predictions = get_bert_tensor(bert,batch[0],tokenizer.pad_token_id,tokenizer.mask_token_id,return_max=True)
+        #print(tokenizer.convert_ids_to_tokens(predictions.numpy()))
+
+    dataset.close()
+    print("--- %s seconds ---" % (time.time() - start_time))
+
+    # Initialize text dataset
+    dataset = text_dataset(text_file, tokenizer, MAX_SEQ_LENGTH)
+
+    import time
+    start_time = time.time()
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=16, pin_memory=False,
+                            collate_fn=text_dataset_collate)
+
+    for i, batch in enumerate(dataloader):
+        predictions = get_bert_tensor(bert,batch[0],tokenizer.pad_token_id,tokenizer.mask_token_id,return_max=True)
+        #print(tokenizer.convert_ids_to_tokens(predictions.numpy()))
+
+    dataset.close()
+    print("--- %s seconds ---" % (time.time() - start_time))
 
     for label_id in np.unique(batch_label):
 
@@ -161,6 +192,8 @@ DICT_SIZE = tokenizer.vocab_size
 text_1 = "Barack Obama is the president of the United States."
 text_2 = "Angela Merkel is still chancellor of Germany."
 texts = [text_1, text_2]
+
+text_file='/home/ingo/PhD/BERT-NLP/data/texts.h5'
 
 #h5file = tables.open_file("tutorial1.h5", mode="r", title="Test file")
 

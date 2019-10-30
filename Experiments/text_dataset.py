@@ -6,7 +6,7 @@ from torch.nn.utils.rnn import pad_sequence
 import numbers
 
 #TODO: Comment
-#TODO: Program custom collate function to output other stuff also
+
 class text_dataset(Dataset):
     def __init__(self, data_path, tokenizer=None, fixed_seq_length=None ):
         self.data_path = data_path
