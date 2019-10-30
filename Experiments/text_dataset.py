@@ -1,5 +1,6 @@
 import torch
 import tables
+import numpy as np
 from torch.utils.data import Dataset, DataLoader
 from torch.nn.utils.rnn import pad_sequence
 import numbers
@@ -27,6 +28,15 @@ class text_dataset(Dataset):
     def close(self):
         self.tables.close()
     def __getitem__(self, index):
+        """
+        This function can be queried both with a single index i, and a range or list i:j, or i,j,k...
+
+        It returns a tuple with three elements
+        1. nxlength tensor of padded tokenized sequences of fixed length including special tokens
+        2. list of length of sequences NOT including special tokens
+        3. list of tokens, not including special tokens
+        """
+
         if torch.is_tensor(index):
             index=index.to_list(index)
 
@@ -82,28 +92,38 @@ class text_dataset(Dataset):
             else:
                 item = pad_sequence(list_tokens, batch_first=True, padding_value=self.tokenizer.pad_token_id)
 
+            # Expand index vector to a 1-dim vector indexing each token by sequence-id
+            lengths = ([x.shape[0] for x in token_id])
+            indexvec = torch.repeat_interleave(torch.as_tensor(index), torch.as_tensor(lengths))
+
+            # Stack token-ids into vector of same length
+            token_id = torch.cat([x for x in token_id])
+
             # Here will need custom collate fn
-            #return index,item,token_id
-            return item
+            return item,indexvec,token_id
         else:
             return index,item
 
     def __len__(self):
         return self.nitems
 
+def text_dataset_collate(batch):
+    """
+    This function collates batches of text_dataset, if a batch is a
+    list or tuple of [dataset[i],dataset[j]] and so forth
 
-database='/home/ingo/PhD/BERT-NLP/data/texts.h5'
-tokenizer = torch.hub.load('huggingface/pytorch-transformers', 'tokenizer','bert-base-uncased')  # Download vocabulary from S3 and cache.
+    In particular, this is to be used with the pyTorch dataloader, who does exactly this
+    """
 
-import time
-start_time = time.time()
+    tokens=torch.cat([x[2] for x in batch])
+    indexvec=torch.cat([torch.as_tensor(x[1]) for x in batch])
+    elem = batch[0][0]
+    out = None
+    if torch.utils.data.get_worker_info() is not None:
+        # If we're in a background process, concatenate directly into a
+        # shared memory tensor to avoid an extra copy
+        numel = sum([x.numel() for batch_el in batch for x in batch_el[0]])
+        storage = elem.storage()._new_shared(numel)
+        out = elem.new(storage)
+    return torch.stack([x[0].squeeze() for x in batch],0), indexvec, tokens
 
-dataset=text_dataset('/home/ingo/PhD/BERT-NLP/data/texts.h5',tokenizer,6)
-
-dataloader = DataLoader(dataset, batch_size=200, shuffle=False, num_workers=16,pin_memory=False)
-
-for i, batch in enumerate(dataloader):
-        print(i, batch)
-
-dataset.close()
-print("--- %s seconds ---" % (time.time() - start_time))
