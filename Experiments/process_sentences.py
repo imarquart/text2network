@@ -3,38 +3,6 @@ import numpy as np
 import tables
 from Experiments.get_bert_tensor import get_bert_tensor
 
-#from transformers import BertTokenizer
-#from transformers import BertForMaskedLM
-#from transformers import BertConfig
-
-
-
-filepath = 'data_file.h5'
-# Load models
-output_vocab_file='D:/NLP/BERT-NLP/BERT-NLP/models/bert-base-uncased-vocab.txt'
-output_model_file = "D:/NLP/BERT-NLP/BERT-NLP/models/bert-base-uncased-pytorch_model.bin"
-output_config_file = "D:/NLP/BERT-NLP/BERT-NLP/models/bert-base-uncased-config.json"
-
-#tokenizer = BertTokenizer.from_pretrained(output_vocab_file)
-#config = BertConfig.from_json_file(output_config_file)
-#bert = BertForMaskedLM.from_pretrained(output_model_file,config=config)
-
-# With online access
-tokenizer = torch.hub.load('huggingface/pytorch-transformers', 'tokenizer','bert-base-uncased')  # Download vocabulary from S3 and cache.
-bert = torch.hub.load('huggingface/pytorch-transformers', 'modelWithLMHead', 'bert-base-uncased')
-
-
-MAX_SEQ_LENGTH = 40
-DICT_SIZE = tokenizer.vocab_size
-
-# Enter sentence without punctuation (uncomment)
-text_1 = "Barack Obama is the president of the United States."
-text_2 = "Angela Merkel is still chancellor of Germany."
-texts = [text_1, text_2]
-
-
-
-
 def process_sentences(tokenizer, bert, texts, seq_ids, filepath, MAX_SEQ_LENGTH, batch_size):
     """
     Extracts probability distributions from texts and saves them in pyTables database
@@ -167,7 +135,34 @@ def process_sentences(tokenizer, bert, texts, seq_ids, filepath, MAX_SEQ_LENGTH,
     data_file.flush()
     data_file.close()
 
-    #h5file = tables.open_file("tutorial1.h5", mode="r", title="Test file")
+# from transformers import BertTokenizer
+# from transformers import BertForMaskedLM
+# from transformers import BertConfig
 
-    #table = h5file.root.detector.readout
-    #test = [x['own_dist'] for x in table.iterrows()]
+filepath = '/home/ingo/PhD/BERT-NLP/data/data_file.h5'
+# Load models
+output_vocab_file = 'D:/NLP/BERT-NLP/BERT-NLP/models/bert-base-uncased-vocab.txt'
+output_model_file = "D:/NLP/BERT-NLP/BERT-NLP/models/bert-base-uncased-pytorch_model.bin"
+output_config_file = "D:/NLP/BERT-NLP/BERT-NLP/models/bert-base-uncased-config.json"
+
+# tokenizer = BertTokenizer.from_pretrained(output_vocab_file)
+# config = BertConfig.from_json_file(output_config_file)
+# bert = BertForMaskedLM.from_pretrained(output_model_file,config=config)
+
+# With online access
+tokenizer = torch.hub.load('huggingface/pytorch-transformers', 'tokenizer',
+                               'bert-base-uncased')  # Download vocabulary from S3 and cache.
+bert = torch.hub.load('huggingface/pytorch-transformers', 'modelWithLMHead', 'bert-base-uncased')
+
+MAX_SEQ_LENGTH = 40
+DICT_SIZE = tokenizer.vocab_size
+
+# Enter sentence without punctuation (uncomment)
+text_1 = "Barack Obama is the president of the United States."
+text_2 = "Angela Merkel is still chancellor of Germany."
+texts = [text_1, text_2]
+
+#h5file = tables.open_file("tutorial1.h5", mode="r", title="Test file")
+
+#table = h5file.root.detector.readout
+#test = [x['own_dist'] for x in table.iterrows()]

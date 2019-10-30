@@ -4,13 +4,7 @@ import nltk
 import os, sys, re
 import spacy
 
-files=['/home/ingo/PhD/BERT-NLP/data/w_news_1990.txt']
-database='/home/ingo/PhD/BERT-NLP/data/texts.h5'
-MAX_SEQ_LENGTH=50
-
-
-
-def process_sentences_COCA(files,database,MAX_SEQ_LENGTH,char_mult,file_type="old"):
+def process_sentences_COCA(files,database,MAX_SEQ_LENGTH,char_mult,max_seq=0,file_type="old"):
     """
     Pre-processes files (using spacy) from raw data into a HD5 Table
 
@@ -28,10 +22,17 @@ def process_sentences_COCA(files,database,MAX_SEQ_LENGTH,char_mult,file_type="ol
     Returns
 
     """
+    # TODO: Load Docs as Matrix or parallelize; speed optimization
+    # TODO: Check with other datasets
+    # TODO: Write more general function for other data (low priority)
+
+    # Use spacy to split sentences (model based)
 
     nlp = spacy.load("en_core_web_sm")
 
+    # Define particle for pytable
     class sequence(tables.IsDescription):
+        run_index = tables.UInt32Col()
         seq_id = tables.UInt32Col()
         text_id = tables.UInt32Col()
         text = tables.StringCol(MAX_SEQ_LENGTH*char_mult)
@@ -39,19 +40,30 @@ def process_sentences_COCA(files,database,MAX_SEQ_LENGTH,char_mult,file_type="ol
         source = tables.StringCol(40)
         max_length = tables.UInt32Col()
 
+
+    # Initiate pytable database
     try:
         data_file = tables.open_file(database, mode="a", title="Sequence Data")
     except:
         data_file = tables.open_file(database, mode="w", title="Sequence Data")
 
+
     try:
-        data_table = data_file.root.textdata
+        data_table = data_file.root.textdata.table
+        start_index=data_file.root.textdata.table.nrows-1
+        run_index=start_index
     except:
         group = data_file.create_group("/", 'textdata', 'Text Data')
         data_table = data_file.create_table(group, 'table', sequence, "Sentence Table")
+        start_index = -1
+        run_index=start_index
 
 
+
+    # Main loop over files
     for file_path in files:
+
+        # Derive file name and year
         if file_type=="old":
             file_name=re.split("/",file_path)[-1]
             file_name = re.split(".txt", file_name)[0]
@@ -67,20 +79,29 @@ def process_sentences_COCA(files,database,MAX_SEQ_LENGTH,char_mult,file_type="ol
 
 
         f=open(file_path)
+        # We read line by line
         for raw in f.readlines():
+            # If max is reached, we will stop adding sentences
+            if (run_index-start_index >= max_seq) & (max_seq != 0):
+                break
+
+            # Get rid of line breaks
             raw=raw.replace('\n','')
 
+            # We do not load empty lines
             if len(raw)==0:
                 continue
 
+            # Skip if text id can not be identified
             text_id=re.findall("##\d+\s",raw)
             if len(text_id)==0:
                 continue
 
-
+            # Get text id and text
             text_id = [int(float(i.replace("#", ""))) for i in text_id]
             text = re.split("##\d+\s", raw)[1]
 
+            # Some pre processing
             text=text.replace('<p>','')
             text = text.replace('@', '')
             text = text.replace(" \'", "'")
@@ -94,18 +115,22 @@ def process_sentences_COCA(files,database,MAX_SEQ_LENGTH,char_mult,file_type="ol
             text = " ".join(re.split("\s+", text, flags=re.UNICODE))
             text=nlp(text)
 
-
+            # Use Spacy to iterate over sentences
             for idx,sent in enumerate(text.sents):
+                # Create table row
                 particle=data_table.row
+                # Do not add sentences which are too short
+                if len(sent) < 3:
+                    continue
+                # Increment run index if we actually seek to add row
+                run_index = run_index + 1
+                particle['run_index']=run_index
                 particle['text_id']=text_id[0]
                 particle['seq_id'] = idx
                 particle['source'] = file_source
                 particle['year'] = year
                 particle['max_length'] = MAX_SEQ_LENGTH
 
-                # Do not add sentences which are too short
-                if len(sent) < 3:
-                    continue
 
                 # If the sentence has too many tokens, we cut using Spacy (on tokens)
                 sent=sent[:MAX_SEQ_LENGTH].string
@@ -130,5 +155,16 @@ def process_sentences_COCA(files,database,MAX_SEQ_LENGTH,char_mult,file_type="ol
         data_file.close()
         f.close()
 
+import time
+start_time = time.time()
 
-process_sentences_COCA(files,database,MAX_SEQ_LENGTH,10,file_type="old")
+
+files=['/home/ingo/PhD/BERT-NLP/data/w_news_1990.txt']
+database='/home/ingo/PhD/BERT-NLP/data/texts.h5'
+MAX_SEQ_LENGTH=50
+char_mult=10
+max_seq=100
+
+process_sentences_COCA(files,database,MAX_SEQ_LENGTH,10,max_seq=0,file_type="old")
+
+print("--- %s seconds ---" % (time.time() - start_time))
