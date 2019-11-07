@@ -1,13 +1,15 @@
 import torch
 import numpy as np
 import tables
-from Experiments.text_dataset import text_dataset
-from Experiments.text_dataset_simple import text_dataset_simple
-from Experiments.text_dataset import text_dataset_collate
-from Experiments.get_bert_tensor import get_bert_tensor
+from NLP.Experiments.text_dataset import text_dataset
+from NLP.Experiments.text_dataset_simple import text_dataset_simple
+from NLP.Experiments.text_dataset import text_dataset_collate
+from NLP.Experiments.get_bert_tensor import get_bert_tensor
 from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import BatchSampler, SequentialSampler
 
-def process_sentences(tokenizer, bert, text_file, filepath, MAX_SEQ_LENGTH, batch_size):
+
+def process_sentences(tokenizer, bert, text_file, filepath, MAX_SEQ_LENGTH, DICT_SIZE, batch_size):
     """
     Extracts probability distributions from texts and saves them in pyTables database
     in three formats:
@@ -88,69 +90,18 @@ def process_sentences(tokenizer, bert, text_file, filepath, MAX_SEQ_LENGTH, batc
     # TODO: Parallelize
     # for batch etc
 
-    batch_size=20
+    batch_size = 20
 
-
-    #%% Initialize text dataset
+    # %% Initialize text dataset
     dataset = text_dataset(text_file, tokenizer, MAX_SEQ_LENGTH)
-
-    import time
-    start_time = time.time()
-    for i in range(0, dataset.nitems-batch_size, batch_size):
-        batch = dataset[i,i+batch_size]
-        predictions = get_bert_tensor(bert,batch[0],tokenizer.pad_token_id,tokenizer.mask_token_id,return_max=True)
-        #print(tokenizer.convert_ids_to_tokens(predictions.numpy()))
+    batch_sampler = BatchSampler(SequentialSampler(range(0, dataset.nitems)), batch_size=batch_size, drop_last=False)
+    dataloader=DataLoader(dataset=dataset,batch_size=None, sampler=batch_sampler,num_workers=16)
+    for batch in dataloader:
+        #predictions = get_bert_tensor(bert, batch[0], tokenizer.pad_token_id, tokenizer.mask_token_id, return_max=True)
+        # print(tokenizer.convert_ids_to_tokens(predictions.numpy()))
+        print((batch[0].shape))
 
     dataset.close()
-    print("--- %s seconds ---" % (time.time() - start_time))
-
-    # %%
-    for label_id in np.unique(batch_label):
-
-        #%% Sequence Table
-        # Init new row pointer
-        particle = seq_table.row
-        # Fill general information
-        particle['seq_id'] = label_id
-        particle['seq_size'] = batch_size[label_id]
-
-        # Pad and add sequence of IDs
-        idx=torch.zeros([1,MAX_SEQ_LENGTH],requires_grad=False,dtype=torch.int32)
-        idx[0,:batch_size[label_id]]=token_id[label_id]
-        particle['token_ids'] = idx
-        # Pad and add distributions per token
-        dists=torch.zeros([MAX_SEQ_LENGTH,DICT_SIZE],requires_grad=False)
-        dists[:batch_size[label_id],:]=bert_tensor[batch_label == label_id, :]
-        particle['token_dist'] = dists
-        # Append
-        particle.append()
-
-        #%% Token-Sequence Table
-        for pos,token in enumerate(token_id[label_id]):
-            particle=token_seq_table.row
-            particle['token_id'] = token
-            particle['seq_id'] = label_id
-            particle['seq_size'] = batch_size[label_id]
-            particle['pos_id'] = pos
-            particle['token_ids'] = idx
-            particle['token_dist'] = dists
-            particle.append()
-
-        #%% Token Table
-        context_index = np.zeros([MAX_SEQ_LENGTH], dtype=np.bool)
-        context_index[:batch_size[label_id]] = True
-        for pos,token in enumerate(token_id[label_id]):
-            particle=token_table.row
-            particle['token_id'] = token
-            particle['seq_id'] = label_id
-            particle['seq_size'] = batch_size[label_id]
-            particle['own_dist'] = dists[pos,:].unsqueeze(0)
-            context_index=np.arange(batch_size[label_id])!=pos
-            context_index=np.concatenate([context_index,np.zeros([MAX_SEQ_LENGTH-batch_size[label_id]],dtype=np.bool)])
-            context_dist=dists[context_index,:]
-            particle['context_dist']=(torch.sum(context_dist,dim=0).unsqueeze(0))/batch_size[label_id]
-            particle.append()
-
     data_file.flush()
     data_file.close()
-
+    return(batch)

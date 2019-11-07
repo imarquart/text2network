@@ -1,10 +1,13 @@
-import numpy as np
 import tables
-import nltk
-import os, sys, re
+import re
 import spacy
+import re
 
-def process_sentences_COCA(files,database,MAX_SEQ_LENGTH,char_mult,max_seq=0,file_type="old"):
+import spacy
+import tables
+
+
+def pre_process_sentences_COCA(files,database,MAX_SEQ_LENGTH,char_mult,max_seq=0,file_type="old"):
     """
     Pre-processes files (using spacy) from raw data into a HD5 Table
 
@@ -155,16 +158,3 @@ def process_sentences_COCA(files,database,MAX_SEQ_LENGTH,char_mult,max_seq=0,fil
         data_file.close()
         f.close()
 
-import time
-start_time = time.time()
-
-
-files=['/home/ingo/PhD/BERT-NLP/data/w_news_1990.txt']
-database='/home/ingo/PhD/BERT-NLP/data/texts.h5'
-MAX_SEQ_LENGTH=50
-char_mult=10
-max_seq=100
-
-process_sentences_COCA(files,database,MAX_SEQ_LENGTH,10,max_seq=1000,file_type="old")
-
-print("--- %s seconds ---" % (time.time() - start_time))
