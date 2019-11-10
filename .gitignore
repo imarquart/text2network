@@ -134,3 +134,7 @@ dmypy.json
 models/
 
 data/
+
+.vscode/
+
+Desktop.ini

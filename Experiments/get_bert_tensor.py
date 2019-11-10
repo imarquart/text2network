@@ -2,7 +2,7 @@ import torch
 import numpy as np
 from torch.nn.utils.rnn import pad_sequence
 
-def get_bert_tensor(bert,tokens,pad_token_id,mask_token_id,return_max=False):
+def get_bert_tensor(args, bert,tokens,pad_token_id,mask_token_id,return_max=False):
     """
     Extracts tensors of probability distributions for each word in sentence from BERT.
     This is done by running BERT separately for each token, masking the focal token.
@@ -70,10 +70,11 @@ def get_bert_tensor(bert,tokens,pad_token_id,mask_token_id,return_max=False):
     labels = torch.tensor([], requires_grad=False)
     eyes = torch.tensor([], requires_grad=False)
 
-    tokens = torch.cat(list_tokens)
-    segments=torch.cat(list_segments)
-    labels=torch.cat(list_labels)
-    eyes=torch.cat(list_eye)
+    # Send to GPU
+    tokens = torch.cat(list_tokens).to(args.device)
+    segments=torch.cat(list_segments).to(args.device)
+    labels=torch.cat(list_labels).to(args.device)
+    eyes=torch.cat(list_eye).to(args.device)
 
     # Save some memory insallah
     del list_tokens
