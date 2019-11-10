@@ -1,10 +1,10 @@
 import torch
 import numpy as np
 import tables
-from Experiments.text_dataset import text_dataset
-from Experiments.text_dataset_simple import text_dataset_simple
-from Experiments.text_dataset import text_dataset_collate_batchsample
-from Experiments.get_bert_tensor import get_bert_tensor
+from NLP.Experiments.text_dataset import text_dataset
+from NLP.Experiments.text_dataset_simple import text_dataset_simple
+from NLP.Experiments.text_dataset import text_dataset_collate_batchsample
+from NLP.Experiments.get_bert_tensor import get_bert_tensor
 from torch.utils.data import Dataset, DataLoader
 from pytorch_memlab import MemReporter
 from pytorch_memlab import profile
@@ -12,14 +12,13 @@ from pytorch_memlab import profile
 from torch.utils.data import BatchSampler
 from torch.utils.data import SequentialSampler
 
-database = '/home/ingo/PhD/BERT-NLP/data/texts.h5'
 tokenizer = torch.hub.load('huggingface/pytorch-transformers', 'tokenizer',
                            'bert-base-uncased')  # Download vocabulary from S3 and cache.
 bert = torch.hub.load('huggingface/pytorch-transformers', 'modelWithLMHead', 'bert-base-uncased')
-text_file = '/home/ingo/PhD/BERT-NLP/data/texts.h5'
+text_file = '/home/ingo/PhD/BERT-NLP/NLP/data/texts.h5'
 MAX_SEQ_LENGTH = 40
 
-batches = [1, 2, 5, 25, 50, 100, 200, 500,1000,10000]
+batches = [1,2,10,50, 100]
 
 dataset = text_dataset_simple(text_file, tokenizer, MAX_SEQ_LENGTH)
 import time

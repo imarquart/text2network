@@ -10,7 +10,7 @@ def get_bert_and_tokenizer(modelpath):
         tokenizer = torch.hub.load('huggingface/pytorch-transformers', 'tokenizer',
                                'bert-base-uncased')
         bert = torch.hub.load('huggingface/pytorch-transformers', 'modelWithLMHead', 'bert-base-uncased')
-        if tokenizer is None | bert is None:
+        if tokenizer is None or bert is None:
             raise ImportError
     except:
         try:

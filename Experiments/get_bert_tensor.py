@@ -71,10 +71,15 @@ def get_bert_tensor(args, bert,tokens,pad_token_id,mask_token_id,return_max=Fals
     eyes = torch.tensor([], requires_grad=False)
 
     # Send to GPU
-    tokens = torch.cat(list_tokens).to(args.device)
-    segments=torch.cat(list_segments).to(args.device)
-    labels=torch.cat(list_labels).to(args.device)
-    eyes=torch.cat(list_eye).to(args.device)
+    #tokens = torch.cat(list_tokens).to(args.device)
+    #segments=torch.cat(list_segments).to(args.device)
+    #labels=torch.cat(list_labels).to(args.device)
+    #eyes=torch.cat(list_eye).to(args.device)
+
+    tokens = torch.cat(list_tokens)
+    segments=torch.cat(list_segments)
+    labels=torch.cat(list_labels)
+    eyes=torch.cat(list_eye)
 
     # Save some memory insallah
     del list_tokens

@@ -3,7 +3,7 @@ import numpy as np
 import tables
 from NLP.Experiments.text_dataset import text_dataset
 from NLP.Experiments.text_dataset_simple import text_dataset_simple
-from NLP.Experiments.text_dataset import text_dataset_collate
+from NLP.Experiments.text_dataset import text_dataset_collate_batchsample
 from NLP.Experiments.get_bert_tensor import get_bert_tensor
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data import BatchSampler, SequentialSampler
@@ -86,22 +86,70 @@ def process_sentences(tokenizer, bert, text_file, filepath, MAX_SEQ_LENGTH, DICT
         group = data_file.create_group("/", 'token_data', 'Token Data')
         token_table = data_file.create_table(group, 'table', Token_Particle, "Token Table")
 
-    # TODO: Batching
-    # TODO: Parallelize
-    # for batch etc
-
-    batch_size = 20
-
     # %% Initialize text dataset
     dataset = text_dataset(text_file, tokenizer, MAX_SEQ_LENGTH)
     batch_sampler = BatchSampler(SequentialSampler(range(0, dataset.nitems)), batch_size=batch_size, drop_last=False)
-    dataloader=DataLoader(dataset=dataset,batch_size=None, sampler=batch_sampler,num_workers=16)
-    for batch in dataloader:
-        #predictions = get_bert_tensor(bert, batch[0], tokenizer.pad_token_id, tokenizer.mask_token_id, return_max=True)
-        # print(tokenizer.convert_ids_to_tokens(predictions.numpy()))
-        print((batch[0].shape))
+    dataloader=DataLoader(dataset=dataset,batch_size=None, sampler=batch_sampler,num_workers=16,collate_fn=text_dataset_collate_batchsample)
+    for batch, seq_ids, token_ids in dataloader:
 
-    dataset.close()
+        # Run BERT and get predictions
+        predictions = get_bert_tensor(0, bert, batch, tokenizer.pad_token_id, tokenizer.mask_token_id, return_max=False)
+
+        # %% Sequence Table
+        # Iterate over sequences
+        for sequence_id in np.unique(seq_ids):
+            sequence_mask = seq_ids == sequence_id
+            sequence_size = sum(sequence_mask)
+
+            # Init new row pointer
+            particle = seq_table.row
+            # Fill general information
+            particle['seq_id'] = sequence_id
+            particle['seq_size'] = sequence_size
+
+            # Pad and add sequence of IDs
+            idx = torch.zeros([1, MAX_SEQ_LENGTH], requires_grad=False, dtype=torch.int32)
+            idx[0, :sequence_size] = token_ids[sequence_mask]
+            particle['token_ids'] = idx
+            # Pad and add distributions per token
+            dists = torch.zeros([MAX_SEQ_LENGTH, DICT_SIZE], requires_grad=False)
+            dists[:sequence_size, :] = predictions[sequence_mask, :]
+            particle['token_dist'] = dists
+            # Append
+            particle.append()
+
+            # %% Token Table
+            context_index = np.zeros([MAX_SEQ_LENGTH], dtype=np.bool)
+            context_index[:sequence_size] = True
+            for pos, token in enumerate(token_ids[sequence_mask]):
+                particle = token_table.row
+                particle['token_id'] = token
+                particle['seq_id'] = sequence_id
+                particle['seq_size'] = sequence_size
+                particle['own_dist'] = dists[pos, :].unsqueeze(0)
+                context_index = np.arange(sequence_size) != pos
+                context_index = np.concatenate(
+                    [context_index, np.zeros([MAX_SEQ_LENGTH - sequence_size], dtype=np.bool)])
+                context_dist = dists[context_index, :]
+                particle['context_dist'] = (torch.sum(context_dist, dim=0).unsqueeze(0)) / sequence_size
+                particle.append()
+
+            # %% Token-Sequence Table
+            #for pos, token in enumerate(token_id[label_id]):
+            #    particle = token_seq_table.row
+            #    particle['token_id'] = token
+            #    particle['seq_id'] = label_id
+            #    particle['seq_size'] = batch_size[label_id]
+            #    particle['pos_id'] = pos
+            #    particle['token_ids'] = idx
+            #    particle['token_dist'] = dists
+            #    particle.append()
+
+
+
+
+
     data_file.flush()
+    dataset.close()
     data_file.close()
     return(batch)
