@@ -107,7 +107,7 @@ class text_dataset(Dataset):
     def __len__(self):
         return self.nitems
 
-def text_dataset_collate(batch):
+def text_dataset_collate_randomsample(batch):
     """
     This function collates batches of text_dataset, if a batch is a
     list or tuple of [dataset[i],dataset[j]] and so forth
@@ -127,3 +127,9 @@ def text_dataset_collate(batch):
         out = elem.new(storage)
     return torch.stack([x[0].squeeze() for x in batch],0), indexvec, tokens
 
+def text_dataset_collate_batchsample(batch):
+    """
+    This function collates batches of text_dataset, if a batch is
+    determined by the batch_sampler and just needs to be passed
+    """
+    return batch
