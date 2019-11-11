@@ -7,7 +7,7 @@ from NLP.Experiments.text_dataset import text_dataset_collate_batchsample
 from NLP.Experiments.get_bert_tensor import get_bert_tensor
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data import BatchSampler, SequentialSampler
-
+import tqdm
 
 def process_sentences(tokenizer, bert, text_file, filepath, MAX_SEQ_LENGTH, DICT_SIZE, batch_size):
     """
@@ -41,6 +41,8 @@ def process_sentences(tokenizer, bert, text_file, filepath, MAX_SEQ_LENGTH, DICT
 
     """
 
+    filters = tables.Filters(complevel=9, complib='blosc', fletcher32=False)
+
     class Seq_Particle(tables.IsDescription):
         seq_id = tables.UInt32Col()
         token_ids = tables.UInt32Col(shape=[1, MAX_SEQ_LENGTH])
@@ -66,7 +68,7 @@ def process_sentences(tokenizer, bert, text_file, filepath, MAX_SEQ_LENGTH, DICT
     try:
         data_file = tables.open_file(filepath, mode="a", title="Data File")
     except:
-        data_file = tables.open_file(filepath, mode="w", title="Data File")
+        data_file = tables.open_file(filepath, mode="w", title="Data File", filters=filters)
 
     try:
         seq_table = data_file.root.seq_data.table
@@ -84,18 +86,24 @@ def process_sentences(tokenizer, bert, text_file, filepath, MAX_SEQ_LENGTH, DICT
         token_table = data_file.root.token_data.table
     except:
         group = data_file.create_group("/", 'token_data', 'Token Data')
-        token_table = data_file.create_table(group, 'table', Token_Particle, "Token Table")
+        token_table = data_file.create_table(group, 'table', Token_Particle, "Token Table", filters=filters)
+
+    # Push BERT to GPU
+    torch.cuda.empty_cache()
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    bert.to(device)
 
     # %% Initialize text dataset
     dataset = text_dataset(text_file, tokenizer, MAX_SEQ_LENGTH)
     batch_sampler = BatchSampler(SequentialSampler(range(0, dataset.nitems)), batch_size=batch_size, drop_last=False)
-    dataloader=DataLoader(dataset=dataset,batch_size=None, sampler=batch_sampler,num_workers=16,collate_fn=text_dataset_collate_batchsample)
-    for batch, seq_ids, token_ids in dataloader:
-
+    dataloader=DataLoader(dataset=dataset,batch_size=None, sampler=batch_sampler,num_workers=16,collate_fn=text_dataset_collate_batchsample, pin_memory=False)
+    for batch, seq_ids, token_ids in tqdm.tqdm(dataloader, desc="Iteration"):
+        # This seems to allow slightly higher batch sizes on my GPU
+        torch.cuda.empty_cache()
         # Run BERT and get predictions
-        predictions = get_bert_tensor(0, bert, batch, tokenizer.pad_token_id, tokenizer.mask_token_id, return_max=False)
-
+        predictions = get_bert_tensor(0, bert, batch, tokenizer.pad_token_id, tokenizer.mask_token_id, device,return_max=False)
         # %% Sequence Table
+        # TODO: Needs to use sparse matrix bc. file-size too large otherwise
         # Iterate over sequences
         for sequence_id in np.unique(seq_ids):
             sequence_mask = seq_ids == sequence_id
@@ -116,7 +124,7 @@ def process_sentences(tokenizer, bert, text_file, filepath, MAX_SEQ_LENGTH, DICT
             dists[:sequence_size, :] = predictions[sequence_mask, :]
             particle['token_dist'] = dists
             # Append
-            particle.append()
+            #particle.append()
 
             # %% Token Table
             context_index = np.zeros([MAX_SEQ_LENGTH], dtype=np.bool)
@@ -124,6 +132,7 @@ def process_sentences(tokenizer, bert, text_file, filepath, MAX_SEQ_LENGTH, DICT
             for pos, token in enumerate(token_ids[sequence_mask]):
                 particle = token_table.row
                 particle['token_id'] = token
+                particle['pos_id'] = pos
                 particle['seq_id'] = sequence_id
                 particle['seq_size'] = sequence_size
                 particle['own_dist'] = dists[pos, :].unsqueeze(0)

@@ -2,7 +2,7 @@ import torch
 import numpy as np
 from torch.nn.utils.rnn import pad_sequence
 
-def get_bert_tensor(args, bert,tokens,pad_token_id,mask_token_id,return_max=False):
+def get_bert_tensor(args, bert,tokens,pad_token_id,mask_token_id,device=torch.device("cpu"),return_max=False):
     """
     Extracts tensors of probability distributions for each word in sentence from BERT.
     This is done by running BERT separately for each token, masking the focal token.
@@ -23,7 +23,6 @@ def get_bert_tensor(args, bert,tokens,pad_token_id,mask_token_id,return_max=Fals
         predictions : Tensor of logits for each token (dimension: sum(k_i)*vocab-length)
     """
     # TODO: CPU / TPU pushing
-
     # We use lists of tensors first
     list_tokens=[]
     list_segments=[]
@@ -71,15 +70,10 @@ def get_bert_tensor(args, bert,tokens,pad_token_id,mask_token_id,return_max=Fals
     eyes = torch.tensor([], requires_grad=False)
 
     # Send to GPU
-    #tokens = torch.cat(list_tokens).to(args.device)
-    #segments=torch.cat(list_segments).to(args.device)
-    #labels=torch.cat(list_labels).to(args.device)
-    #eyes=torch.cat(list_eye).to(args.device)
-
-    tokens = torch.cat(list_tokens)
-    segments=torch.cat(list_segments)
-    labels=torch.cat(list_labels)
-    eyes=torch.cat(list_eye)
+    tokens = torch.cat(list_tokens).to(device)
+    segments=torch.cat(list_segments).to(device)
+    labels=torch.cat(list_labels).to(device)
+    eyes=torch.cat(list_eye).to(device)
 
     # Save some memory insallah
     del list_tokens
@@ -90,6 +84,9 @@ def get_bert_tensor(args, bert,tokens,pad_token_id,mask_token_id,return_max=Fals
     with torch.no_grad():
         loss, predictions = bert(tokens, masked_lm_labels=labels, token_type_ids=segments)
 
+    del tokens
+    del labels
+    del segments
     # Apply softmax to graph the distributions
     # WILL DO THIS LATER BC OF LINEARITY
     #softmax = torch.nn.Softmax(dim=2)
@@ -102,3 +99,4 @@ def get_bert_tensor(args, bert,tokens,pad_token_id,mask_token_id,return_max=Fals
         predictions=torch.argmax(predictions, dim=1)
 
     return predictions
+    #return predictions.to(torch.device('cpu'))
