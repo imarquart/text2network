@@ -98,7 +98,7 @@ def process_sentences(tokenizer, bert, text_file, filepath, MAX_SEQ_LENGTH, DICT
     dataloader=DataLoader(dataset=dataset,batch_size=None, sampler=batch_sampler,num_workers=16,collate_fn=text_dataset_collate_batchsample, pin_memory=False)
     for batch, seq_ids, token_ids in tqdm.tqdm(dataloader, desc="Iteration"):
         # This seems to allow slightly higher batch sizes on my GPU
-        torch.cuda.empty_cache()
+        #torch.cuda.empty_cache()
         # Run BERT and get predictions
         predictions = get_bert_tensor(0, bert, batch, tokenizer.pad_token_id, tokenizer.mask_token_id, device,return_max=False)
         # %% Sequence Table
@@ -142,7 +142,7 @@ def process_sentences(tokenizer, bert, text_file, filepath, MAX_SEQ_LENGTH, DICT
                 particle['context_dist'] = (torch.sum(context_dist, dim=0).unsqueeze(0)) / sequence_size
                 particle.append()
 
-        del predictions
+        #del predictions
             # %% Token-Sequence Table
             #for pos, token in enumerate(token_id[label_id]):
             #    particle = token_seq_table.row
