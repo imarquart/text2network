@@ -98,5 +98,5 @@ def get_bert_tensor(args, bert,tokens,pad_token_id,mask_token_id,device=torch.de
     if return_max==True:
         predictions=torch.argmax(predictions, dim=1)
 
-    return predictions
-    #return predictions.to(torch.device('cpu'))
+    #return predictions
+    return predictions.to(torch.device('cpu'))
