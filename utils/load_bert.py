@@ -9,7 +9,7 @@ def get_bert_and_tokenizer(modelpath):
     try:
         tokenizer = torch.hub.load('huggingface/pytorch-transformers', 'tokenizer',
                                'bert-base-uncased')
-        bert = torch.hub.load('huggingface/pytorch-transformers', 'modelWithLMHead', 'bert-base-uncased')
+        bert = torch.hub.load('huggingface/pytorch-transformers', 'modelWithLMHead', 'bert-base-uncased',output_attentions=True)
         if tokenizer is None or bert is None:
             raise ImportError
     except:
@@ -21,6 +21,7 @@ def get_bert_and_tokenizer(modelpath):
 
             tokenizer = BertTokenizer.from_pretrained(output_vocab_file)
             config = BertConfig.from_json_file(output_config_file)
+            config.output_attentions = True
             bert = BertForMaskedLM.from_pretrained(output_model_file,config=config)
         except:
             raise ImportError

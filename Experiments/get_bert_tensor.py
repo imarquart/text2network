@@ -82,7 +82,7 @@ def get_bert_tensor(args, bert,tokens,pad_token_id,mask_token_id,device=torch.de
     del list_eye
 
     with torch.no_grad():
-        loss, predictions = bert(tokens, masked_lm_labels=labels, token_type_ids=segments)
+        loss, predictions, attn= bert(tokens, masked_lm_labels=labels, token_type_ids=segments)
 
     del tokens
     del labels
@@ -98,5 +98,12 @@ def get_bert_tensor(args, bert,tokens,pad_token_id,mask_token_id,device=torch.de
     if return_max==True:
         predictions=torch.argmax(predictions, dim=1)
 
-    #return predictions
-    return predictions.to(torch.device('cpu'))
+    # Operate on attention
+    attn=torch.stack(attn)
+    # Max over layers and attention heads
+    attn,_ =torch.max(attn,dim=0)
+    attn,_ = torch.max(attn, dim=1)
+    # We are left with a one matrix for each batch size
+    attn=attn[eyes.bool(),:]
+    #returns
+    return predictions.to(torch.device('cpu')), attn.cpu()
