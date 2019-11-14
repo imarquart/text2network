@@ -1,3 +1,5 @@
+# TODO: Commment
+
 from sklearn.cluster import SpectralClustering
 import torch
 import numpy as np
@@ -125,6 +127,6 @@ def create_network(database,tokenizer,start_token,nr_clusters):
         graphs[i].add_weighted_edges_from(get_weighted_edgelist(token,replacement))
 
     # Now parallel loop over all nodes
-    ....
+    #....
 
 

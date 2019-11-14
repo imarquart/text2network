@@ -1,26 +1,19 @@
 import torch
-import numpy as np
-from torch.nn.utils.rnn import pad_sequence
 
 def get_bert_tensor(args, bert,tokens,pad_token_id,mask_token_id,device=torch.device("cpu"),return_max=False):
     """
     Extracts tensors of probability distributions for each word in sentence from BERT.
     This is done by running BERT separately for each token, masking the focal token.
 
-    Parameters
-        tokenizer : BERT tokenizer (pyTorch)
-
-        bert : BERT model
-
-        tokens : tensor of sequences
-
-        pad/mask_id : Token id's from tokenizer
-
-        return_max : only returns ID of most likely token
-
-    Returns
-
-        predictions : Tensor of logits for each token (dimension: sum(k_i)*vocab-length)
+    :param args: future: config
+    :param bert: BERT model
+    :param tokens: tensor of sequences
+    :param pad_token_id: Token id's from tokenizer
+    :param mask_token_id: Token id's from tokenizer
+    :param device: CPU or CUDA device
+    :param return_max: only returns ID of most likely token
+    :return: predictions: Tensor of logits for each token (dimension: sum(k_i)*vocab-length)
+    :return: attn: Attention weights for each token
     """
     # TODO: CPU / TPU pushing
     # We use lists of tensors first
@@ -81,16 +74,13 @@ def get_bert_tensor(args, bert,tokens,pad_token_id,mask_token_id,device=torch.de
     del list_segments
     del list_eye
 
+    # Get predictions
     with torch.no_grad():
         loss, predictions, attn= bert(tokens, masked_lm_labels=labels, token_type_ids=segments)
 
     del tokens
     del labels
     del segments
-    # Apply softmax to graph the distributions
-    # WILL DO THIS LATER BC OF LINEARITY
-    #softmax = torch.nn.Softmax(dim=2)
-    #predictions = softmax(predictions)
 
     # Only return predictions of masked words (gives one per word for each sentence)
     predictions = predictions[eyes.bool(), :]
@@ -105,5 +95,4 @@ def get_bert_tensor(args, bert,tokens,pad_token_id,mask_token_id,device=torch.de
     attn,_ = torch.max(attn, dim=1)
     # We are left with a one matrix for each batch size
     attn=attn[eyes.bool(),:]
-    #returns
     return predictions.to(torch.device('cpu')), attn.cpu()
