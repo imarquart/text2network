@@ -14,6 +14,12 @@ from numpy import inf
 from sklearn.cluster import KMeans
 
 def create_stopword_list(tokenizer):
+    """
+    Return a list of tokenized tokens for words which should be removed from the data set
+
+    :param tokenizer: BERT tokenizer
+    :return: Numerical list of tokens to take out of sample 
+    """
     alphabet = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u',
                 'v', 'w', 'x', 'y', 'z']
     alphabet_ids = tokenizer.convert_tokens_to_ids(alphabet)
@@ -43,11 +49,28 @@ def create_stopword_list(tokenizer):
     delwords = np.union1d(delwords, numbers_ids)
     return delwords
 
-def get_weighted_edgelist(token,x):
-    # Get the most pertinent words
-    neighbors = np.argsort(-x)[:25]
-    weights = x[neighbors]
+def get_weighted_edgelist(token,x,cutoff_number=25,cutoff_probability=0):
+    """
+    Sort probability distribution to get the most likely neighbor nodes.
+    Return a networksx weighted edge list for a given focal token as node.
 
+    :param token: Numerical, token which to add
+    :param x: Probability distribution
+    :param cutoff_number: Number of neighbor token to consider. Not used if 0.
+    :param cutoff_probability: Lowest probability to consider. Not used if 0.
+    :return: List of tuples compatible with networkx
+    """
+    # Get the most pertinent words
+    if cutoff_number > 0:
+        neighbors = np.argsort(-x)[:25]
+    else:
+        neighbors = np.argsort(-x)[:]
+
+    if cutoff_probability >0:
+        # TODO
+        cutoff_probability=0
+    
+    weights = x[neighbors]
     #edgelist = [(token, x) for x in neighbors]
     return [(token, x[0], x[1]) for x in list(zip(neighbors, weights))]
 
@@ -127,6 +150,42 @@ def create_network(database,tokenizer,start_token,nr_clusters):
         graphs[i].add_weighted_edges_from(get_weighted_edgelist(token,replacement))
 
     # Now parallel loop over all nodes
-    #....
+    # TODO: Parallel
+
+    for idx, token in enumerate(nodes):
+        query = "".join(['token_id==', str(token)])
+        rows = token_table.read_where(query)
+        nr_rows = len(rows)
+        if nr_rows == 0:
+            raise AssertionError("Database error: Token information missing")
+
+        # Create context distributions
+        context_dists=np.stack([x[0] for x in rows],axis=0).squeeze()
+        own_dists=np.stack([x[1] for x in rows],axis=0).squeeze()
+       
+        if nr_rows == 1:
+            context_dists=np.reshape(context_dists, (-1, context_dists.shape[0]))
+            own_dists=np.reshape(own_dists, (-1, own_dists.shape[0]))
+
+        context_dists[:, token] = np.min(context_dists)
+        context_dists[:, delwords] = np.min(context_dists)
+        own_dists[:, token] = np.min(own_dists)
+        own_dists[:, delwords] = np.min(own_dists)
+
+        context_dists = softmax(context_dists)
+        own_dists = softmax(own_dists)
+
+        # Predict to label
+        results=spcluster.predict(context_dists)
+        for i in range(nr_clusters):
+            if len(results.label_) >0:
+                replacement = np.sum(own_dists[spcluster.labels_==i,:],axis=0)
+                context=np.sum(own_dists[spcluster.labels_==i,:],axis=0)
+                replacement=simple_norm(replacement)
+                context=simple_norm(context)
+                graphs[i].add_weighted_edges_from(get_weighted_edgelist(token,replacement))
+
+
+
 
 
