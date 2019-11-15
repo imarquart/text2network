@@ -1,10 +1,7 @@
 # TODO: Check Comments
 
-import tables
-import re
-import spacy
-import re
 
+import re
 import spacy
 import tables
 
@@ -13,19 +10,13 @@ def pre_process_sentences_COCA(files,database,MAX_SEQ_LENGTH,char_mult,max_seq=0
     """
     Pre-processes files (using spacy) from raw data into a HD5 Table
 
-    Parameters
-        files : list of raw text files
-
-        database : HDF5 file to use with pyTables
-
-        MAX_SEQ_LENGTH: Maximal length of sequence in token
-
-        char_mult: Multiplier for MAX_SEQ_LENGTH for array size
-
-        file_type : "old" / "new" file format
-
-    Returns
-
+    :param files: list of raw text files from COCA
+    :param database: HDF5 file to use with pyTables
+    :param MAX_SEQ_LENGTH: Maximal length of sequence in token
+    :param char_mult: Multiplier for MAX_SEQ_LENGTH for array size - average token length
+    :param max_seq: How many sequences to process maximally from data
+    :param file_type: old / new COCA format
+    :return: none
     """
     # TODO: Load Docs as Matrix or parallelize; speed optimization
     # TODO: Check with other datasets

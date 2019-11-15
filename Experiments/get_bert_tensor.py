@@ -12,10 +12,9 @@ def get_bert_tensor(args, bert,tokens,pad_token_id,mask_token_id,device=torch.de
     :param mask_token_id: Token id's from tokenizer
     :param device: CPU or CUDA device
     :param return_max: only returns ID of most likely token
-    :return: predictions: Tensor of logits for each token (dimension: sum(k_i)*vocab-length)
-    :return: attn: Attention weights for each token
+    :return: predictions: Tensor of logits for each token (dimension: sum(k_i)*vocab-length); attn: Attention weights for each token
     """
-    # TODO: CPU / TPU pushing
+
     # We use lists of tensors first
     list_tokens=[]
     list_segments=[]

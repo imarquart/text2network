@@ -21,25 +21,16 @@ def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_
     the sequence (duplication). Allows indexing by token.
 
     Token Data: One entry for each token in each sequence, but only includes fields for
-    distribution of focal token, and and aggregation (average) of all contextual tokens.
+    distribution of focal token, and and aggregation (average weighted by attention) of all contextual tokens.
 
-    Parameters
-        tokenizer : BERT tokenizer (pyTorch)
-
-        bert : BERT model
-
-        texts : List of sentences (n sequences of length k_i, where k_i<= MAX_SEQ_LENGTH)
-
-        seq_ids : List of IDs to pass for each sequence
-
-        filepath : Path to HDF5 PyTables file
-
-        MAX_SEQ_LENGTH : maximal length of sequences
-
-        batch_size : Batch size to use for sending texts to BERT (e.g. via GPU)
-
-    Returns
-
+    :param tokenizer: BERT tokenizer (pyTorch)
+    :param bert: BERT model
+    :param text_db: HDF5 File of processes sentences, string of tokens, ending with punctuation
+    :param tensor_db: HDF5 File to save processed tensors
+    :param MAX_SEQ_LENGTH:  maximal length of sequences
+    :param DICT_SIZE: tokenizer dict size
+    :param batch_size: batch size to send to BERT
+    :return: None
     """
 
     filters = tables.Filters(complevel=9, complib='blosc', fletcher32=False)

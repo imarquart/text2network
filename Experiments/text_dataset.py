@@ -114,7 +114,7 @@ def text_dataset_collate_randomsample(batch):
     This function collates batches of text_dataset, if a batch is a
     list or tuple of [dataset[i],dataset[j]] and so forth
 
-    In particular, this is to be used with the pyTorch dataloader, who does exactly this
+    In particular, this is to be used with the pyTorch RANDOM dataloader, who does exactly this
     """
 
     tokens=torch.cat([x[2] for x in batch])
