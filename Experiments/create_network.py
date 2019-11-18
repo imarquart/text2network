@@ -12,6 +12,7 @@ from sklearn.preprocessing import normalize
 import matplotlib.pyplot as plt
 from numpy import inf
 from sklearn.cluster import KMeans
+import hdbscan
 
 def create_stopword_list(tokenizer):
     """
@@ -49,7 +50,7 @@ def create_stopword_list(tokenizer):
     delwords = np.union1d(delwords, numbers_ids)
     return delwords
 
-def get_weighted_edgelist(token,x,cutoff_number=25,cutoff_probability=0):
+def get_weighted_edgelist(token,x,cutoff_number=5,cutoff_probability=0):
     """
     Sort probability distribution to get the most likely neighbor nodes.
     Return a networksx weighted edge list for a given focal token as node.
@@ -62,7 +63,7 @@ def get_weighted_edgelist(token,x,cutoff_number=25,cutoff_probability=0):
     """
     # Get the most pertinent words
     if cutoff_number > 0:
-        neighbors = np.argsort(-x)[:25]
+        neighbors = np.argsort(-x)[:cutoff_number]
     else:
         neighbors = np.argsort(-x)[:]
 
@@ -90,12 +91,10 @@ def create_network(database,tokenizer,start_token,nr_clusters):
     # Open database connection, and table
     try:
         data_file = tables.open_file(database, mode="r", title="Data File")
-    except:
-        print("ERROR")
-    try:
         token_table = data_file.root.token_data.table
     except:
-        print("ERROR")
+        raise FileNotFoundError("Could not read token table from database.")
+
 
     # Get all unique tokens in database
     nodes = np.unique(token_table.col('token_id'))
@@ -106,6 +105,7 @@ def create_network(database,tokenizer,start_token,nr_clusters):
 
 
     # Now we will situate the contexts of the start token
+    start_token=tokenizer.convert_tokens_to_ids(start_token)
     token=start_token
     query = "".join(['token_id==', str(token)])
     rows = token_table.read_where(query)
@@ -132,19 +132,26 @@ def create_network(database,tokenizer,start_token,nr_clusters):
     # Cluster according the context distributions
     nr_clusters=min(nr_clusters,nr_rows)
     spcluster=SpectralClustering(n_clusters=nr_clusters,assign_labels = "discretize",random_state = 0).fit(context_dists)
-
     # In case some cluster is empty
     nr_clusters = len(np.unique(spcluster.labels_))
+
+
+    # HDBSCAN Clusterer
+    clusterer = hdbscan.HDBSCAN(min_cluster_size=2, prediction_data=True).fit(context_dists)
+    nr_clusters = len(np.unique(clusterer.labels_))
+
+
+
 
     # Create di-Graphs to store network
     # Each cluster is stored separately
     graphs=[nx.DiGraph() for i in range(nr_clusters)]
     # Add all potential tokens
-    for g in graphs: g.add_nodes_from(range(1, tokenizer.vocab_size))
+    for g in graphs: g.add_nodes_from(range(0, tokenizer.vocab_size))
 
     for i in range(nr_clusters):
-        replacement = np.sum(own_dists[spcluster.labels_==i,:],axis=0)
-        context=np.sum(own_dists[spcluster.labels_==i,:],axis=0)
+        replacement = np.sum(own_dists[clusterer.labels_==i-1,:],axis=0)
+        context=np.sum(own_dists[clusterer.labels_==i-1,:],axis=0)
         replacement=simple_norm(replacement)
         context=simple_norm(context)
         graphs[i].add_weighted_edges_from(get_weighted_edgelist(token,replacement))
@@ -152,7 +159,7 @@ def create_network(database,tokenizer,start_token,nr_clusters):
     # Now parallel loop over all nodes
     # TODO: Parallel
 
-    for idx, token in enumerate(nodes):
+    for idx, token in tqdm(enumerate(nodes)):
         query = "".join(['token_id==', str(token)])
         rows = token_table.read_where(query)
         nr_rows = len(rows)
@@ -176,11 +183,12 @@ def create_network(database,tokenizer,start_token,nr_clusters):
         own_dists = softmax(own_dists)
 
         # Predict to label
-        results=spcluster.predict(context_dists)
+        labels, strengths = hdbscan.approximate_predict(clusterer, context_dists)
+
         for i in range(nr_clusters):
-            if len(results.label_) >0:
-                replacement = np.sum(own_dists[spcluster.labels_==i,:],axis=0)
-                context=np.sum(own_dists[spcluster.labels_==i,:],axis=0)
+            if len(labels[labels==i-1]) >0:
+                replacement = np.sum(own_dists[labels==i-1,:],axis=0)
+                context=np.sum(own_dists[labels==i-1,:],axis=0)
                 replacement=simple_norm(replacement)
                 context=simple_norm(context)
                 graphs[i].add_weighted_edges_from(get_weighted_edgelist(token,replacement))
@@ -189,3 +197,4 @@ def create_network(database,tokenizer,start_token,nr_clusters):
 
 
 
+    return graphs
