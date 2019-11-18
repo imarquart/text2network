@@ -1,8 +1,8 @@
 
 import os
 import time
-from NLP.Experiments.process_sentences import process_sentences
-from NLP.utils.load_bert import get_bert_and_tokenizer
+from Experiments.process_sentences import process_sentences
+from utils.load_bert import get_bert_and_tokenizer
 #os.chdir('/home/ingo/PhD/BERT-NLP/BERTNLP')
 start_time = time.time()
 cwd= os.getcwd()

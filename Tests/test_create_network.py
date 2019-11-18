@@ -2,8 +2,8 @@
 import os
 import time
 import networkx as nx
-from NLP.Experiments.create_network import create_network
-from NLP.utils.load_bert import get_bert_and_tokenizer
+from Experiments.create_network import create_network
+from utils.load_bert import get_bert_and_tokenizer
 
 start_time = time.time()
 cwd= os.getcwd()
