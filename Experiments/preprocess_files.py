@@ -2,7 +2,8 @@
 
 
 import re
-import spacy
+#import spacy
+import nltk
 import tables
 
 
@@ -24,7 +25,7 @@ def pre_process_sentences_COCA(files,database,MAX_SEQ_LENGTH,char_mult,max_seq=0
 
     # Use spacy to split sentences (model based)
 
-    nlp = spacy.load("en_core_web_sm")
+    #nlp = spacy.load("en_core_web_sm")
 
     # Define particle for pytable
     class sequence(tables.IsDescription):
@@ -109,10 +110,9 @@ def pre_process_sentences_COCA(files,database,MAX_SEQ_LENGTH,char_mult,max_seq=0
             for k in killchars: text=str.replace(text,k,'')
             text = text.strip()
             text = " ".join(re.split("\s+", text, flags=re.UNICODE))
-            text=nlp(text)
 
             # Use Spacy to iterate over sentences
-            for idx,sent in enumerate(text.sents):
+            for idx,sent in enumerate(nltk.sent_tokenize(text)):
                 # Create table row
                 particle=data_table.row
                 # Do not add sentences which are too short
@@ -129,7 +129,8 @@ def pre_process_sentences_COCA(files,database,MAX_SEQ_LENGTH,char_mult,max_seq=0
 
 
                 # If the sentence has too many tokens, we cut using Spacy (on tokens)
-                sent=sent[:MAX_SEQ_LENGTH].string
+                sent(nltk.word_tokenize)
+                sent=sent[:MAX_SEQ_LENGTH]
                 # Delete white space
                 sent=sent.strip()
 

@@ -3,9 +3,9 @@
 import torch
 import numpy as np
 import tables
-from Experiments.text_dataset import text_dataset
-from Experiments.text_dataset import text_dataset_collate_batchsample
-from Experiments.get_bert_tensor import get_bert_tensor
+from NLP.Experiments.text_dataset import text_dataset
+from NLP.Experiments.text_dataset import text_dataset_collate_batchsample
+from NLP.Experiments.get_bert_tensor import get_bert_tensor
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data import BatchSampler, SequentialSampler
 import tqdm
