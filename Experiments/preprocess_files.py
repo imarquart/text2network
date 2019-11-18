@@ -112,6 +112,7 @@ def pre_process_sentences_COCA(files,database,MAX_SEQ_LENGTH,char_mult,max_seq=0
             text = " ".join(re.split("\s+", text, flags=re.UNICODE))
 
             # Use Spacy to iterate over sentences
+            # Note: We could probably do without NLTK here and use just split
             for idx,sent in enumerate(nltk.sent_tokenize(text)):
                 # Create table row
                 particle=data_table.row
@@ -128,11 +129,18 @@ def pre_process_sentences_COCA(files,database,MAX_SEQ_LENGTH,char_mult,max_seq=0
                 particle['max_length'] = MAX_SEQ_LENGTH
 
 
-                # If the sentence has too many tokens, we cut using Spacy (on tokens)
-                sent(nltk.word_tokenize)
+                # If the sentence has too many tokens, we cut using nltk tokenizer
+                #sent=nltk.word_tokenize(sent)
+
+                # Actually, let's use python split for now
+                sent=sent.split()
+                # Cut max word amounts
                 sent=sent[:MAX_SEQ_LENGTH]
-                # Delete white space
-                sent=sent.strip()
+                # Re-join
+                sent=' '.join(sent)
+
+                # Detokenize again, since we will be using BERT to tokenize
+                #sent=TreebankWordDetokenizer().detokenize(sent)
 
                 # Our array has a maximum size limit
                 # if the string is to long, we want to cut only complete words
