@@ -85,8 +85,15 @@ def simple_norm(x):
     return x/np.sum(x,axis=-1)
 
 def create_network(database,tokenizer,start_token,nr_clusters):
+    # Open database connection, and table
+    try:
+        data_file = tables.open_file(database, mode="a", title="Data File")
+        token_table = data_file.root.token_data.table
+    except:
+        raise FileNotFoundError("Could not read token table from database.")
 
 
+    data_file.close()
     # Open database connection, and table
     try:
         data_file = tables.open_file(database, mode="r", title="Data File")
@@ -94,6 +101,9 @@ def create_network(database,tokenizer,start_token,nr_clusters):
     except:
         raise FileNotFoundError("Could not read token table from database.")
 
+
+
+    # Creat index?
 
     # Get all unique tokens in database
     nodes = np.unique(token_table.col('token_id'))
@@ -130,9 +140,9 @@ def create_network(database,tokenizer,start_token,nr_clusters):
 
     # Cluster according the context distributions
     nr_clusters=min(nr_clusters,nr_rows)
-    spcluster=SpectralClustering(n_clusters=nr_clusters,assign_labels = "discretize",random_state = 0).fit(context_dists)
+    #spcluster=SpectralClustering(n_clusters=nr_clusters,assign_labels = "discretize",random_state = 0).fit(context_dists)
     # In case some cluster is empty
-    nr_clusters = len(np.unique(spcluster.labels_))
+    #nr_clusters = len(np.unique(spcluster.labels_))
 
 
     # HDBSCAN Clusterer
@@ -157,6 +167,7 @@ def create_network(database,tokenizer,start_token,nr_clusters):
 
     # Now parallel loop over all nodes
     # TODO: Parallel
+    # TODO: Batch the DB request (at least)
 
     for idx, token in tqdm(enumerate(nodes)):
         query = "".join(['token_id==', str(token)])
@@ -191,6 +202,9 @@ def create_network(database,tokenizer,start_token,nr_clusters):
                 replacement=simple_norm(replacement)
                 context=simple_norm(context)
                 graphs[i].add_weighted_edges_from(get_weighted_edgelist(token,replacement))
+
+        #if idx>10:
+        #    break
 
 
 

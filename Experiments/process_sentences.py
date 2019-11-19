@@ -168,5 +168,8 @@ def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_
 
 
     data_file.flush()
+
+    token_table.cols.token_id.create_index()
+
     dataset.close()
     data_file.close()
