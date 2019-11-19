@@ -8,10 +8,10 @@ from NLP.Experiments.text_dataset import text_dataset_collate_batchsample
 from NLP.Experiments.get_bert_tensor import get_bert_tensor
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data import BatchSampler, SequentialSampler
-from NLP.utils.delwords import create_stopword_list
+from scipy import sparse
 import tqdm
 
-def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_SIZE, batch_size):
+def process_sentences_sparse(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_SIZE, batch_size):
     """
     Extracts probability distributions from texts and saves them in pyTables database
     in three formats:
@@ -38,11 +38,10 @@ def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_
 
     class Token_Particle(tables.IsDescription):
         token_id = tables.UInt32Col()
+        peer_id = tables.UInt32Col()
+        value = tables.Float16Col()
         seq_id = tables.UInt32Col()
         pos_id = tables.UInt32Col()
-        seq_size = tables.UInt32Col()
-        own_dist = tables.Float32Col(shape=(1, DICT_SIZE))
-        context_dist = tables.Float32Col(shape=(1, DICT_SIZE))
 
     try:
         data_file = tables.open_file(tensor_db, mode="a", title="Data File")
@@ -50,19 +49,27 @@ def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_
         data_file = tables.open_file(tensor_db, mode="w", title="Data File", filters=filters)
 
     try:
-        token_table = data_file.root.token_data.table
+        own_table = data_file.root.token_data.table
     except:
         group = data_file.create_group("/", 'token_data', 'Token Data')
-        token_table = data_file.create_table(group, 'table', Token_Particle, "Token Table", filters=filters)
-        token_table.cols.token_id.create_csindex()
+        own_table = data_file.create_table(group, 'owndist', Token_Particle, "Own Distributions", filters=filters)
+        own_table.cols.token_id.create_index()
+        own_table.cols.peer_id.create_index()
+
+    try:
+        con_table = data_file.root.token_data.table
+    except:
+        group = data_file.create_group("/", 'token_data', 'Token Data')
+        con_table = data_file.create_table(group, 'contdist', Token_Particle, "Context distributions", filters=filters)
+        con_table.cols.token_id.create_csindex()
+        con_table.cols.peer_id.create_csindex()
+
 
     # Push BERT to GPU
     torch.cuda.empty_cache()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     bert.to(device)
     bert.eval()
-
-    delwords=create_stopword_list(tokenizer)
 
     # %% Initialize text dataset
     dataset = text_dataset(text_db, tokenizer, MAX_SEQ_LENGTH)
@@ -78,12 +85,14 @@ def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_
         # TODO: Needs to use sparse matrix bc. file-size too large otherwise
         # Iterate over sequences
         for sequence_id in np.unique(seq_ids):
+
             sequence_mask = seq_ids == sequence_id
             sequence_size = sum(sequence_mask)
 
             # Pad and add sequence of IDs
             idx = torch.zeros([1, MAX_SEQ_LENGTH], requires_grad=False, dtype=torch.int32)
             idx[0, :sequence_size] = token_ids[sequence_mask]
+
             # Pad and add distributions per token, we need to save to maximum sequence size
             dists = torch.zeros([MAX_SEQ_LENGTH, DICT_SIZE], requires_grad=False)
             dists[:sequence_size, :] = predictions[sequence_mask, :]
@@ -99,38 +108,33 @@ def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_
             seq_attn=torch.div(seq_attn.transpose(-1, 0), torch.sum(seq_attn, dim=1)).transpose(-1, 0)
 
             for pos, token in enumerate(token_ids[sequence_mask]):
-                if token.numpy() not in delwords:
-                    particle = token_table.row
-                    particle['token_id'] = token
-                    particle['pos_id'] = pos
-                    particle['seq_id'] = sequence_id
-                    particle['seq_size'] = sequence_size
-                    particle['own_dist'] = dists[pos, :].unsqueeze(0)
-                    ## Context distribution with attention weights
-                    context_index = np.zeros([MAX_SEQ_LENGTH], dtype=np.bool)
-                    context_index[:sequence_size] = True
-                    context_dist = dists[context_index, :]
-                    particle['context_dist'] =(torch.sum((seq_attn[pos] * context_dist.transpose(-1, 0)).transpose(-1, 0)
-                               , dim=0).unsqueeze(0))
+                # Particles
+                own_p = own_table.row
+                con_p = con_table.row
 
-                    # Simple average
-                    #context_index = np.arange(sequence_size) != pos
-                    #context_index = np.concatenate(
-                    #    [context_index, np.zeros([MAX_SEQ_LENGTH - sequence_size], dtype=np.bool)])
-                    # particle['context_dist'] = (torch.sum(context_dist, dim=0).unsqueeze(0)) / sequence_size
-                    particle.append()
+                # Base Entries
+                own_p['token_id'] = token
+                own_p['pos_id'] = pos
+                own_p['seq_id'] = sequence_id
+                con_p['token_id'] = token
+                con_p['pos_id'] = pos
+                con_p['seq_id'] = sequence_id
 
-        #del predictions
-            # %% Token-Sequence Table
-            #for pos, token in enumerate(token_id[label_id]):
-            #    particle = token_seq_table.row
-            #    particle['token_id'] = token
-            #    particle['seq_id'] = label_id
-            #    particle['seq_size'] = batch_size[label_id]
-            #    particle['pos_id'] = pos
-            #    particle['token_ids'] = idx
-            #    particle['token_dist'] = dists
-            #    particle.append()
+
+                ## Context distribution with attention weights
+                context_index = np.zeros([MAX_SEQ_LENGTH], dtype=np.bool)
+                context_index[:sequence_size] = True
+                context_dist = dists[context_index, :]
+                context_dist =(torch.sum((seq_attn[pos] * context_dist.transpose(-1, 0)).transpose(-1, 0)
+                           , dim=0).unsqueeze(0))
+
+                # Simple average
+                #context_index = np.arange(sequence_size) != pos
+                #context_index = np.concatenate(
+                #    [context_index, np.zeros([MAX_SEQ_LENGTH - sequence_size], dtype=np.bool)])
+                # particle['context_dist'] = (torch.sum(context_dist, dim=0).unsqueeze(0)) / sequence_size
+                particle.append()
+
 
 
 
@@ -138,9 +142,6 @@ def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_
 
     data_file.flush()
 
-    # Try to sort table
-    token_table.copy(overwrite=True, sortby="token_id",propindexes=True)
-    data_file.flush()
 
     dataset.close()
     data_file.close()

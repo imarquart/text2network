@@ -12,42 +12,19 @@ import matplotlib.pyplot as plt
 from numpy import inf
 from sklearn.cluster import KMeans
 import hdbscan
+import itertools
+from NLP.utils.delwords import create_stopword_list
 
-def create_stopword_list(tokenizer):
-    """
-    Return a list of tokenized tokens for words which should be removed from the data set
+def batches(iterable, size):
+    source = iter(iterable)
+    while True:
+        chunk = [val for _, val in zip(range(size), source)]
+        if not chunk:
+            raise StopIteration
+        yield chunk
 
-    :param tokenizer: BERT tokenizer
-    :return: Numerical list of tokens to take out of sample 
-    """
-    alphabet = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u',
-                'v', 'w', 'x', 'y', 'z']
-    alphabet_ids = tokenizer.convert_tokens_to_ids(alphabet)
-    numbers = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'one', 'two', 'three', 'four']
-    numbers_ids = tokenizer.convert_tokens_to_ids(numbers)
-    pronouns = ['we', 'us', 'my', 'yourself', 'you', 'me', 'he', 'her', 'his', 'him', 'she', 'they', 'their', 'them',
-                'me', 'myself', 'himself', 'herself', 'themselves']
-    pronouns_ids = tokenizer.convert_tokens_to_ids(pronouns)
-    stopwords = ['&', ',', '.', 'and', '-', 'the', '##d', '...', 'that', 'to', 'as', 'for', '"', 'in', "'", 'a', 'of',
-                 'only', ':', 'so', 'all', 'one', 'it', 'then', 'also', 'with', 'but', 'by', 'on', 'just', 'like',
-                 'again', ';', 'more', 'this', 'not', 'is', 'there', 'was', 'even', 'still', 'after', 'here', 'later',
-                 '!', 'over', 'from', 'i', 'or', '?', 'at', 'first', '##s', 'while', ')', 'before', 'when', 'once',
-                 'too', 'out', 'yet', 'because', 'some', 'though', 'had', 'instead', 'always', '(', 'well', 'back',
-                 'tonight', 'since', 'about', 'through', 'will', 'them', 'left', 'often', 'what', 'ever', 'until',
-                 'sometimes', 'if', 'however', 'finally', 'another', 'somehow', 'everything', 'further', 'really',
-                 'last', 'an', '/', 'rather', 's', 'may', 'be', 'each', 'thus', 'almost', 'where', 'anyway', 'their',
-                 'has', 'something', 'already', 'within', 'any', 'indeed', '##a', '[UNK]', '~', 'every', 'meanwhile',
-                 'would', '##e', 'have', 'nevertheless', 'which', 'how', '1', 'are', 'either', 'along', 'thereafter',
-                 'otherwise', 'did', 'quite', 'these', 'can', '2', 'its', 'merely', 'actually', 'certainly', '3',
-                 'else', 'upon', 'except', 'those', 'especially', 'therefore', 'beside', 'apparently', 'besides',
-                 'third', 'whilst', '*', 'although', 'were', 'likewise', 'mainly', 'four', 'seven', 'into', 'm', ']',
-                 'than', 't', 'surely', '|', '#', 'till', '##ly', '_', 'al']
-    stopwords_ids = tokenizer.convert_tokens_to_ids(stopwords)
 
-    delwords = np.union1d(stopwords_ids, pronouns_ids)
-    delwords = np.union1d(delwords, alphabet_ids)
-    delwords = np.union1d(delwords, numbers_ids)
-    return delwords
+
 
 def get_weighted_edgelist(token,x,cutoff_number=5,cutoff_probability=0):
     """
@@ -84,16 +61,8 @@ def simple_norm(x):
     x=x-np.min(x,axis=-1)
     return x/np.sum(x,axis=-1)
 
-def create_network(database,tokenizer,start_token,nr_clusters):
-    # Open database connection, and table
-    try:
-        data_file = tables.open_file(database, mode="a", title="Data File")
-        token_table = data_file.root.token_data.table
-    except:
-        raise FileNotFoundError("Could not read token table from database.")
+def create_network(database,tokenizer,start_token,nr_clusters,batch_size):
 
-
-    data_file.close()
     # Open database connection, and table
     try:
         data_file = tables.open_file(database, mode="r", title="Data File")
@@ -158,20 +127,39 @@ def create_network(database,tokenizer,start_token,nr_clusters):
     # Add all potential tokens
     for g in graphs: g.add_nodes_from(range(0, tokenizer.vocab_size))
 
-    for i in range(nr_clusters):
-        replacement = np.sum(own_dists[clusterer.labels_==i-1,:],axis=0)
-        context=np.sum(own_dists[clusterer.labels_==i-1,:],axis=0)
-        replacement=simple_norm(replacement)
-        context=simple_norm(context)
-        graphs[i].add_weighted_edges_from(get_weighted_edgelist(token,replacement))
+    #for i in range(nr_clusters):
+    #    replacement = np.sum(own_dists[clusterer.labels_==i-1,:],axis=0)
+    #    context=np.sum(own_dists[clusterer.labels_==i-1,:],axis=0)
+    #    replacement=simple_norm(replacement)
+    #    context=simple_norm(context)
+    #    graphs[i].add_weighted_edges_from(get_weighted_edgelist(token,replacement))
 
     # Now parallel loop over all nodes
     # TODO: Parallel
     # TODO: Batch the DB request (at least)
 
-    for idx, token in tqdm(enumerate(nodes)):
-        query = "".join(['token_id==', str(token)])
-        rows = token_table.read_where(query)
+
+    nodes=np.sort(nodes)
+    node_batch=batches(nodes,batch_size)
+
+    for chunk in tqdm(node_batch):
+        limits=[chunk[0],chunk[-1]]
+        query = "".join(['(token_id>=', str(limits[0]),') & (token_id<=', str(limits[1]),')' ])
+        rows = token_table.where(query)
+        group = {}  # dictionary to put results grouped by 'pressure'
+
+        ar=np.zeros((1,30522))
+        for token in chunk:
+            group[token]=ar
+
+        def token_id_sel(row):
+            return row['token_id']
+
+        for token_id, rows_grouped_by_token_id in itertools.groupby(rows, token_id_sel):
+            if token_id not in delwords:
+                group[token_id] = np.stack([group[token_id]],np.stack(r['own_dist'] for r in rows_grouped_by_token_id))
+
+
         nr_rows = len(rows)
         if nr_rows == 0:
             raise AssertionError("Database error: Token information missing")
