@@ -11,7 +11,7 @@ from torch.utils.data import BatchSampler, SequentialSampler
 from NLP.utils.delwords import create_stopword_list
 import tqdm
 
-def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_SIZE, batch_size,nr_workers=0):
+def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_SIZE, batch_size,nr_workers=0,copysort=True):
     """
     Extracts probability distributions from texts and saves them in pyTables database
     in three formats:
@@ -137,10 +137,14 @@ def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_
 
 
     data_file.flush()
-
     # Try to sort table
-    token_table.copy(overwrite=True, sortby="token_id",propindexes=True)
-    data_file.flush()
+    if copysort==True:
+        oldname=token_table.name
+        newtable = token_table.copy(newname='sortedset', sortby='token_id',propindexes=True)
+        token_table.remove()
+        newtable.rename(oldname)
+        data_file.flush()
+
 
     dataset.close()
     data_file.close()
