@@ -58,7 +58,7 @@ def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_
 
     # Push BERT to GPU
     torch.cuda.empty_cache()
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     bert.to(device)
     bert.eval()
 
