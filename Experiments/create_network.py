@@ -146,18 +146,20 @@ def create_network(database,tokenizer,start_token,nr_clusters,batch_size):
         limits=[chunk[0],chunk[-1]]
         query = "".join(['(token_id>=', str(limits[0]),') & (token_id<=', str(limits[1]),')' ])
         rows = token_table.where(query)
-        group = {}  # dictionary to put results grouped by 'pressure'
-
+        own_dists = {}
+        context_dists = {}
         ar=np.zeros((1,30522))
         for token in chunk:
-            group[token]=ar
+            own_dists[token]=ar
+            context_dists[token] = ar
 
         def token_id_sel(row):
             return row['token_id']
 
         for token_id, rows_grouped_by_token_id in itertools.groupby(rows, token_id_sel):
             if token_id not in delwords:
-                group[token_id] = np.stack([group[token_id]],np.stack(r['own_dist'] for r in rows_grouped_by_token_id))
+                own_dists[token_id] = np.stack([own_dists[token_id]],np.stack(r['own_dist'] for r in rows_grouped_by_token_id))
+                context_dists[token_id] = np.stack([context_dists[token_id]],np.stack(r['own_dist'] for r in rows_grouped_by_token_id))
 
 
         nr_rows = len(rows)
