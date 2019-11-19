@@ -1,0 +1,168 @@
+# TODO: Redo Comments
+
+import torch
+import numpy as np
+import tables
+from NLP.Experiments.text_dataset import text_dataset
+from NLP.Experiments.text_dataset import text_dataset_collate_batchsample
+from NLP.Experiments.get_bert_tensor import get_bert_tensor
+from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import BatchSampler, SequentialSampler
+import tqdm
+
+import os
+import time
+from NLP.Experiments.process_sentences import process_sentences
+from NLP.utils.load_bert import get_bert_and_tokenizer_local
+
+# os.chdir('/home/ingo/PhD/BERT-NLP/BERTNLP')
+start_time = time.time()
+cwd = os.getcwd()
+text_db = os.path.join(cwd, 'NLP/data/texts.h5')
+tensor_db = os.path.join(cwd, 'NLP/data/tensors.h5')
+modelpath = os.path.join(cwd, 'NLP/models')
+MAX_SEQ_LENGTH = 30
+batch_size = 36
+tokenizer, bert = get_bert_and_tokenizer_local(modelpath)
+DICT_SIZE = tokenizer.vocab_size
+
+filters = tables.Filters(complevel=9, complib='blosc', fletcher32=False)
+
+
+class Seq_Particle(tables.IsDescription):
+    seq_id = tables.UInt32Col()
+    token_ids = tables.UInt32Col(shape=[1, MAX_SEQ_LENGTH])
+    token_dist = tables.Float32Col(shape=(MAX_SEQ_LENGTH, DICT_SIZE))
+    seq_size = tables.UInt32Col()
+
+
+class Token_Seq_Particle(tables.IsDescription):
+    token_id = tables.UInt32Col()
+    seq_id = tables.UInt32Col()
+    seq_size = tables.UInt32Col()
+    pos_id = tables.UInt32Col()
+    token_ids = tables.UInt32Col(shape=[1, MAX_SEQ_LENGTH])
+    token_dist = tables.Float32Col(shape=(MAX_SEQ_LENGTH, DICT_SIZE))
+
+
+class Token_Particle(tables.IsDescription):
+    token_id = tables.UInt32Col()
+    seq_id = tables.UInt32Col()
+    pos_id = tables.UInt32Col()
+    seq_size = tables.UInt32Col()
+    own_dist = tables.Float32Col(shape=(1, DICT_SIZE))
+    context_dist = tables.Float32Col(shape=(1, DICT_SIZE))
+
+
+try:
+    data_file = tables.open_file(tensor_db, mode="a", title="Data File")
+except:
+    data_file = tables.open_file(tensor_db, mode="w", title="Data File", filters=filters)
+
+try:
+    seq_table = data_file.root.seq_data.table
+except:
+    group = data_file.create_group("/", 'seq_data', 'Sequence Data')
+    seq_table = data_file.create_table(group, 'table', Seq_Particle, "Sequence Table")
+
+try:
+    token_seq_table = data_file.root.token_seq_data.table
+except:
+    group = data_file.create_group("/", 'token_seq_data', 'Token Sequence Data')
+    token_seq_table = data_file.create_table(group, 'table', Token_Seq_Particle, "Token Sequence Table")
+
+try:
+    token_table = data_file.root.token_data.table
+except:
+    group = data_file.create_group("/", 'token_data', 'Token Data')
+    token_table = data_file.create_table(group, 'table', Token_Particle, "Token Table", filters=filters)
+
+# Push BERT to GPU
+torch.cuda.empty_cache()
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+bert.to(device)
+bert.eval()
+
+# %% Initialize text dataset
+dataset = text_dataset(text_db, tokenizer, MAX_SEQ_LENGTH)
+batch_sampler = BatchSampler(SequentialSampler(range(0, dataset.nitems)), batch_size=batch_size, drop_last=False)
+dataloader = DataLoader(dataset=dataset, batch_size=None, sampler=batch_sampler, num_workers=0,
+                        collate_fn=text_dataset_collate_batchsample, pin_memory=False)
+
+for batch, seq_ids, token_ids in tqdm.tqdm(dataloader, desc="Iteration"):
+    torch.cuda.empty_cache()
+    # This seems to allow slightly higher batch sizes on my GPU
+    # torch.cuda.empty_cache()
+    # Run BERT and get predictions
+    predictions, attn = get_bert_tensor(0, bert, batch, tokenizer.pad_token_id, tokenizer.mask_token_id, device,
+                                        return_max=False)
+    # %% Sequence Table
+    # TODO: Needs to use sparse matrix bc. file-size too large otherwise
+    # Iterate over sequences
+    for sequence_id in np.unique(seq_ids):
+        sequence_mask = seq_ids == sequence_id
+        sequence_size = sum(sequence_mask)
+
+        # Init new row pointer
+        particle = seq_table.row
+        # Fill general information
+        particle['seq_id'] = sequence_id
+        particle['seq_size'] = sequence_size
+
+        # Pad and add sequence of IDs
+        idx = torch.zeros([1, MAX_SEQ_LENGTH], requires_grad=False, dtype=torch.int32)
+        idx[0, :sequence_size] = token_ids[sequence_mask]
+        particle['token_ids'] = idx
+        # Pad and add distributions per token, we need to save to maximum sequence size
+        dists = torch.zeros([MAX_SEQ_LENGTH, DICT_SIZE], requires_grad=False)
+        dists[:sequence_size, :] = predictions[sequence_mask, :]
+        particle['token_dist'] = dists
+        # Append
+        # particle.append()
+
+        # %% Token Table
+        # Extract attention
+        seq_attn = attn[sequence_mask, :].cpu()
+        # Curtail to tokens in sequence
+        seq_attn = seq_attn[:, 1:sequence_size + 1]
+        # Delete diagonal attention
+        seq_attn[torch.eye(sequence_size).bool()] = 0
+        # Normalize
+        seq_attn = torch.div(seq_attn.transpose(-1, 0), torch.sum(seq_attn, dim=1)).transpose(-1, 0)
+
+        for pos, token in enumerate(token_ids[sequence_mask]):
+            particle = token_table.row
+            particle['token_id'] = token
+            particle['pos_id'] = pos
+            particle['seq_id'] = sequence_id
+            particle['seq_size'] = sequence_size
+            particle['own_dist'] = dists[pos, :].unsqueeze(0)
+            ## Context distribution with attention weights
+            context_index = np.zeros([MAX_SEQ_LENGTH], dtype=np.bool)
+            context_index[:sequence_size] = True
+            context_dist = dists[context_index, :]
+            particle['context_dist'] = (torch.sum((seq_attn[pos] * context_dist.transpose(-1, 0)).transpose(-1, 0)
+                                                  , dim=0).unsqueeze(0))
+
+            # Simple average
+            # context_index = np.arange(sequence_size) != pos
+            # context_index = np.concatenate(
+            #    [context_index, np.zeros([MAX_SEQ_LENGTH - sequence_size], dtype=np.bool)])
+            # particle['context_dist'] = (torch.sum(context_dist, dim=0).unsqueeze(0)) / sequence_size
+            particle.append()
+
+    # del predictions
+    # %% Token-Sequence Table
+    # for pos, token in enumerate(token_id[label_id]):
+    #    particle = token_seq_table.row
+    #    particle['token_id'] = token
+    #    particle['seq_id'] = label_id
+    #    particle['seq_size'] = batch_size[label_id]
+    #    particle['pos_id'] = pos
+    #    particle['token_ids'] = idx
+    #    particle['token_dist'] = dists
+    #    particle.append()
+
+data_file.flush()
+dataset.close()
+data_file.close()

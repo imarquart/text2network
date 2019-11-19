@@ -2,13 +2,13 @@
 import os
 import time
 import networkx as nx
-from Experiments.create_network import create_network
-from utils.load_bert import get_bert_and_tokenizer
+from NLP.Experiments.create_network import create_network
+from NLP.utils.load_bert import get_bert_and_tokenizer
 
 start_time = time.time()
 cwd= os.getcwd()
 data_path=os.path.join(cwd, 'NLP/data/')
-database=os.path.join(cwd,'NLP/data/tensor_db.h5')
+database=os.path.join(cwd,'NLP/data/tensors.h5')
 modelpath=os.path.join(cwd,'NLP/models')
 MAX_SEQ_LENGTH=30
 tokenizer, _ = get_bert_and_tokenizer(modelpath)

@@ -3,9 +3,9 @@
 import torch
 import numpy as np
 import tables
-from Experiments.text_dataset import text_dataset
-from Experiments.text_dataset import text_dataset_collate_batchsample
-from Experiments.get_bert_tensor import get_bert_tensor
+from NLP.Experiments.text_dataset import text_dataset
+from NLP.Experiments.text_dataset import text_dataset_collate_batchsample
+from NLP.Experiments.get_bert_tensor import get_bert_tensor
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data import BatchSampler, SequentialSampler
 import tqdm
@@ -90,6 +90,7 @@ def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_
     dataset = text_dataset(text_db, tokenizer, MAX_SEQ_LENGTH)
     batch_sampler = BatchSampler(SequentialSampler(range(0, dataset.nitems)), batch_size=batch_size, drop_last=False)
     dataloader=DataLoader(dataset=dataset,batch_size=None, sampler=batch_sampler,num_workers=16,collate_fn=text_dataset_collate_batchsample, pin_memory=False)
+
     for batch, seq_ids, token_ids in tqdm.tqdm(dataloader, desc="Iteration"):
         # This seems to allow slightly higher batch sizes on my GPU
         #torch.cuda.empty_cache()

@@ -6,7 +6,6 @@ import numpy as np
 import tables
 import networkx as nx
 import os
-from utils.load_bert import get_bert_and_tokenizer
 from tqdm import tqdm
 from sklearn.preprocessing import normalize
 import matplotlib.pyplot as plt
