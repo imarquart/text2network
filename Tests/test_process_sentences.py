@@ -11,7 +11,7 @@ if __name__ == '__main__':
     tensor_db=os.path.join(cwd,'NLP/data/tensor_db.h5')
     modelpath=os.path.join(cwd,'NLP/models')
     MAX_SEQ_LENGTH=30
-    batch_size=3
+    batch_size=36
     tokenizer, bert = get_bert_and_tokenizer_local(modelpath)
     DICT_SIZE=tokenizer.vocab_size
 

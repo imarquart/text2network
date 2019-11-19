@@ -11,7 +11,7 @@ from torch.utils.data import BatchSampler, SequentialSampler
 from NLP.utils.delwords import create_stopword_list
 import tqdm
 
-def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_SIZE, batch_size):
+def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_SIZE, batch_size,nr_workers=0):
     """
     Extracts probability distributions from texts and saves them in pyTables database
     in three formats:
@@ -67,7 +67,7 @@ def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_
     # %% Initialize text dataset
     dataset = text_dataset(text_db, tokenizer, MAX_SEQ_LENGTH)
     batch_sampler = BatchSampler(SequentialSampler(range(0, dataset.nitems)), batch_size=batch_size, drop_last=False)
-    dataloader=DataLoader(dataset=dataset,batch_size=None, sampler=batch_sampler,num_workers=16,collate_fn=text_dataset_collate_batchsample, pin_memory=False)
+    dataloader=DataLoader(dataset=dataset,batch_size=None, sampler=batch_sampler,num_workers=nr_workers,collate_fn=text_dataset_collate_batchsample, pin_memory=False)
 
     for batch, seq_ids, token_ids in tqdm.tqdm(dataloader, desc="Iteration"):
         # This seems to allow slightly higher batch sizes on my GPU
