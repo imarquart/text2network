@@ -11,11 +11,11 @@ if __name__ == '__main__':
     tensor_db=os.path.join(cwd,'NLP/data/tensor_db.h5')
     modelpath=os.path.join(cwd,'NLP/models')
     MAX_SEQ_LENGTH=30
-    batch_size=36
+    batch_size=3
     tokenizer, bert = get_bert_and_tokenizer_local(modelpath)
     DICT_SIZE=tokenizer.vocab_size
 
-    process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_SIZE, batch_size)
+    process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_SIZE, batch_size, nr_workers=16,copysort=True)
 
 
     print("--- %s seconds ---" % (time.time() - start_time))

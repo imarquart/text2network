@@ -8,7 +8,6 @@ from NLP.Experiments.create_network import create_network
 from NLP.utils.load_bert import get_bert_and_tokenizer
 
 
-start_time = time.time()
 cwd= os.getcwd()
 data_path=os.path.join(cwd, 'NLP/data/')
 database=os.path.join(cwd,'NLP/data/tensor_db.h5')
@@ -17,7 +16,21 @@ MAX_SEQ_LENGTH=30
 tokenizer, _ = get_bert_and_tokenizer(modelpath)
 start_token="manager"
 
-graphs=create_network(database,tokenizer,start_token,4)
+
+
+
+print("#############")
+print("BATCH SIZE 1")
+start_time = time.time()
+graphs=create_network(database,tokenizer,start_token,nr_clusters=4,batch_size=1)
+print("--- %s seconds ---" % (time.time() - start_time))
+
+print("#############")
+print("BATCH SIZE 5")
+start_time = time.time()
+graphs=create_network(database,tokenizer,start_token,nr_clusters=4,batch_size=5)
+print("--- %s seconds ---" % (time.time() - start_time))
+
 
 #tokenizer.convert_ids_to_tokens(range)
 
@@ -29,4 +42,3 @@ for idx,graph in enumerate(graphs):
     graph_path=os.path.join(data_path,"".join([start_token,"_graph_",str(idx),'.gexf']))
     nx.write_gexf(graph,graph_path)
 
-print("--- %s seconds ---" % (time.time() - start_time))
