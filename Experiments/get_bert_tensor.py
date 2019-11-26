@@ -87,11 +87,20 @@ def get_bert_tensor(args, bert,tokens,pad_token_id,mask_token_id,device=torch.de
     if return_max==True:
         predictions=torch.argmax(predictions, dim=1)
 
+
+    # Softmax prediction probabilities
+    softmax=torch.nn.Softmax(dim=1)
+    predictions=softmax(predictions)
+
+
     # Operate on attention
     attn=torch.stack(attn)
     # Max over layers and attention heads
     attn,_ =torch.max(attn,dim=0)
     attn,_ = torch.max(attn, dim=1)
-    # We are left with a one matrix for each batch size
+    # We are left with a one matrix for each batch
+    # Select the attention of the focal tokens only
     attn=attn[eyes.bool(),:]
+    # Note attention is now of (nr_tokens,sequence_size+2)
+    # because we added <SEP> and <CLS> tokens
     return predictions.to(torch.device('cpu')), attn.cpu()

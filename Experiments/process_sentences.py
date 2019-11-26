@@ -11,7 +11,7 @@ from torch.utils.data import BatchSampler, SequentialSampler
 from NLP.utils.delwords import create_stopword_list
 import tqdm
 
-def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_SIZE, batch_size,nr_workers=0,copysort=True):
+def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_SIZE, batch_size,nr_workers=0,copysort=True,method="attention"):
     """
     Extracts probability distributions from texts and saves them in pyTables database
     in three formats:
@@ -89,14 +89,24 @@ def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_
             dists[:sequence_size, :] = predictions[sequence_mask, :]
 
             # %% Token Table
-            # Extract attention
-            seq_attn=attn[sequence_mask,:].cpu()
-            # Curtail to tokens in sequence
-            seq_attn=seq_attn[:,1:sequence_size+1]
-            # Delete diagonal attention
-            seq_attn[torch.eye(sequence_size).bool()]=0
-            # Normalize
-            seq_attn=torch.div(seq_attn.transpose(-1, 0), torch.sum(seq_attn, dim=1)).transpose(-1, 0)
+
+            if method=="attention":
+                # Extract attention for sequence
+                seq_attn=attn[sequence_mask,:].cpu()
+                # Curtail to tokens in sequence
+                # attention row vectors for each token are of
+                # size sequence_size+2, where position 0 is <CLS>
+                # and position n+1 is <SEP>, these we ignore
+                seq_attn=seq_attn[:,1:sequence_size+1]
+                # Delete diagonal attention
+                seq_attn[torch.eye(sequence_size).bool()]=0
+                # Normalize
+                #seq_attn=torch.div(seq_attn.transpose(-1, 0), torch.sum(seq_attn, dim=1)).transpose(-1, 0)
+            else:
+                # Context element distribution: we sum over all probabilities in a sequence
+                seq_attn=torch.ones([sequence_size,sequence_size])
+                seq_attn[torch.eye(sequence_size).bool()]=0
+
 
             for pos, token in enumerate(token_ids[sequence_mask]):
                 if token.numpy() not in delwords:

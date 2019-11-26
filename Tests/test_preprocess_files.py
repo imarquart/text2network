@@ -11,6 +11,6 @@ MAX_SEQ_LENGTH=30
 char_mult=10
 max_seq=100
 
-pre_process_sentences_COCA(files,database,MAX_SEQ_LENGTH,10,max_seq=10000,file_type="old")
+pre_process_sentences_COCA(files,database,MAX_SEQ_LENGTH,10,max_seq=100,file_type="old")
 
 print("--- %s seconds ---" % (time.time() - start_time))
