@@ -1,3 +1,5 @@
+# TODO: Do padding and extension somehow differently such that batch can be sent to GPU earlier?
+
 import torch
 
 def get_bert_tensor(args, bert,tokens,pad_token_id,mask_token_id,device=torch.device("cpu"),return_max=False):

@@ -2,12 +2,19 @@
 
 import torch
 import tables
-import numpy as np
 from torch.utils.data import Dataset, DataLoader
 from torch.nn.utils.rnn import pad_sequence
+from prefetch_generator import BackgroundGenerator
 import numbers
 
 #TODO: Comment
+
+
+class DataLoaderX(DataLoader):
+
+    def __iter__(self):
+        return BackgroundGenerator(super().__iter__())
+
 
 class text_dataset(Dataset):
     def __init__(self, data_path, tokenizer=None, fixed_seq_length=None ):

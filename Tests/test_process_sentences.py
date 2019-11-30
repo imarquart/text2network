@@ -12,7 +12,7 @@ if __name__ == '__main__':
     modelpath=os.path.join(cwd,'NLP/models')
     MAX_SEQ_LENGTH=20
     batch_size=36
-    method="attention"
+    method="conelem"
     tokenizer, bert = get_bert_and_tokenizer_local(modelpath)
     DICT_SIZE=tokenizer.vocab_size
     tensor_db=''.join(['NLP/data/tensor_db_',method,'.h5'])
@@ -20,4 +20,4 @@ if __name__ == '__main__':
     process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_SIZE, batch_size, nr_workers=0,copysort=True,method=method)
 
 
-    print("--- %s seconds ---" % (time.time() - start_time))
+    print("Total Time: %s seconds" % (time.time() - start_time))

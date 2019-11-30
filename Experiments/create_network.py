@@ -1,5 +1,6 @@
 # TODO: Commment
 # TODO: Add Logger
+# TODO: Rewrite Dataset class to use DataloderX implementation for parallel IO
 
 from sklearn.cluster import SpectralClustering
 import torch
@@ -16,6 +17,7 @@ import hdbscan
 import itertools
 from NLP.utils.delwords import create_stopword_list
 from torch.utils.data import BatchSampler, SequentialSampler
+import time
 from sklearn.cluster import MeanShift, estimate_bandwidth
 
 def calculate_cutoffs(x,method="mean"):
@@ -156,11 +158,23 @@ def create_network(database, tokenizer, start_token, nr_clusters, batch_size=0):
     nodes = np.sort(nodes)
 
     btsampler = BatchSampler(SequentialSampler(nodes), batch_size=batch_size, drop_last=False)
+
+    # Counter for timing
+    prep_timings=[]
+    process_timings=[]
+    load_timings=[]
+    start_time = time.time()
+
     for chunk in tqdm(btsampler):
         chunk = nodes[chunk]
         limits = [chunk[0], chunk[-1]]
         query = "".join(['(token_id>=', str(limits[0]), ') & (token_id<=', str(limits[1]), ')'])
         rows = token_table.read_where(query)
+
+        # Data spent on loading batch
+        load_time=time.time()-start_time
+        load_timings.append(load_time)
+
         nr_rows = len(rows)
         if nr_rows == 0:
             raise AssertionError("Database error: Token information missing")
@@ -194,6 +208,10 @@ def create_network(database, tokenizer, start_token, nr_clusters, batch_size=0):
         # labels, strengths = hdbscan.approximate_predict(clusterer, context_dists)
         labels = clusterer.predict(context_dists)
 
+        # compute model timings time
+        prepare_time=time.time()-start_time-load_time
+        prep_timings.append(prepare_time)
+
         for i in range(nr_clusters):
             for token in chunk:
                 mask = (token_idx == token) & (labels == i)
@@ -207,5 +225,10 @@ def create_network(database, tokenizer, start_token, nr_clusters, batch_size=0):
 
                     cutoff_number, cutoff_probability = calculate_cutoffs(context, method="mean")
                     context_graphs[i].add_weighted_edges_from(get_weighted_edgelist(token, context, cutoff_number, cutoff_probability))
+        process_timings.append(time.time() - start_time - prepare_time - load_time)
 
+    print("Average Load Time: %s seconds" % (np.mean(load_timings)))
+    print("Average Prep Time: %s seconds" % (np.mean(prep_timings)))
+    print("Average Processing Time: %s seconds" % (np.mean(process_timings)))
+    print("Ratio Load/Processing: %s seconds" % (np.mean(process_timings)/np.mean(load_timings)))
     return graphs,context_graphs

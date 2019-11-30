@@ -10,7 +10,7 @@ from NLP.utils.load_bert import get_bert_and_tokenizer
 
 cwd= os.getcwd()
 data_path=os.path.join(cwd, 'NLP/data/')
-database=os.path.join(cwd,'NLP/data/tensor_db_attention.h5')
+database=os.path.join(cwd,'NLP/data/tensor_db_conelem.h5')
 modelpath=os.path.join(cwd,'NLP/models')
 MAX_SEQ_LENGTH=30
 tokenizer, _ = get_bert_and_tokenizer(modelpath)

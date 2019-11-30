@@ -3,13 +3,18 @@
 import torch
 import numpy as np
 import tables
-from NLP.Experiments.text_dataset import text_dataset
+import time
+
+from NLP.Experiments.text_dataset import text_dataset, DataLoaderX
 from NLP.Experiments.text_dataset import text_dataset_collate_batchsample
 from NLP.Experiments.get_bert_tensor import get_bert_tensor
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data import BatchSampler, SequentialSampler
 from NLP.utils.delwords import create_stopword_list
 import tqdm
+
+
+
 
 def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_SIZE, batch_size,nr_workers=0,copysort=True,method="attention"):
     """
@@ -33,8 +38,17 @@ def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_
     :param batch_size: batch size to send to BERT
     :return: None
     """
+    tables.set_blosc_max_threads(15)
+    # We will compress below
+    filters = tables.Filters(complevel=9, complib='zlib')
 
-    filters = tables.Filters(complevel=9, complib='blosc', fletcher32=False)
+    # %% Initialize text dataset
+    dataset = text_dataset(text_db, tokenizer, MAX_SEQ_LENGTH)
+    batch_sampler = BatchSampler(SequentialSampler(range(0, dataset.nitems)), batch_size=batch_size, drop_last=False)
+    dataloader=DataLoaderX(dataset=dataset,batch_size=None, sampler=batch_sampler,num_workers=nr_workers,collate_fn=text_dataset_collate_batchsample, pin_memory=False)
+
+    # Calculate expected rows
+    expected_rows=np.int(dataset.nitems*7.4)
 
     class Token_Particle(tables.IsDescription):
         token_id = tables.UInt32Col()
@@ -47,14 +61,17 @@ def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_
     try:
         data_file = tables.open_file(tensor_db, mode="a", title="Data File")
     except:
-        data_file = tables.open_file(tensor_db, mode="w", title="Data File", filters=filters)
+        data_file = tables.open_file(tensor_db, mode="w", title="Data File")
 
     try:
         token_table = data_file.root.token_data.table
     except:
         group = data_file.create_group("/", 'token_data', 'Token Data')
-        token_table = data_file.create_table(group, 'table', Token_Particle, "Token Table", filters=filters)
-        token_table.cols.token_id.create_csindex()
+        token_table = data_file.create_table(group, 'table', Token_Particle, "Token Table", expectedrows=expected_rows)
+        # Create index ONLY when not sorting later
+        # We want to reindex otherwise, and enable autochunking etc.
+        if copysort==False:
+            token_table.cols.token_id.create_csindex()
 
     # Push BERT to GPU
     torch.cuda.empty_cache()
@@ -64,16 +81,26 @@ def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_
 
     delwords=create_stopword_list(tokenizer)
 
-    # %% Initialize text dataset
-    dataset = text_dataset(text_db, tokenizer, MAX_SEQ_LENGTH)
-    batch_sampler = BatchSampler(SequentialSampler(range(0, dataset.nitems)), batch_size=batch_size, drop_last=False)
-    dataloader=DataLoader(dataset=dataset,batch_size=None, sampler=batch_sampler,num_workers=nr_workers,collate_fn=text_dataset_collate_batchsample, pin_memory=False)
 
+    # Counter for timing
+    model_timings=[]
+    process_timings=[]
+    load_timings=[]
+    start_time = time.time()
     for batch, seq_ids, token_ids in tqdm.tqdm(dataloader, desc="Iteration"):
+
+        # Data spent on loading batch
+        load_time=time.time()-start_time
+        load_timings.append(load_time)
         # This seems to allow slightly higher batch sizes on my GPU
         #torch.cuda.empty_cache()
         # Run BERT and get predictions
         predictions, attn = get_bert_tensor(0, bert, batch, tokenizer.pad_token_id, tokenizer.mask_token_id, device,return_max=False)
+
+        # compute model timings time
+        prepare_time=time.time()-start_time-load_time
+        model_timings.append(prepare_time)
+
         # %% Sequence Table
         # TODO: Needs to use sparse matrix bc. file-size too large otherwise
         # Iterate over sequences
@@ -122,25 +149,14 @@ def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_
                     context_dist = dists[context_index, :]
                     particle['context_dist'] =(torch.sum((seq_attn[pos] * context_dist.transpose(-1, 0)).transpose(-1, 0), dim=0).unsqueeze(0))
 
-                    # Simple average
-                    #context_index = np.arange(sequence_size) != pos
-                    #context_index = np.concatenate(
-                    #    [context_index, np.zeros([MAX_SEQ_LENGTH - sequence_size], dtype=np.bool)])
-                    # particle['context_dist'] = (torch.sum(context_dist, dim=0).unsqueeze(0)) / sequence_size
                     particle.append()
 
-        #del predictions
-            # %% Token-Sequence Table
-            #for pos, token in enumerate(token_id[label_id]):
-            #    particle = token_seq_table.row
-            #    particle['token_id'] = token
-            #    particle['seq_id'] = label_id
-            #    particle['seq_size'] = batch_size[label_id]
-            #    particle['pos_id'] = pos
-            #    particle['token_ids'] = idx
-            #    particle['token_dist'] = dists
-            #    particle.append()
+        del predictions, attn
 
+        # compute processing time
+        process_timings.append(time.time()-start_time - prepare_time - load_time)
+        # New start time
+        start_time=time.time()
 
 
 
@@ -148,8 +164,11 @@ def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_
     data_file.flush()
     # Try to sort table
     if copysort==True:
+        print("Copying table, reindexing, and sorting of %i rows." % token_table.nrows)
         oldname=token_table.name
-        newtable = token_table.copy(newname='sortedset', sortby='token_id',propindexes=True)
+        token_table.cols.token_id.create_csindex()
+        expected_rows=token_table.nrows
+        newtable = token_table.copy(newname='sortedset', sortby='token_id',propindexes=True, filters=filters,chunkshape="auto",expected_rows=expected_rows)
         token_table.remove()
         newtable.rename(oldname)
         data_file.flush()
@@ -157,3 +176,9 @@ def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_
 
     dataset.close()
     data_file.close()
+
+    print("Average Load Time: %s seconds" % (np.mean(load_timings)))
+    print("Average Model Time: %s seconds" % (np.mean(model_timings)))
+    print("Average Processing Time: %s seconds" % (np.mean(process_timings)))
+    print("Ratio Model/Processing: %s seconds" % (np.mean(model_timings)/np.mean(process_timings)))
+
