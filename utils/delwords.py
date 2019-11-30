@@ -15,7 +15,7 @@ def create_stopword_list(tokenizer):
     pronouns = ['we', 'us', 'my', 'yourself', 'you', 'me', 'he', 'her', 'his', 'him', 'she', 'they', 'their', 'them',
                 'me', 'myself', 'himself', 'herself', 'themselves']
     pronouns_ids = tokenizer.convert_tokens_to_ids(pronouns)
-    stopwords = ['&', ',', '.', 'and', '-', 'the', '##d', '...', 'that', 'to', 'as', 'for', '"', 'in', "'", 'a', 'of',
+    stopwords = ['¨','@','110','100','1000','000','!','ve','&', ',', '.', 'and', '-', 'the', '##d', '...', 'that', 'to', 'as', 'for', '"', 'in', "'", 'a', 'of',
                  'only', ':', 'so', 'all', 'one', 'it', 'then', 'also', 'with', 'but', 'by', 'on', 'just', 'like',
                  'again', ';', 'more', 'this', 'not', 'is', 'there', 'was', 'even', 'still', 'after', 'here', 'later',
                  '!', 'over', 'from', 'i', 'or', '?', 'at', 'first', '##s', 'while', ')', 'before', 'when', 'once',
@@ -28,7 +28,7 @@ def create_stopword_list(tokenizer):
                  'otherwise', 'did', 'quite', 'these', 'can', '2', 'its', 'merely', 'actually', 'certainly', '3',
                  'else', 'upon', 'except', 'those', 'especially', 'therefore', 'beside', 'apparently', 'besides',
                  'third', 'whilst', '*', 'although', 'were', 'likewise', 'mainly', 'four', 'seven', 'into', 'm', ']',
-                 'than', 't', 'surely', '|', '#', 'till', '##ly', '_', 'al']
+                 'than', 't', 'surely', '|', '#', 'till', '##ly', '_', 'al','«','»','{','[',']','}','%','+','-','>','<',':','.']
     stopwords_ids = tokenizer.convert_tokens_to_ids(stopwords)
 
     # Now all special tokens

@@ -120,8 +120,7 @@ def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_
                     context_index = np.zeros([MAX_SEQ_LENGTH], dtype=np.bool)
                     context_index[:sequence_size] = True
                     context_dist = dists[context_index, :]
-                    particle['context_dist'] =(torch.sum((seq_attn[pos] * context_dist.transpose(-1, 0)).transpose(-1, 0)
-                               , dim=0).unsqueeze(0))
+                    particle['context_dist'] =(torch.sum((seq_attn[pos] * context_dist.transpose(-1, 0)).transpose(-1, 0), dim=0).unsqueeze(0))
 
                     # Simple average
                     #context_index = np.arange(sequence_size) != pos

@@ -10,7 +10,7 @@ if __name__ == '__main__':
     text_db=os.path.join(cwd,'NLP/data/texts.h5')
 
     modelpath=os.path.join(cwd,'NLP/models')
-    MAX_SEQ_LENGTH=30
+    MAX_SEQ_LENGTH=20
     batch_size=36
     method="attention"
     tokenizer, bert = get_bert_and_tokenizer_local(modelpath)
