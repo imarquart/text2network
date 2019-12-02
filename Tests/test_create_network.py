@@ -10,7 +10,7 @@ from NLP.utils.load_bert import get_bert_and_tokenizer
 
 cwd= os.getcwd()
 data_path=os.path.join(cwd, 'NLP/data/')
-database=os.path.join(cwd,'NLP/data/tensor_db_conelem.h5')
+database=os.path.join(cwd,'NLP/data/tensor_db_context_element.h5')
 modelpath=os.path.join(cwd,'NLP/models')
 MAX_SEQ_LENGTH=30
 tokenizer, _ = get_bert_and_tokenizer(modelpath)
@@ -28,7 +28,7 @@ start_token="manager"
 print("#############")
 print("BATCH SIZE 5")
 start_time = time.time()
-graphs,context_graphs=create_network(database,tokenizer,start_token,nr_clusters=2,batch_size=5)
+graphs,context_graphs=create_network(database,tokenizer,start_token,nr_clusters=2,batch_size=10)
 print("--- %s seconds ---" % (time.time() - start_time))
 
 

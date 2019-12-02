@@ -85,7 +85,6 @@ def create_network(database, tokenizer, start_token, nr_clusters, batch_size=0):
     except:
         raise FileNotFoundError("Could not read token table from database.")
 
-    # Creat index?
 
     # Get all unique tokens in database
     nodes = np.unique(token_table.col('token_id'))
@@ -121,17 +120,18 @@ def create_network(database, tokenizer, start_token, nr_clusters, batch_size=0):
 
     # Cluster according the context distributions
     nr_clusters = min(nr_clusters, nr_rows)
-    # spcluster=SpectralClustering(n_clusters=nr_clusters,assign_labels = "discretize",random_state = 0).fit(context_dists)
-    # In case some cluster is empty
-    # nr_clusters = len(np.unique(spcluster.labels_))
+
 
     # Clusterer
-    clusterer = KMeans(n_clusters=nr_clusters).fit(context_dists)
-    # clusterer = hdbscan.HDBSCAN(min_cluster_size=4, prediction_data=True).fit(context_dists)
-    # bandwidth = estimate_bandwidth(context_dists, quantile=0.2)
-    # clusterer = MeanShift(bandwidth=0.3, bin_seeding=True).fit(context_dists)
-
-    nr_clusters = len(np.unique(clusterer.labels_))
+    if nr_clusters > 1:
+        clusterer = KMeans(n_clusters=nr_clusters).fit(context_dists)
+        # clusterer = hdbscan.HDBSCAN(min_cluster_size=4, prediction_data=True).fit(context_dists)
+        # bandwidth = estimate_bandwidth(context_dists, quantile=0.2)
+        # clusterer = MeanShift(bandwidth=0.3, bin_seeding=True).fit(context_dists)
+        # spcluster=SpectralClustering(n_clusters=nr_clusters,assign_labels = "discretize",random_state = 0).fit(context_dists)
+        # In case some cluster is empty
+        # nr_clusters = len(np.unique(spcluster.labels_))
+        nr_clusters = len(np.unique(clusterer.labels_))
 
     print("".join(["Number of clusters: ", str(nr_clusters)]))
 
@@ -206,7 +206,10 @@ def create_network(database, tokenizer, start_token, nr_clusters, batch_size=0):
 
         # Predict to label
         # labels, strengths = hdbscan.approximate_predict(clusterer, context_dists)
-        labels = clusterer.predict(context_dists)
+        if nr_clusters > 1:
+            labels = clusterer.predict(context_dists)
+        else:
+            labels = np.zeros(nr_rows, dtype=int)
 
         # compute model timings time
         prepare_time=time.time()-start_time-load_time

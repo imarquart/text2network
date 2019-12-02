@@ -63,7 +63,7 @@ def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_
     try:
         data_file = tables.open_file(tensor_db, mode="a", title="Data File")
     except:
-        data_file = tables.open_file(tensor_db, mode="w", title="Data File")
+        data_file = tables.open_file(tensor_db, mode="w", title="Data File", filters=filters)
 
     try:
         token_table = data_file.root.token_data.table
@@ -168,7 +168,10 @@ def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_
     if copysort==True:
         print("Copying table, reindexing, and sorting of %i rows." % token_table.nrows)
         oldname=token_table.name
-        token_table.cols.token_id.create_csindex()
+        if token_table.cols.token_id.is_indexed==False:
+            token_table.cols.token_id.create_csindex()
+        else:
+            token_table.cols.token_id.reindex()
         expected_rows=token_table.nrows
         newtable = token_table.copy(newname='sortedset', sortby='token_id',propindexes=True, filters=filters,chunkshape="auto",expected_rows=expected_rows)
         token_table.remove()
