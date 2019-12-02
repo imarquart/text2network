@@ -36,11 +36,14 @@ def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_
     :param MAX_SEQ_LENGTH:  maximal length of sequences
     :param DICT_SIZE: tokenizer dict size
     :param batch_size: batch size to send to BERT
+    :param nr_workers: Nr workers for dataloader. Probably should be set to 0 on windows
+    :param copysort: At the end of the operation, sort table by token id, reapply compression and save (recommended)
+    :param method: "attention": Weigh by BERT attention; "context_element": Sum probabilities unweighted
     :return: None
     """
     tables.set_blosc_max_threads(15)
-    # We will compress below
-    filters = tables.Filters(complevel=9, complib='zlib')
+    # If copysort is set to true, we will not compress until the very end
+    filters = tables.Filters(complevel=9, complib='blosc')
 
     # %% Initialize text dataset
     dataset = text_dataset(text_db, tokenizer, MAX_SEQ_LENGTH)
@@ -180,5 +183,5 @@ def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_
     print("Average Load Time: %s seconds" % (np.mean(load_timings)))
     print("Average Model Time: %s seconds" % (np.mean(model_timings)))
     print("Average Processing Time: %s seconds" % (np.mean(process_timings)))
-    print("Ratio Model/Processing: %s seconds" % (np.mean(model_timings)/np.mean(process_timings)))
+    print("Ratio Load/Operations: %s seconds" % (np.mean(load_timings)/np.mean(process_timings+model_timings)))
 

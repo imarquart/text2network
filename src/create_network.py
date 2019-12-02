@@ -230,5 +230,5 @@ def create_network(database, tokenizer, start_token, nr_clusters, batch_size=0):
     print("Average Load Time: %s seconds" % (np.mean(load_timings)))
     print("Average Prep Time: %s seconds" % (np.mean(prep_timings)))
     print("Average Processing Time: %s seconds" % (np.mean(process_timings)))
-    print("Ratio Load/Processing: %s seconds" % (np.mean(process_timings)/np.mean(load_timings)))
+    print("Ratio Load/Operations: %s seconds" % (np.mean(load_timings)/np.mean(process_timings+prep_timings)))
     return graphs,context_graphs

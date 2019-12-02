@@ -4,7 +4,7 @@ import os
 
 import time
 import networkx as nx
-from NLP.Experiments.create_network import create_network
+from NLP.src.create_network import create_network
 from NLP.utils.load_bert import get_bert_and_tokenizer
 
 
