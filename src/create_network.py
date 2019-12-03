@@ -4,6 +4,7 @@
 
 from sklearn.cluster import SpectralClustering
 import torch
+from NLP.src.datasets.dataloaderX import DataLoaderX
 import numpy as np
 import tables
 import networkx as nx
@@ -19,8 +20,10 @@ from NLP.utils.delwords import create_stopword_list
 from torch.utils.data import BatchSampler, SequentialSampler
 import time
 from sklearn.cluster import MeanShift, estimate_bandwidth
+from NLP.src.datasets.tensor_dataset import tensor_dataset, tensor_dataset_collate_batchsample
 
-def calculate_cutoffs(x,method="mean"):
+
+def calculate_cutoffs(x, method="mean"):
     """
     Different methods to calculate cutoff probability and number.
 
@@ -28,14 +31,15 @@ def calculate_cutoffs(x,method="mean"):
     :param method: To implement. Currently: mean
     :return: cutoff_number and probability
     """
-    if method=="mean":
-        cutoff_probability=max(np.mean(x),0.01)
-        cutoff_number=max(np.int(len(x)/100),100)
+    if method == "mean":
+        cutoff_probability = max(np.mean(x), 0.01)
+        cutoff_number = max(np.int(len(x) / 100), 100)
     else:
-        cutoff_probability=0
-        cutoff_number=0
+        cutoff_probability = 0
+        cutoff_number = 0
 
-    return cutoff_number,cutoff_probability
+    return cutoff_number, cutoff_probability
+
 
 def get_weighted_edgelist(token, x, cutoff_number=100, cutoff_probability=0):
     """
@@ -77,42 +81,27 @@ def simple_norm(x):
         return x
 
 
-def create_network(database, tokenizer, start_token, nr_clusters, batch_size=0):
-    # Open database connection, and table
-    try:
-        data_file = tables.open_file(database, mode="r", title="Data File")
-        token_table = data_file.root.token_data.table
-    except:
-        raise FileNotFoundError("Could not read token table from database.")
+def create_network(database, tokenizer, start_token, nr_clusters, batch_size=0, dset_method=0):
+    dataset = tensor_dataset(database, method=dset_method)
 
-
-    # Get all unique tokens in database
-    nodes = np.unique(token_table.col('token_id'))
     # Delete from this stopwords and the like
+    #print("Total nodes: %i" % dataset.nodes.shape[0])
     delwords = create_stopword_list(tokenizer)
-    nodes = np.setdiff1d(nodes, delwords)
-    nr_nodes = nodes.shape[0]
+    dataset.nodes = np.setdiff1d(dataset.nodes, delwords)
+    nr_nodes = dataset.nodes.shape[0]
+    #print("Nodes after deletion: %i" % dataset.nodes.shape[0])
 
     # Now we will situate the contexts of the start token
     start_token = tokenizer.convert_tokens_to_ids(start_token)
-    token = start_token
-    query = "".join(['token_id==', str(token)])
-    rows = token_table.read_where(query)
-    nr_rows = len(rows)
+
+    chunk, token_idx, own_dists, context_dists = dataset[dataset.tokenid_to_index(start_token)]
+    nr_rows = len(token_idx)
     if nr_rows == 0:
         raise AssertionError("Start token not in dataset")
 
-    # Create context distributions
-    context_dists = np.stack([x[0] for x in rows], axis=0).squeeze()
-    own_dists = np.stack([x[1] for x in rows], axis=0).squeeze()
-
-    if nr_rows == 1:
-        context_dists = np.reshape(context_dists, (-1, context_dists.shape[0]))
-        own_dists = np.reshape(own_dists, (-1, own_dists.shape[0]))
-
-    context_dists[:, token] = np.min(context_dists)
+    context_dists[:, start_token] = np.min(context_dists)
     context_dists[:, delwords] = np.min(context_dists)
-    own_dists[:, token] = np.min(own_dists)
+    own_dists[:, start_token] = np.min(own_dists)
     own_dists[:, delwords] = np.min(own_dists)
 
     # context_dists = softmax(context_dists)
@@ -120,8 +109,6 @@ def create_network(database, tokenizer, start_token, nr_clusters, batch_size=0):
 
     # Cluster according the context distributions
     nr_clusters = min(nr_clusters, nr_rows)
-
-
     # Clusterer
     if nr_clusters > 1:
         clusterer = KMeans(n_clusters=nr_clusters).fit(context_dists)
@@ -133,7 +120,7 @@ def create_network(database, tokenizer, start_token, nr_clusters, batch_size=0):
         # nr_clusters = len(np.unique(spcluster.labels_))
         nr_clusters = len(np.unique(clusterer.labels_))
 
-    print("".join(["Number of clusters: ", str(nr_clusters)]))
+    #print("".join(["Number of clusters: ", str(nr_clusters)]))
 
     # Create di-Graphs to store network
     # Each cluster is stored separately
@@ -155,38 +142,24 @@ def create_network(database, tokenizer, start_token, nr_clusters, batch_size=0):
     # TODO: Parallel
     # TODO: Batch the DB request (at least)
 
-    nodes = np.sort(nodes)
-
-    btsampler = BatchSampler(SequentialSampler(nodes), batch_size=batch_size, drop_last=False)
+    btsampler = BatchSampler(SequentialSampler(dataset.nodes), batch_size=batch_size, drop_last=False)
+    dataloader=DataLoaderX(dataset=dataset,batch_size=None, sampler=btsampler,num_workers=0,collate_fn=tensor_dataset_collate_batchsample, pin_memory=False)
 
     # Counter for timing
-    prep_timings=[]
-    process_timings=[]
-    load_timings=[]
+    prep_timings = []
+    process_timings = []
+    load_timings = []
     start_time = time.time()
 
-    for chunk in tqdm(btsampler):
-        chunk = nodes[chunk]
-        limits = [chunk[0], chunk[-1]]
-        query = "".join(['(token_id>=', str(limits[0]), ') & (token_id<=', str(limits[1]), ')'])
-        rows = token_table.read_where(query)
-
+    for chunk, token_idx, own_dists, context_dists in tqdm(dataloader):
+        #chunk, token_idx, own_dists, context_dists = batch
         # Data spent on loading batch
-        load_time=time.time()-start_time
+        load_time = time.time() - start_time
         load_timings.append(load_time)
 
-        nr_rows = len(rows)
+        nr_rows = len(token_idx)
         if nr_rows == 0:
             raise AssertionError("Database error: Token information missing")
-
-        # Create context distributions
-        context_dists = np.stack([x[0] for x in rows], axis=0).squeeze()
-        own_dists = np.stack([x[1] for x in rows], axis=0).squeeze()
-        token_idx = np.stack([x['token_id'] for x in rows], axis=0).squeeze()
-
-        if nr_rows == 1:
-            context_dists = np.reshape(context_dists, (-1, context_dists.shape[0]))
-            own_dists = np.reshape(own_dists, (-1, own_dists.shape[0]))
 
         context_dists[:, delwords] = 0  # np.min(context_dists)
         own_dists[:, delwords] = 0
@@ -194,12 +167,8 @@ def create_network(database, tokenizer, start_token, nr_clusters, batch_size=0):
         # Find a better way to do this
         # thsi is terrible
         for token in chunk:
-            if nr_rows == 1:
-                context_dists[[token_idx == token], token] = 0
-                own_dists[[token_idx == token], token] = 0
-            else:
-                context_dists[token_idx == token, token] = 0
-                own_dists[token_idx == token, token] = 0
+            context_dists[token_idx == token, token] = 0
+            own_dists[token_idx == token, token] = 0
 
         # context_dists = softmax(context_dists)
         # own_dists = softmax(own_dists)
@@ -212,7 +181,7 @@ def create_network(database, tokenizer, start_token, nr_clusters, batch_size=0):
             labels = np.zeros(nr_rows, dtype=int)
 
         # compute model timings time
-        prepare_time=time.time()-start_time-load_time
+        prepare_time = time.time() - start_time - load_time
         prep_timings.append(prepare_time)
 
         for i in range(nr_clusters):
@@ -224,14 +193,16 @@ def create_network(database, tokenizer, start_token, nr_clusters, batch_size=0):
                     replacement = simple_norm(replacement)
                     context = simple_norm(context)
                     cutoff_number, cutoff_probability = calculate_cutoffs(replacement, method="mean")
-                    graphs[i].add_weighted_edges_from(get_weighted_edgelist(token, replacement, cutoff_number, cutoff_probability))
+                    graphs[i].add_weighted_edges_from(
+                        get_weighted_edgelist(token, replacement, cutoff_number, cutoff_probability))
 
                     cutoff_number, cutoff_probability = calculate_cutoffs(context, method="mean")
-                    context_graphs[i].add_weighted_edges_from(get_weighted_edgelist(token, context, cutoff_number, cutoff_probability))
+                    context_graphs[i].add_weighted_edges_from(
+                        get_weighted_edgelist(token, context, cutoff_number, cutoff_probability))
         process_timings.append(time.time() - start_time - prepare_time - load_time)
-
+    print(" ")
     print("Average Load Time: %s seconds" % (np.mean(load_timings)))
     print("Average Prep Time: %s seconds" % (np.mean(prep_timings)))
     print("Average Processing Time: %s seconds" % (np.mean(process_timings)))
-    print("Ratio Load/Operations: %s seconds" % (np.mean(load_timings)/np.mean(process_timings+prep_timings)))
-    return graphs,context_graphs
+    print("Ratio Load/Operations: %s seconds" % (np.mean(load_timings) / np.mean(process_timings + prep_timings)))
+    return graphs, context_graphs

@@ -19,19 +19,20 @@ start_token="manager"
 
 
 
-#print("#############")
-#print("BATCH SIZE 1")
-#start_time = time.time()
-#graphs=create_network(database,tokenizer,start_token,nr_clusters=2,batch_size=1)
-#print("--- %s seconds ---" % (time.time() - start_time))
+batch_size=[1,2,5,10,20,50,100,500,1000]
 
-print("#############")
-print("BATCH SIZE 5")
-start_time = time.time()
-graphs,context_graphs=create_network(database,tokenizer,start_token,nr_clusters=2,batch_size=10)
-print("--- %s seconds ---" % (time.time() - start_time))
+for bs in batch_size:
+    print("#############")
+    print("BATCH SIZE %i, Single access" % bs)
+    start_time = time.time()
+    graphs,context_graphs=create_network(database,tokenizer,start_token,nr_clusters=2,batch_size=bs,dset_method="single")
+    print("--- %s seconds ---" % (time.time() - start_time))
 
-
+    print("#############")
+    print("BATCH SIZE %i, batch access" % bs)
+    start_time = time.time()
+    graphs,context_graphs=create_network(database,tokenizer,start_token,nr_clusters=2,batch_size=bs,dset_method=0)
+    print("--- %s seconds ---" % (time.time() - start_time))
 #tokenizer.convert_ids_to_tokens(range)
 
 token_map={v: k for k, v in tokenizer.vocab.items()}
