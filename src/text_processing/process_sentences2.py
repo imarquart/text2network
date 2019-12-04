@@ -1,6 +1,6 @@
 # TODO: NODE LIST DB
 # TODO: Redo Comments
-
+# TODO: Do everything in float 16 to save space
 
 import torch
 import numpy as np
@@ -54,12 +54,16 @@ def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_
     # Calculate expected rows
     expected_rows=np.int(7)
 
+    class Token_List_Particle(tables.IsDescription):
+        idx = tables.UInt16Col()
+        count = tables.UInt16Col()
+
     class Token_Particle(tables.IsDescription):
         seq_id = tables.UInt32Col()
         pos_id = tables.UInt32Col()
         seq_size = tables.UInt32Col()
-        own_dist = tables.Float32Col(shape=(1, DICT_SIZE))
-        context_dist = tables.Float32Col(shape=(1, DICT_SIZE))
+        own_dist = tables.Float16Col(shape=(1, DICT_SIZE))
+        context_dist = tables.Float16Col(shape=(1, DICT_SIZE))
 
     try:
         data_file = tables.open_file(tensor_db, mode="a", title="Data File")
@@ -70,6 +74,12 @@ def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_
         group = data_file.root.token_data
     except:
         group = data_file.create_group("/", 'token_data', 'Token Data')
+
+    try:
+        tbl_token_list = data_file.root.token_list
+    except:
+        tbl_token_list = data_file.create_table("/", "token_list",Token_List_Particle, "Token List")
+
         # Create index ONLY when not sorting later
         # We want to reindex otherwise, and enable autochunking etc.
         #if copysort==False:
@@ -142,7 +152,13 @@ def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_
                     token_name="".join(["tk_",str(token.item())])
                     if not token_name in group._v_children:
                         token_table = data_file.create_table(group, token_name, Token_Particle, "Token Table",filters=filters)
+                        # Also create entry in token list
+                        tk_particle= tbl_token_list.row
+                        tk_particle['idx'] = int(token.item())
+                        tk_particle['count'] = 1
+                        tk_particle.append()
                     else:
+                        # TODO: If needed, update token list with count here
                         #token_table = data_file.get_node(group,token_name)
                         token_table = group.__getitem__(token_name)
 

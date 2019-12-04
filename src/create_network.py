@@ -20,7 +20,7 @@ from NLP.utils.delwords import create_stopword_list
 from torch.utils.data import BatchSampler, SequentialSampler
 import time
 from sklearn.cluster import MeanShift, estimate_bandwidth
-from NLP.src.datasets.tensor_dataset import tensor_dataset, tensor_dataset_collate_batchsample
+from NLP.src.datasets.tensor_dataset2 import tensor_dataset, tensor_dataset_collate_batchsample
 
 
 def calculate_cutoffs(x, method="mean"):

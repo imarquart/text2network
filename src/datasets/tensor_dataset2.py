@@ -17,9 +17,15 @@ class tensor_dataset(Dataset):
         # Open database connection, and table
         self.data, self.table = self.open_db_con()
 
-        self.nitems = self.data.nrows
+        # Get token list
+        try:
+            tbl_token_list = self.table.root.token_list
+        except:
+            ImportError("Could not load token list.")
+
+        self.nitems = tbl_token_list.nrows
         # Save a list of nodes
-        self.nodes = np.unique(self.data.col('token_id'))
+        self.nodes = np.unique(tbl_token_list.col('idx'))
         self.nodes = np.sort(self.nodes)
 
         self.table.close()
@@ -69,21 +75,34 @@ class tensor_dataset(Dataset):
         limits = [chunk[0], chunk[-1]]
         rows = []
 
+        # Open group of token tables
+        try:
+            group = self.table.root.token_data
+        except:
+            ImportError("Could not open root group of token data.")
+
         # %% Method "Single": Query each token separately
         context_dists = []
         own_dists = []
         token_idx = []
         for node in chunk:
-            query = "".join(['(token_id==', str(node), ')'])
-            row = self.data.read_where(query)
+            token_name = "".join(["tk_", str(node)])
+            try:
+                token_table = group.__getitem__(token_name)
+            except:
+                ImportError("Could not find token information on %i" % node)
+
+            row = token_table[:]
+            nr_rows = len(row)
+
             own_dist = row['own_dist'].squeeze()
             context_dist = row['context_dist'].squeeze()
-            token_id = row['token_id'].squeeze()
+            token_id = np.repeat([node], nr_rows)
+
             # Control for 1-sequence results with zero first dimension
             if len(row) == 1:
                 context_dist = np.reshape(context_dist, (-1, context_dist.shape[0]))
                 own_dist = np.reshape(own_dist, (-1, own_dist.shape[0]))
-                token_id = np.expand_dims(token_id, axis=0)
 
             own_dists.append(own_dist)
             context_dists.append(context_dist)
