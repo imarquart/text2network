@@ -27,12 +27,13 @@ class tensor_dataset(Dataset):
     def open_db_con(self):
         try:
             table = tables.open_file(self.data_path, mode="r")
-            token_table = self.data
+
             # Check if data is not initialized
             if (self.data is None):
                 token_table = table.root.token_data.table
             # Check if data has been closed
             elif (self.data._v_isopen == False):
+                token_table = self.data
                 token_table = table.root.token_data.table
 
         except:

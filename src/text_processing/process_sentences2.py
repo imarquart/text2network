@@ -17,7 +17,7 @@ import tqdm
 
 
 
-def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_SIZE, batch_size,nr_workers=0,copysort=True,method="attention"):
+def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_SIZE, batch_size,nr_workers=0,copysort=True,method="attention",filters=tables.Filters(complevel=9, complib='blosc'),ch_shape=None):
     """
     Extracts probability distributions from texts and saves them in pyTables database
     in three formats:
@@ -44,7 +44,7 @@ def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_
     """
     tables.set_blosc_max_threads(15)
     # If copysort is set to true, we will not compress until the very end
-    filters = tables.Filters(complevel=9, complib='blosc')
+
 
     # %% Initialize text dataset
     dataset = text_dataset(text_db, tokenizer, MAX_SEQ_LENGTH)
@@ -151,7 +151,7 @@ def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_
                 if token.numpy() not in delwords:
                     token_name="".join(["tk_",str(token.item())])
                     if not token_name in group._v_children:
-                        token_table = data_file.create_table(group, token_name, Token_Particle, "Token Table",filters=filters)
+                        token_table = data_file.create_table(group, token_name, Token_Particle, "Token Table",filters=filters, chunkshape=ch_shape)
                         # Also create entry in token list
                         tk_particle= tbl_token_list.row
                         tk_particle['idx'] = int(token.item())
