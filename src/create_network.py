@@ -1,6 +1,5 @@
 # TODO: Commment
 # TODO: Add Logger
-# TODO: Rewrite Dataset class to use DataloderX implementation for parallel IO
 
 from sklearn.cluster import SpectralClustering
 import torch

@@ -6,9 +6,9 @@ import tables
 # os.chdir('/home/ingo/PhD/BERT-NLP/BERTNLP')
 import subprocess
 
-MAX_SEQ_LENGTH = 20
+MAX_SEQ_LENGTH = 30
 batch_size = 36
-method = "attention"
+method = "context_element"
 cwd = os.getcwd()
 text_db = os.path.join(cwd, 'NLP/data/texts.h5')
 modelpath = os.path.join(cwd, 'NLP/models')
