@@ -19,7 +19,7 @@ import time
 from sklearn.cluster import MeanShift, estimate_bandwidth
 from NLP.src.datasets.tensor_dataset import tensor_dataset, tensor_dataset_collate_batchsample
 
-def calculate_cutoffs(x, method="mean"):
+def calculate_cutoffs(x, method="mean", percent=100, min_cut=0.1):
     """
     Different methods to calculate cutoff probability and number.
 
@@ -30,14 +30,14 @@ def calculate_cutoffs(x, method="mean"):
     if method == "mean":
         cutoff_probability = max(np.mean(x), 0.01)
         cutoff_number = max(np.int(len(x) / 100), 100)
-    elif method == "80":
+    elif method == "percent":
         sortx = np.sort(x)[::-1]
         cum_sum = np.cumsum(sortx)
-        cutoff = cum_sum[-1] * 0.8
+        cutoff = cum_sum[-1] * percent/100
         cutoff_number = np.where(cum_sum >= cutoff)[0][0]
-        cutoff_probability = 0.01
+        cutoff_probability = min_cut
     else:
-        cutoff_probability = 0
+        cutoff_probability = min_cut
         cutoff_number = 0
 
     return cutoff_number, cutoff_probability
