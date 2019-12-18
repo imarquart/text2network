@@ -7,7 +7,7 @@ import time
 
 import networkx as nx
 from NLP.utils.rowvec_tools import simple_norm, get_weighted_edgelist, calculate_cutoffs
-from NLP.src.datasets.text_dataset import text_dataset,text_dataset_collate_batchsample
+from NLP.src.datasets.text_dataset import text_dataset, text_dataset_collate_batchsample
 from NLP.src.datasets.dataloaderX import DataLoaderX
 from NLP.src.text_processing.get_bert_tensor import get_bert_tensor
 from torch.utils.data import BatchSampler, SequentialSampler
@@ -15,40 +15,32 @@ from NLP.utils.delwords import create_stopword_list
 import tqdm
 
 
-
-
-def process_sentences_network(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_SIZE, batch_size,nr_workers=0,copysort=True,method="attention",filters = tables.Filters(complevel=9, complib='blosc'),ch_shape=None):
+def process_sentences_network(tokenizer, bert, text_db, MAX_SEQ_LENGTH, DICT_SIZE, batch_size, nr_workers=0,
+                              method="attention", cutoff_percent=80):
     """
-    Extracts probability distributions from texts and saves them in pyTables database
-    in three formats:
+    Extracts pre-processed sentences, gets predictions by BERT and creates a network
 
-    Sequence Data: Tensor for each sequence including distribution for each word.
-
-    Token-Sequence Data: One entry for each token in each sequence, including all distributions of
-    the sequence (duplication). Allows indexing by token.
-
-    Token Data: One entry for each token in each sequence, but only includes fields for
-    distribution of focal token, and and aggregation (average weighted by attention) of all contextual tokens.
+    Network is created for both context distribution and for replacement distribution
+    Each sentence is added via parallel ties in a multigraph
 
     :param tokenizer: BERT tokenizer (pyTorch)
     :param bert: BERT model
     :param text_db: HDF5 File of processes sentences, string of tokens, ending with punctuation
-    :param tensor_db: HDF5 File to save processed tensors
     :param MAX_SEQ_LENGTH:  maximal length of sequences
     :param DICT_SIZE: tokenizer dict size
     :param batch_size: batch size to send to BERT
     :param nr_workers: Nr workers for dataloader. Probably should be set to 0 on windows
-    :param copysort: At the end of the operation, sort table by token id, reapply compression and save (recommended)
     :param method: "attention": Weigh by BERT attention; "context_element": Sum probabilities unweighted
-    :return: None
+    :param cutoff_percent: Amount of probability mass to use to create links. Smaller values, less ties.
+    :return: graph, context_graph (networkx DiMultiGraphs)
     """
     tables.set_blosc_max_threads(15)
 
     # %% Initialize text dataset
     dataset = text_dataset(text_db, tokenizer, MAX_SEQ_LENGTH)
     batch_sampler = BatchSampler(SequentialSampler(range(0, dataset.nitems)), batch_size=batch_size, drop_last=False)
-    dataloader=DataLoaderX(dataset=dataset,batch_size=None, sampler=batch_sampler,num_workers=nr_workers,collate_fn=text_dataset_collate_batchsample, pin_memory=False)
-
+    dataloader = DataLoaderX(dataset=dataset, batch_size=None, sampler=batch_sampler, num_workers=nr_workers,
+                             collate_fn=text_dataset_collate_batchsample, pin_memory=False)
 
     # Push BERT to GPU
     torch.cuda.empty_cache()
@@ -57,7 +49,7 @@ def process_sentences_network(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGT
     bert.eval()
 
     # Create Stopwords
-    delwords=create_stopword_list(tokenizer)
+    delwords = create_stopword_list(tokenizer)
     # Create Graphs
     graph = nx.MultiDiGraph()
     context_graph = nx.MultiDiGraph()
@@ -65,22 +57,23 @@ def process_sentences_network(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGT
     context_graph.add_nodes_from(range(0, tokenizer.vocab_size))
 
     # Counter for timing
-    model_timings=[]
-    process_timings=[]
-    load_timings=[]
+    model_timings = []
+    process_timings = []
+    load_timings = []
     start_time = time.time()
     for batch, seq_ids, token_ids in tqdm.tqdm(dataloader, desc="Iteration"):
 
         # Data spent on loading batch
-        load_time=time.time()-start_time
+        load_time = time.time() - start_time
         load_timings.append(load_time)
         # This seems to allow slightly higher batch sizes on my GPU
-        #torch.cuda.empty_cache()
+        # torch.cuda.empty_cache()
         # Run BERT and get predictions
-        predictions, attn = get_bert_tensor(0, bert, batch, tokenizer.pad_token_id, tokenizer.mask_token_id, device,return_max=False)
+        predictions, attn = get_bert_tensor(0, bert, batch, tokenizer.pad_token_id, tokenizer.mask_token_id, device,
+                                            return_max=False)
 
         # compute model timings time
-        prepare_time=time.time()-start_time-load_time
+        prepare_time = time.time() - start_time - load_time
         model_timings.append(prepare_time)
 
         # %% Sequence Table
@@ -98,62 +91,73 @@ def process_sentences_network(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGT
 
             # %% Token Table
 
-            if method=="attention":
+            if method == "attention":
                 # Extract attention for sequence
-                seq_attn=attn[sequence_mask,:].cpu()
+                seq_attn = attn[sequence_mask, :].cpu()
                 # Curtail to tokens in sequence
                 # attention row vectors for each token are of
                 # size sequence_size+2, where position 0 is <CLS>
                 # and position n+1 is <SEP>, these we ignore
-                seq_attn=seq_attn[:,1:sequence_size+1]
+                seq_attn = seq_attn[:, 1:sequence_size + 1]
                 # Delete diagonal attention
-                seq_attn[torch.eye(sequence_size).bool()]=0
-                # Normalize
-                #seq_attn=torch.div(seq_attn.transpose(-1, 0), torch.sum(seq_attn, dim=1)).transpose(-1, 0)
+                seq_attn[torch.eye(sequence_size).bool()] = 0
             else:
                 # Context element distribution: we sum over all probabilities in a sequence
-                seq_attn=torch.ones([sequence_size,sequence_size])
-                seq_attn[torch.eye(sequence_size).bool()]=0
-
+                seq_attn = torch.ones([sequence_size, sequence_size])
+                seq_attn[torch.eye(sequence_size).bool()] = 0
 
             for pos, token in enumerate(token_ids[sequence_mask]):
-                # Add Network logic here
-                if token.numpy() not in delwords:
+                # Should all be np
+                token=token.item()
+                if token not in delwords:
                     replacement = dists[pos, :]
+
                     ## Context distribution with attention weights
                     context_index = np.zeros([MAX_SEQ_LENGTH], dtype=np.bool)
                     context_index[:sequence_size] = True
                     context_dist = dists[context_index, :]
-                    context =(torch.sum((seq_attn[pos] * context_dist.transpose(-1, 0)).transpose(-1, 0), dim=0).unsqueeze(0))
+                    context = (
+                        torch.sum((seq_attn[pos] * context_dist.transpose(-1, 0)).transpose(-1, 0), dim=0).unsqueeze(0))
+                    # Flatten, since it is one row each
+                    replacement = replacement.numpy().flatten()
+                    context = context.numpy().flatten()
+                    # Sparsify
+                    replacement[replacement==np.min(replacement)]=0
+                    context[context==np.min(context)]=0
+                    # Get rid of delnorm links
+                    replacement[delwords]=0
+                    context[delwords]=0
+                    # We norm the distributions here
+                    replacement = simple_norm(replacement)
+                    context = simple_norm(context)
 
-                    replacement = simple_norm(replacement.numpy())
-                    context = simple_norm(context.numpy())
-                    replacement=replacement.flatten()
-                    context=context.flatten()
-                    cutoff_number, cutoff_probability = calculate_cutoffs(replacement, method="percent", percent=80)
+
+                    # Create Adjacency List for Replacement Dist
+                    cutoff_number, cutoff_probability = calculate_cutoffs(replacement, method="percent",
+                                                                          percent=cutoff_percent)
                     graph.add_weighted_edges_from(
                         get_weighted_edgelist(token, replacement, cutoff_number, cutoff_probability), 'weight',
                         seq_id=sequence_id, pos=pos)
-                    cutoff_number, cutoff_probability = calculate_cutoffs(context, method="percent", percent=80)
-                    graph.add_weighted_edges_from(
+
+                    # Create Adjacency List for Context Dist
+                    cutoff_number, cutoff_probability = calculate_cutoffs(context, method="percent",
+                                                                          percent=cutoff_percent)
+                    context_graph.add_weighted_edges_from(
                         get_weighted_edgelist(token, context, cutoff_number, cutoff_probability), 'weight',
                         seq_id=sequence_id, pos=pos)
 
         del predictions, attn
 
         # compute processing time
-        process_timings.append(time.time()-start_time - prepare_time - load_time)
+        process_timings.append(time.time() - start_time - prepare_time - load_time)
         # New start time
-        start_time=time.time()
-
-
-
+        start_time = time.time()
 
     dataset.close()
 
     print("Average Load Time: %s seconds" % (np.mean(load_timings)))
     print("Average Model Time: %s seconds" % (np.mean(model_timings)))
     print("Average Processing Time: %s seconds" % (np.mean(process_timings)))
-    print("Ratio Load/Operations: %s seconds" % (np.mean(load_timings)/np.mean(process_timings+model_timings)))
+    print("Ratio Load/Operations: %s seconds" % (np.mean(load_timings) / np.mean(process_timings + model_timings)))
 
     return graph, context_graph
