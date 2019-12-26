@@ -19,6 +19,23 @@ import time
 from sklearn.cluster import MeanShift, estimate_bandwidth
 from NLP.src.datasets.tensor_dataset import tensor_dataset, tensor_dataset_collate_batchsample
 
+def add_to_networks(graph, context_graph, replacement, context, token=0, cutoff_percent=80, pos=0, sequence_id=0):
+    # Create Adjacency List for Replacement Dist
+    cutoff_number, cutoff_probability = calculate_cutoffs(replacement, method="percent",
+                                                          percent=cutoff_percent)
+    graph.add_weighted_edges_from(
+        get_weighted_edgelist(token, replacement, cutoff_number, cutoff_probability), 'weight',
+        seq_id=sequence_id, pos=pos)
+
+    # Create Adjacency List for Context Dist
+    cutoff_number, cutoff_probability = calculate_cutoffs(context, method="percent",
+                                                          percent=cutoff_percent)
+    context_graph.add_weighted_edges_from(
+        get_weighted_edgelist(token, context, cutoff_number, cutoff_probability), 'weight',
+        seq_id=sequence_id, pos=pos)
+
+    return graph, context_graph
+
 def calculate_cutoffs(x, method="mean", percent=100, min_cut=0.1):
     """
     Different methods to calculate cutoff probability and number.

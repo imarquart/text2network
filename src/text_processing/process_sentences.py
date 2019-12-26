@@ -15,7 +15,7 @@ import tqdm
 
 
 
-def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_SIZE, batch_size,nr_workers=0,copysort=True,method="attention",filters = tables.Filters(complevel=9, complib='blosc'),ch_shape=None):
+def process_sentences(tokenizer, bert, text_db, tensor_db, temp_db, MAX_SEQ_LENGTH, DICT_SIZE, batch_size,nr_workers=0,copysort=True,method="attention",filters = tables.Filters(complevel=9, complib='blosc'),ch_shape=None):
     """
     Extracts probability distributions from texts and saves them in pyTables database
     in three formats:
@@ -59,19 +59,20 @@ def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_
         context_dist = tables.Float32Col(shape=(1, DICT_SIZE))
 
     try:
-        data_file = tables.open_file(tensor_db, mode="a", title="Data File")
+        data_file = tables.open_file(temp_db, mode="w", title="Data File")
+        final_file = tables.open_file(tensor_db, mode="w", title="Data File")
     except:
-        data_file = tables.open_file(tensor_db, mode="w", title="Data File", filters=filters)
+        data_file = tables.open_file(temp_db, mode="w", title="Data File")
+        final_file = tables.open_file(tensor_db, mode="w", title="Data File", filters=filters)
 
-    try:
-        token_table = data_file.root.token_data.table
-    except:
-        group = data_file.create_group("/", 'token_data', 'Token Data')
-        token_table = data_file.create_table(group, 'table', Token_Particle, "Token Table", expectedrows=expected_rows, chunkshape=ch_shape)
-        # Create index ONLY when not sorting later
-        # We want to reindex otherwise, and enable autochunking etc.
-        if copysort==False:
-            token_table.cols.token_id.create_csindex()
+
+    group = data_file.create_group("/", 'token_data', 'Token Data')
+    final_group = final_file.create_group("/", 'token_data', 'Token Data')
+    token_table = data_file.create_table(group, 'table', Token_Particle, "Token Table", expectedrows=expected_rows, chunkshape=ch_shape)
+    # Create index ONLY when not sorting later
+    # We want to reindex otherwise, and enable autochunking etc.
+    if copysort==False:
+        token_table.cols.token_id.create_csindex()
 
     # Push BERT to GPU
     torch.cuda.empty_cache()
@@ -172,14 +173,18 @@ def process_sentences(tokenizer, bert, text_db, tensor_db, MAX_SEQ_LENGTH, DICT_
             token_table.cols.token_id.reindex()
         expected_rows=token_table.nrows
         newtable = token_table.copy(newname='sortedset', sortby='token_id',propindexes=True, filters=filters,chunkshape="auto",expected_rows=expected_rows)
-        token_table.remove()
-        data_file.flush()
+        #newdata=newtable.read()
+        token_table._f_remove(recursive=True, force=True)
         newtable.rename(oldname)
+        newtable._f_copy(newparent=final_group, newname=None, overwrite=True, recursive=False, createparents=False)
+        group._f_remove(recursive=True, force=True)
+        final_file.flush()
         data_file.flush()
 
 
     dataset.close()
     data_file.close()
+    final_file.close()
 
     print("Average Load Time: %s seconds" % (np.mean(load_timings)))
     print("Average Model Time: %s seconds" % (np.mean(model_timings)))

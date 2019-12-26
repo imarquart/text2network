@@ -6,7 +6,7 @@ import tables
 import time
 
 import networkx as nx
-from NLP.utils.rowvec_tools import simple_norm, get_weighted_edgelist, calculate_cutoffs
+from NLP.utils.rowvec_tools import simple_norm, get_weighted_edgelist, calculate_cutoffs, add_to_networks
 from NLP.src.datasets.text_dataset import text_dataset, text_dataset_collate_batchsample
 from NLP.src.datasets.dataloaderX import DataLoaderX
 from NLP.src.text_processing.get_bert_tensor import get_bert_tensor
@@ -131,20 +131,9 @@ def process_sentences_network(tokenizer, bert, text_db, MAX_SEQ_LENGTH, DICT_SIZ
                     replacement = simple_norm(replacement)
                     context = simple_norm(context)
 
+                    # Add values to network
+                    graph,context_graph=add_to_networks(graph,context_graph,replacement,context,token,cutoff_percent,pos,sequence_id)
 
-                    # Create Adjacency List for Replacement Dist
-                    cutoff_number, cutoff_probability = calculate_cutoffs(replacement, method="percent",
-                                                                          percent=cutoff_percent)
-                    graph.add_weighted_edges_from(
-                        get_weighted_edgelist(token, replacement, cutoff_number, cutoff_probability), 'weight',
-                        seq_id=sequence_id, pos=pos)
-
-                    # Create Adjacency List for Context Dist
-                    cutoff_number, cutoff_probability = calculate_cutoffs(context, method="percent",
-                                                                          percent=cutoff_percent)
-                    context_graph.add_weighted_edges_from(
-                        get_weighted_edgelist(token, context, cutoff_number, cutoff_probability), 'weight',
-                        seq_id=sequence_id, pos=pos)
 
         del predictions, attn
 
