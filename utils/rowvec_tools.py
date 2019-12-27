@@ -1,23 +1,8 @@
 
-from sklearn.cluster import SpectralClustering
-import torch
-from NLP.src.datasets.dataloaderX import DataLoaderX
+
 import numpy as np
-import tables
 import networkx as nx
-import os
-from tqdm import tqdm
-from sklearn.preprocessing import normalize
-import matplotlib.pyplot as plt
-from numpy import inf
-from sklearn.cluster import KMeans
-import hdbscan
-import itertools
-from NLP.utils.delwords import create_stopword_list
-from torch.utils.data import BatchSampler, SequentialSampler
-import time
-from sklearn.cluster import MeanShift, estimate_bandwidth
-from NLP.src.datasets.tensor_dataset import tensor_dataset, tensor_dataset_collate_batchsample
+
 
 def add_to_networks(graph, context_graph, replacement, context, token=0, cutoff_percent=80, pos=0, sequence_id=0):
     # Create Adjacency List for Replacement Dist
@@ -41,7 +26,7 @@ def calculate_cutoffs(x, method="mean", percent=100, min_cut=0.1):
     Different methods to calculate cutoff probability and number.
 
     :param x: Contextual vector
-    :param method: To implement. Currently: mean
+    :param method: mean: Only accept entries above the mean; percent: Take the k biggest elements that explain X% of mass.
     :return: cutoff_number and probability
     """
     if method == "mean":
@@ -98,3 +83,11 @@ def simple_norm(x):
         return x / np.sum(x, axis=-1)
     else:
         return x
+
+
+
+
+def softmax(x):
+    """Compute softmax values for each sets of scores in x."""
+    x = np.exp(x - np.max(x))
+    return np.exp(x) / np.sum(np.exp(x), axis=-1, keepdims=True)

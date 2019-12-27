@@ -34,8 +34,9 @@ if __name__ == '__main__':
     process_sentences(tokenizer, bert, text_db, tensor_db,temp_db, MAX_SEQ_LENGTH, DICT_SIZE, batch_size, nr_workers=0,
                       copysort=True, method=method, filters=filters, ch_shape=ch_shape)
 
+    # delete temp file
+    os.remove(temp_db)
     data_file = tables.open_file(tensor_db, mode="r", title="Data File")
     print(data_file)
-    print(data_file.root.token_data.table)
 
 print("Total Time: %s seconds" % (time.time() - start_time))

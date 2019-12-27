@@ -375,6 +375,60 @@ def evaluate(args, model, tokenizer, prefix=""):
 
     return result
 
+class bert_args():
+    def __init__(self,train_data_file, output_dir, do_train,model_dir,mlm_probability=0.15, block_size=-1, gpu_batch=4,epochs=1,warmup_steps=0):
+        self.train_data_file=train_data_file
+        self.eval_data_file=train_data_file
+        self.output_dir=output_dir
+
+        self.mlm=True
+        self.mlm_probability=mlm_probability
+
+        if do_train == True:
+            self.do_train = True
+            self.do_eval = False
+        else:
+            self.do_train = False
+            self.do_eval = True
+
+        self.do_lower_case = True
+
+        self.model_dir=model_dir
+
+        self.warmup_steps = warmup_steps
+        self.num_train_epochs = epochs
+
+        self.block_size=block_size
+
+        self.evaluate_during_training=True
+
+        self.per_gpu_train_batch_size=gpu_batch
+        self.per_gpu_eval_batch_size=gpu_batch
+
+        self.model_type="bert"
+        self.config_name = ""
+        self.tokenizer_name = ""
+        self.cache_dir = ""
+        self.gradient_accumulation_steps=1
+        self.learning_rate=5e-5
+        self.weight_decay=0
+        self.data_epsilon=1e-8
+        self.max_grad_norm=1.0
+        self.max_steps=-1
+        self.logging_steps=50
+        self.save_steps=50
+        self.save_total_limit=None
+        self.eva_all_checkpoints=True
+        self.no_cuda=False
+        self.overwrite_output_dir=True
+        self.overwrite_cache=True
+        self.seed=42
+        self.fp16=False
+        self.fp16_opt_level="01"
+        self.local_rank=-1
+        self.server_ip=''
+        self.server_port=''
+
 
 def main():
     parser = argparse.ArgumentParser()
