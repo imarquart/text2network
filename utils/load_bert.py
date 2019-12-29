@@ -1,8 +1,11 @@
 import torch
+import logging
 from transformers import BertTokenizer
 from transformers import BertForMaskedLM
 from transformers import BertConfig
 import os
+
+logger = logging.getLogger(__name__)
 
 
 def get_bert_and_tokenizer_local(modelpath):
@@ -18,6 +21,7 @@ def get_bert_and_tokenizer_local(modelpath):
 
 
 def get_bert_and_tokenizer(modelpath,load_local=False):
+    logger.setLevel(logging.WARN)
     if load_local==True:
 
         #config = BertConfig.from_json_file(modelpath)
@@ -57,5 +61,5 @@ def get_bert_and_tokenizer(modelpath,load_local=False):
                 bert = BertForMaskedLM.from_pretrained(output_model_file, config=config)
             except:
                 raise ImportError
-
+    logger.setLevel(logging.INFO)
     return tokenizer, bert

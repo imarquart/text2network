@@ -5,7 +5,7 @@ import re
 #import spacy
 import nltk
 import tables
-
+from collections.abc import Iterable
 
 def pre_process_sentences_COCA(files,database,MAX_SEQ_LENGTH,char_mult,max_seq=0,file_type="old"):
     """
@@ -55,22 +55,23 @@ def pre_process_sentences_COCA(files,database,MAX_SEQ_LENGTH,char_mult,max_seq=0
         start_index = -1
         run_index=start_index
 
-
+    # We expect a list of files here
+    if not isinstance(files,list):
+        files=[files]
 
     # Main loop over files
     for file_path in files:
-
         # Derive file name and year
         if file_type=="old":
             file_name=re.split("/",file_path)[-1]
             file_name = re.split(".txt", file_name)[0]
             file_source = re.split("_", file_name)[1]
             year = int(re.split("_", file_name)[2])
-        elif file_type=="new":
+        elif file_type=="year":
             file_name=re.split("/",file_path)[-1]
             file_name = re.split(".txt", file_name)[0]
-            file_source = re.split("_", file_name)[1]
-            year = int(re.split("_", file_name)[0])
+            file_source = "year"
+            year = int(file_name)
         else:
             AssertionError("File type not correctly specified.")
 

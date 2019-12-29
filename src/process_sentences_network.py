@@ -4,7 +4,7 @@ import torch
 import numpy as np
 import tables
 import time
-
+import logging
 import networkx as nx
 from NLP.utils.rowvec_tools import simple_norm, get_weighted_edgelist, calculate_cutoffs, add_to_networks
 from NLP.src.datasets.text_dataset import text_dataset, text_dataset_collate_batchsample
@@ -44,7 +44,7 @@ def process_sentences_network(tokenizer, bert, text_db, MAX_SEQ_LENGTH, DICT_SIZ
 
     # Push BERT to GPU
     torch.cuda.empty_cache()
-    if torch.cuda.is_available(): print("Using CUDA.")
+    if torch.cuda.is_available(): logging.info("Using CUDA.")
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     bert.to(device)
     bert.eval()
@@ -129,6 +129,7 @@ def process_sentences_network(tokenizer, bert, text_db, MAX_SEQ_LENGTH, DICT_SIZ
                     context = context.numpy().flatten()
 
                     # Sparsify
+                    replacement[token]=0
                     replacement[replacement==np.min(replacement)]=0
                     context[context==np.min(context)]=0
                     context_att[context_att==np.min(context_att)]=0
@@ -156,9 +157,9 @@ def process_sentences_network(tokenizer, bert, text_db, MAX_SEQ_LENGTH, DICT_SIZ
 
     dataset.close()
 
-    print("Average Load Time: %s seconds" % (np.mean(load_timings)))
-    print("Average Model Time: %s seconds" % (np.mean(model_timings)))
-    print("Average Processing Time: %s seconds" % (np.mean(process_timings)))
-    print("Ratio Load/Operations: %s seconds" % (np.mean(load_timings) / np.mean(process_timings + model_timings)))
+    logging.info("Average Load Time: %s seconds" % (np.mean(load_timings)))
+    logging.info("Average Model Time: %s seconds" % (np.mean(model_timings)))
+    logging.info("Average Processing Time: %s seconds" % (np.mean(process_timings)))
+    logging.info("Ratio Load/Operations: %s seconds" % (np.mean(load_timings) / np.mean(process_timings + model_timings)))
 
     return graph, context_graph, attention_graph
