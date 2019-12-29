@@ -4,7 +4,7 @@ import numpy as np
 import networkx as nx
 
 
-def add_to_networks(graph, context_graph, replacement, context, token=0, cutoff_percent=80, pos=0, sequence_id=0):
+def add_to_networks(graph, context_graph, attention_graph, replacement, context, context_att,token=0, cutoff_percent=80, pos=0, sequence_id=0):
     # Create Adjacency List for Replacement Dist
     cutoff_number, cutoff_probability = calculate_cutoffs(replacement, method="percent",
                                                           percent=cutoff_percent)
@@ -19,7 +19,14 @@ def add_to_networks(graph, context_graph, replacement, context, token=0, cutoff_
         get_weighted_edgelist(token, context, cutoff_number, cutoff_probability), 'weight',
         seq_id=sequence_id, pos=pos)
 
-    return graph, context_graph
+    # Create Adjacency List for Attention Dist
+    cutoff_number, cutoff_probability = calculate_cutoffs(context_att, method="percent",
+                                                          percent=cutoff_percent)
+    attention_graph.add_weighted_edges_from(
+        get_weighted_edgelist(token, context_att, cutoff_number, cutoff_probability), 'weight',
+        seq_id=sequence_id, pos=pos)
+
+    return graph, context_graph,attention_graph
 
 def calculate_cutoffs(x, method="mean", percent=100, min_cut=0.1):
     """

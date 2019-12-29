@@ -16,7 +16,7 @@ import tqdm
 
 
 def process_sentences_network(tokenizer, bert, text_db, MAX_SEQ_LENGTH, DICT_SIZE, batch_size, nr_workers=0,
-                              method="attention", cutoff_percent=80):
+                              cutoff_percent=80):
     """
     Extracts pre-processed sentences, gets predictions by BERT and creates a network
 
@@ -44,6 +44,7 @@ def process_sentences_network(tokenizer, bert, text_db, MAX_SEQ_LENGTH, DICT_SIZ
 
     # Push BERT to GPU
     torch.cuda.empty_cache()
+    if torch.cuda.is_available(): print("Using CUDA.")
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     bert.to(device)
     bert.eval()
@@ -53,8 +54,11 @@ def process_sentences_network(tokenizer, bert, text_db, MAX_SEQ_LENGTH, DICT_SIZ
     # Create Graphs
     graph = nx.MultiDiGraph()
     context_graph = nx.MultiDiGraph()
+    attention_graph = nx.MultiDiGraph()
+
     graph.add_nodes_from(range(0, tokenizer.vocab_size))
     context_graph.add_nodes_from(range(0, tokenizer.vocab_size))
+    attention_graph.add_nodes_from(range(0, tokenizer.vocab_size))
 
     # Counter for timing
     model_timings = []
@@ -89,22 +93,19 @@ def process_sentences_network(tokenizer, bert, text_db, MAX_SEQ_LENGTH, DICT_SIZ
             dists = torch.zeros([MAX_SEQ_LENGTH, DICT_SIZE], requires_grad=False)
             dists[:sequence_size, :] = predictions[sequence_mask, :]
 
-            # %% Token Table
 
-            if method == "attention":
-                # Extract attention for sequence
-                seq_attn = attn[sequence_mask, :].cpu()
-                # Curtail to tokens in sequence
-                # attention row vectors for each token are of
-                # size sequence_size+2, where position 0 is <CLS>
-                # and position n+1 is <SEP>, these we ignore
-                seq_attn = seq_attn[:, 1:sequence_size + 1]
-                # Delete diagonal attention
-                seq_attn[torch.eye(sequence_size).bool()] = 0
-            else:
-                # Context element distribution: we sum over all probabilities in a sequence
-                seq_attn = torch.ones([sequence_size, sequence_size])
-                seq_attn[torch.eye(sequence_size).bool()] = 0
+            #%% Extract attention for sequence
+            seq_attn = attn[sequence_mask, :].cpu()
+            # Curtail to tokens in sequence
+            # attention row vectors for each token are of
+            # size sequence_size+2, where position 0 is <CLS>
+            # and position n+1 is <SEP>, these we ignore
+            seq_attn = seq_attn[:, 1:sequence_size + 1]
+            # Delete diagonal attention
+            seq_attn[torch.eye(sequence_size).bool()] = 0
+            #%% Context element distribution: we sum over all probabilities in a sequence
+            seq_ce = torch.ones([sequence_size, sequence_size])
+            seq_ce[torch.eye(sequence_size).bool()] = 0
 
             for pos, token in enumerate(token_ids[sequence_mask]):
                 # Should all be np
@@ -112,27 +113,38 @@ def process_sentences_network(tokenizer, bert, text_db, MAX_SEQ_LENGTH, DICT_SIZ
                 if token not in delwords:
                     replacement = dists[pos, :]
 
-                    ## Context distribution with attention weights
+                    ## Context distributions
                     context_index = np.zeros([MAX_SEQ_LENGTH], dtype=np.bool)
                     context_index[:sequence_size] = True
                     context_dist = dists[context_index, :]
-                    context = (
+                    ## Attention
+                    context_att = (
                         torch.sum((seq_attn[pos] * context_dist.transpose(-1, 0)).transpose(-1, 0), dim=0).unsqueeze(0))
+                    ## Context Element
+                    context = (
+                        torch.sum((seq_ce[pos] * context_dist.transpose(-1, 0)).transpose(-1, 0), dim=0).unsqueeze(0))
                     # Flatten, since it is one row each
                     replacement = replacement.numpy().flatten()
+                    context_att = context_att.numpy().flatten()
                     context = context.numpy().flatten()
+
                     # Sparsify
                     replacement[replacement==np.min(replacement)]=0
                     context[context==np.min(context)]=0
+                    context_att[context_att==np.min(context_att)]=0
+
                     # Get rid of delnorm links
                     replacement[delwords]=0
                     context[delwords]=0
+                    context_att[delwords]=0
+
                     # We norm the distributions here
                     replacement = simple_norm(replacement)
                     context = simple_norm(context)
+                    context_att = simple_norm(context_att)
 
                     # Add values to network
-                    graph,context_graph=add_to_networks(graph,context_graph,replacement,context,token,cutoff_percent,pos,sequence_id)
+                    graph,context_graph,attention_graph=add_to_networks(graph,context_graph,attention_graph,replacement,context,context_att,token,cutoff_percent,pos,sequence_id)
 
 
         del predictions, attn
@@ -149,4 +161,4 @@ def process_sentences_network(tokenizer, bert, text_db, MAX_SEQ_LENGTH, DICT_SIZ
     print("Average Processing Time: %s seconds" % (np.mean(process_timings)))
     print("Ratio Load/Operations: %s seconds" % (np.mean(load_timings) / np.mean(process_timings + model_timings)))
 
-    return graph, context_graph
+    return graph, context_graph, attention_graph

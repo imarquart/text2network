@@ -20,7 +20,7 @@ using a masked language modeling (MLM) loss.
 """
 
 from __future__ import absolute_import, division, print_function
-from NLP.utils.load_bert import get_bert_and_tokenizer_local
+from NLP.utils.load_bert import get_bert_and_tokenizer
 import argparse
 import glob
 import logging
@@ -36,10 +36,10 @@ from torch.utils.data import DataLoader, Dataset, SequentialSampler, RandomSampl
 from torch.utils.data.distributed import DistributedSampler
 from torch.utils.tensorboard import SummaryWriter
 
-#try:
+# try:
 #
-#except:
-    #from tensorboardX import SummaryWriter
+# except:
+# from tensorboardX import SummaryWriter
 
 from tqdm import tqdm, trange
 
@@ -54,61 +54,63 @@ MODEL_CLASSES = {
 
 
 class bert_args():
-    def __init__(self,train_data_file, output_dir, do_train,model_dir,mlm_probability=0.15, block_size=-1, gpu_batch=4,epochs=1,warmup_steps=0):
-        self.train_data_file=train_data_file
-        self.eval_data_file=train_data_file
-        self.output_dir=output_dir
+    def __init__(self, train_data_file, output_dir, do_train, model_dir, mlm_probability=0.15, block_size=-1,
+                 gpu_batch=4, epochs=1, warmup_steps=0):
+        self.train_data_file = train_data_file
+        self.eval_data_file = train_data_file
+        self.output_dir = output_dir
 
-        self.mlm=True
-        self.mlm_probability=mlm_probability
+        self.mlm = True
+        self.mlm_probability = mlm_probability
 
         if do_train == True:
             self.do_train = True
-            self.do_eval = False
+            self.do_eval = True
         else:
             self.do_train = False
             self.do_eval = True
 
         self.do_lower_case = True
 
-        self.model_name_or_path=model_dir
+        self.model_name_or_path = model_dir
+        self.model_dir = model_dir
 
         self.warmup_steps = warmup_steps
         self.num_train_epochs = epochs
 
-        self.block_size=block_size
+        self.block_size = block_size
 
-        self.evaluate_during_training=True
+        self.evaluate_during_training = True
 
-        self.per_gpu_train_batch_size=gpu_batch
-        self.per_gpu_eval_batch_size=gpu_batch
+        self.per_gpu_train_batch_size = gpu_batch
+        self.per_gpu_eval_batch_size = gpu_batch
 
-        self.model_type="bert"
+        self.model_type = "bert"
         self.config_name = ""
         self.tokenizer_name = ""
         self.cache_dir = ""
-        self.gradient_accumulation_steps=1
-        self.learning_rate=5e-5
-        self.weight_decay=0
-        self.data_epsilon=1e-8
-        self.max_grad_norm=1.0
-        self.max_steps=-1
-        self.logging_steps=50
-        self.save_steps=50
-        self.save_total_limit=None
-        self.eva_all_checkpoints=True
-        self.no_cuda=False
-        self.overwrite_output_dir=True
-        self.overwrite_cache=True
-        self.seed=42
-        self.fp16=False
-        self.fp16_opt_level="01"
-        self.local_rank=-1
-        self.n_gpu=1
-        self.server_ip=''
-        self.server_port=''
+        self.gradient_accumulation_steps = 1
+        self.learning_rate = 5e-5
+        self.weight_decay = 0
+        self.adam_epsilon = 1e-8
+        self.max_grad_norm = 1.0
+        self.max_steps = -1
+        self.logging_steps = 3000
+        self.save_steps = 2000
+        self.save_total_limit = None
+        self.eval_all_checkpoints = False
+        self.no_cuda = False
+        self.overwrite_output_dir = True
+        self.overwrite_cache = True
+        self.seed = 42
+        self.fp16 = False
+        self.fp16_opt_level = "01"
+        self.local_rank = -1
+        self.n_gpu = 1
+        self.server_ip = ''
+        self.server_port = ''
 
-        self.device=None
+        self.device = None
 
 
 class TextDataset(Dataset):
@@ -241,11 +243,13 @@ def train(args, train_dataset, model, tokenizer):
     scheduler = WarmupLinearSchedule(optimizer, warmup_steps=args.warmup_steps, t_total=t_total)
 
     # Check if saved optimizer or scheduler states exist
+    return_from_checkpoint = False
     if os.path.isfile(os.path.join(args.model_name_or_path, 'optimizer.pt')) and os.path.isfile(
             os.path.join(args.model_name_or_path, 'scheduler.pt')):
         # Load in optimizer and scheduler states
         optimizer.load_state_dict(torch.load(os.path.join(args.model_name_or_path, 'optimizer.pt')))
         scheduler.load_state_dict(torch.load(os.path.join(args.model_name_or_path, 'scheduler.pt')))
+        return_from_checkpoint = True
 
     if args.fp16:
         try:
@@ -279,7 +283,9 @@ def train(args, train_dataset, model, tokenizer):
     epochs_trained = 0
     steps_trained_in_current_epoch = 0
     # Check if continuing training from a checkpoint
-    if os.path.exists(args.model_name_or_path):
+
+    # DISABLE THIS FOR NOW
+    if os.path.exists(args.model_name_or_path) and return_from_checkpoint == True:
         # set global_step to gobal_step of last saved checkpoint from model path
         global_step = int(args.model_name_or_path.split('-')[-1].split('/')[0])
         epochs_trained = global_step // (len(train_dataloader) // args.gradient_accumulation_steps)
@@ -300,7 +306,7 @@ def train(args, train_dataset, model, tokenizer):
                             disable=args.local_rank not in [-1, 0])
     set_seed(args)  # Added here for reproducibility (even between python 2 and 3)
     for _ in train_iterator:
-        epoch_iterator = tqdm(train_dataloader, desc="Iteration", disable=args.local_rank not in [-1, 0])
+        epoch_iterator = tqdm(train_dataloader, desc="Iteration", leave=False, position=0,disable=args.local_rank not in [-1, 0])
         for step, batch in enumerate(epoch_iterator):
 
             # Skip past any already trained steps if resuming training
@@ -368,9 +374,11 @@ def train(args, train_dataset, model, tokenizer):
                     logger.info("Saving optimizer and scheduler states to %s", output_dir)
 
             if args.max_steps > 0 and global_step > args.max_steps:
+                logger.info("Global step %i larger than max steps %i", global_step, args.max_steps)
                 epoch_iterator.close()
                 break
         if args.max_steps > 0 and global_step > args.max_steps:
+            logger.info("Global step %i larger than max steps %i", global_step, args.max_steps)
             train_iterator.close()
             break
 
@@ -406,7 +414,7 @@ def evaluate(args, model, tokenizer, prefix=""):
     nb_eval_steps = 0
     model.eval()
 
-    for batch in tqdm(eval_dataloader, desc="Evaluating"):
+    for batch in tqdm(eval_dataloader, leave=False, position=0,desc="Evaluating"):
         inputs, labels = mask_tokens(batch, tokenizer, args) if args.mlm else (batch, batch)
         inputs = inputs.to(args.device)
         labels = labels.to(args.device)
@@ -421,7 +429,8 @@ def evaluate(args, model, tokenizer, prefix=""):
     perplexity = torch.exp(torch.tensor(eval_loss))
 
     result = {
-        "perplexity": perplexity
+        "perplexity": perplexity,
+        "eval_loss": eval_loss
     }
 
     output_eval_file = os.path.join(eval_output_dir, prefix, "eval_results.txt")
@@ -433,10 +442,9 @@ def evaluate(args, model, tokenizer, prefix=""):
 
     return result
 
+
 def run_bert(args):
-
     #
-
 
     if os.path.exists(args.output_dir) and os.listdir(
             args.output_dir) and args.do_train and not args.overwrite_output_dir:
@@ -449,10 +457,9 @@ def run_bert(args):
     # Disable dist
     args.local_rank = -1
 
-
     device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
-    #args.n_gpu = torch.cuda.device_count()
-    args.n_gpu =1
+    # args.n_gpu = torch.cuda.device_count()
+    args.n_gpu = 1
 
     args.device = device
 
@@ -471,13 +478,13 @@ def run_bert(args):
         torch.distributed.barrier()  # Barrier to make sure only the first process in distributed training download model & vocab
 
     config_class, model_class, tokenizer_class = MODEL_CLASSES[args.model_type]
-    #config = config_class.from_pretrained(args.config_name if args.config_name else args.model_name_or_path,
+    # config = config_class.from_pretrained(args.config_name if args.config_name else args.model_name_or_path,
     #                                      cache_dir=args.cache_dir if args.cache_dir else None)
-    #tokenizer = tokenizer_class.from_pretrained(args.tokenizer_name if args.tokenizer_name else args.model_name_or_path,
+    # tokenizer = tokenizer_class.from_pretrained(args.tokenizer_name if args.tokenizer_name else args.model_name_or_path,
     #                                            do_lower_case=args.do_lower_case,
     #                                            cache_dir=args.cache_dir if args.cache_dir else None)
 
-    tokenizer, model = get_bert_and_tokenizer_local(args.model_dir)
+    tokenizer, model = get_bert_and_tokenizer(args.model_dir,True)
     if args.block_size <= 0:
         args.block_size = tokenizer.max_len_single_sentence  # Our input block size will be the max possible for the model
     args.block_size = min(args.block_size, tokenizer.max_len_single_sentence)
@@ -526,21 +533,33 @@ def run_bert(args):
     # Evaluation
     results = {}
     if args.do_eval and args.local_rank in [-1, 0]:
-        checkpoints = [args.output_dir]
+
+        # Change: If not training, we evaluate not on output folder, but model folder model
+        if args.do_train==False:
+            check_dir=args.model_dir
+        else:
+            check_dir=args.output_dir
+
+        # Continue base script
+        checkpoints = [check_dir]
         if args.eval_all_checkpoints:
             checkpoints = list(
-                os.path.dirname(c) for c in sorted(glob.glob(args.output_dir + '/**/' + WEIGHTS_NAME, recursive=True)))
+                os.path.dirname(c) for c in sorted(glob.glob(check_dir + '/**/' + WEIGHTS_NAME, recursive=True)))
             logging.getLogger("transformers.modeling_utils").setLevel(logging.WARN)  # Reduce logging
         logger.info("Evaluate the following checkpoints: %s", checkpoints)
         for checkpoint in checkpoints:
             global_step = checkpoint.split('-')[-1] if len(checkpoints) > 1 else ""
             prefix = checkpoint.split('/')[-1] if checkpoint.find('checkpoint') != -1 else ""
 
-            model = model_class.from_pretrained(checkpoint)
+            # Allow loading local, non modified files
+            try:
+                model = model_class.from_pretrained(checkpoint)
+            except:
+                _, model = get_bert_and_tokenizer(args.model_dir, True)
+
             model.to(args.device)
             result = evaluate(args, model, tokenizer, prefix=prefix)
             result = dict((k + '_{}'.format(global_step), v) for k, v in result.items())
             results.update(result)
 
     return results
-
