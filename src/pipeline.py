@@ -1,10 +1,12 @@
 #%% Imports
 
+
+import glob
 import os, time, sys
 import logging
 from shutil import copyfile
 from sys import exit
-from NLP.src.text_processing.preprocess_files import pre_process_sentences_COCA
+from NLP.src.text_processing.preprocess_files_HBR import preprocess_files_HBR
 from NLP.config.config import configuration
 from NLP.src.process_sentences_network import process_sentences_network
 from NLP.utils.load_bert import get_bert_and_tokenizer
@@ -15,7 +17,7 @@ import networkx as nx
 
 #%% Definitions:
 year=1990
-input_file="D:/NLP/BERT-NLP/NLP/data/w_news_1990.txt"
+input_folder='D:/NLP/BERT-NLP/NLP/data/HBR/articles/1990'
 cfg=configuration()
 
 #%% Config
@@ -42,18 +44,18 @@ if not os.path.exists(bert_folder): os.mkdir(bert_folder)
 if not os.path.exists(tensor_folder): os.mkdir(tensor_folder)
 if not os.path.exists(nw_folder): os.mkdir(nw_folder)
 
-logging.info("Copying text file")
-try:
-    copyfile(input_file, text_file)
-except IOError as e:
-    logging.error("Unable to copy file. %s" % e)
-    exit(1)
-except:
-    logging.error("Unexpected error:", sys.exc_info())
-    exit(1)
+logging.info("Copying separate text files into text folder.")
+read_files = glob.glob(''.join([input_folder,'/*.txt']))
+
+with open(text_file, "wb") as outfile:
+    for f in read_files:
+        with open(f, "rb") as infile:
+            outfile.write(infile.read())
+
+
 
 #%% Get file hash
-hash=hash_file(input_file,hash_factory="md5")
+hash=hash_file(text_file,hash_factory="md5")
 logging.info("File Hash is %s" % hash)
 
 #%% Preprocess files
@@ -63,7 +65,7 @@ if check_step(text_folder, hash):
 else:
     start_time = time.time()
     logging.disable(cfg.subprocess_level)
-    pre_process_sentences_COCA(text_file,text_db,cfg.max_seq_length,cfg.char_mult,max_seq=cfg.max_seq,file_type="year")
+    preprocess_files_HBR(input_folder,text_db,cfg.max_seq_length,cfg.char_mult,max_seq=cfg.max_seq)
     logging.disable(logging.NOTSET)
     logging.info("Pre-processing finished in %s seconds" % (time.time() - start_time))
     complete_step(text_folder,hash)
@@ -95,6 +97,7 @@ if check_step(nw_folder, hash):
 else:
     start_time = time.time()
     logging.disable(cfg.subprocess_level)
+    logging.disable(logging.NOTSET)
     tokenizer, bert = get_bert_and_tokenizer(bert_folder, True)
     logging.disable(logging.NOTSET)
     DICT_SIZE = tokenizer.vocab_size

@@ -38,6 +38,7 @@ def process_sentences_network(tokenizer, bert, text_db, MAX_SEQ_LENGTH, DICT_SIZ
 
     # %% Initialize text dataset
     dataset = text_dataset(text_db, tokenizer, MAX_SEQ_LENGTH)
+    logging.info("Number of sentences found: %i"%dataset.nitems)
     batch_sampler = BatchSampler(SequentialSampler(range(0, dataset.nitems)), batch_size=batch_size, drop_last=False)
     dataloader = DataLoaderX(dataset=dataset, batch_size=None, sampler=batch_sampler, num_workers=nr_workers,
                              collate_fn=text_dataset_collate_batchsample, pin_memory=False)
