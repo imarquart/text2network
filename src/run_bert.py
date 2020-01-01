@@ -54,14 +54,16 @@ MODEL_CLASSES = {
 
 
 class bert_args():
-    def __init__(self, train_data_file, output_dir, do_train, model_dir, mlm_probability=0.15, block_size=-1,
-                 gpu_batch=4, epochs=1, warmup_steps=0):
+    def __init__(self, train_data_file, output_dir, do_train, model_dir, mlm_probability=0.15, block_size=30,
+                 loss_limit=0.5, gpu_batch=4, epochs=1, warmup_steps=0):
         self.train_data_file = train_data_file
         self.eval_data_file = train_data_file
         self.output_dir = output_dir
 
         self.mlm = True
         self.mlm_probability = mlm_probability
+
+        self.loss_limit=loss_limit
 
         if do_train == True:
             self.do_train = True
@@ -379,6 +381,11 @@ def train(args, train_dataset, model, tokenizer):
                 break
         if args.max_steps > 0 and global_step > args.max_steps:
             logger.info("Global step %i larger than max steps %i", global_step, args.max_steps)
+            train_iterator.close()
+            break
+
+        if tr_loss / global_step <= args.loss_limit:
+            logger.info("Loss at global step %i has reached desired value with %i", global_step, tr_loss / global_step)
             train_iterator.close()
             break
 

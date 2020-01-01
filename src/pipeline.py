@@ -82,7 +82,7 @@ for year in years:
 
         start_time = time.time()
         # Create BERT args
-        args = bert_args(text_file, bert_folder, cfg.do_train, cfg.model_dir, cfg.mlm_probability, cfg.max_seq_length, cfg.gpu_batch, cfg.epochs,
+        args = bert_args(text_file, bert_folder, cfg.do_train, cfg.model_dir, cfg.mlm_probability, cfg.max_seq_length, cfg.loss_limit, cfg.gpu_batch, cfg.epochs,
                          cfg.warmup_steps)
         torch.cuda.empty_cache()
         logging.disable(cfg.subprocess_level)
