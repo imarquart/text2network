@@ -24,8 +24,6 @@ def get_bert_and_tokenizer(modelpath,load_local=False):
     logger.setLevel(logging.WARN)
     if load_local==True:
 
-        #config = BertConfig.from_json_file(modelpath)
-        #config.output_attentions = True
         try:
             tokenizer = BertTokenizer.from_pretrained(modelpath, do_lower_case=True)
             bert = BertForMaskedLM.from_pretrained(modelpath, output_attentions=True)
