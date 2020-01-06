@@ -25,7 +25,7 @@ logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message
 cfg = configuration()
 
 # %% Main Loop:
-years = range(1990, 2016)
+years = range(1990, 2017)
 logging.info("Setting up folder structure")
 cluster_xls = ''.join([cfg.data_folder, '/cluster_xls'])
 plot_folder = ''.join([cfg.data_folder, '/plots/cluster'])
@@ -35,35 +35,6 @@ if not os.path.exists(cluster_xls): os.mkdir(cluster_xls)
 if not os.path.exists(plot_folder): os.mkdir(plot_folder)
 if not os.path.exists(egoplot_folder): os.mkdir(egoplot_folder)
 
-# %% Dynamic Clustering
-for network_type in ["Rgraph-Sum-Rev", "Rgraph-Sum", "Cgraph-Sum", "Cgraph-Sum-Rev"]:
-    for focal_token in cfg.focal_nodes:
-        logging.info("%s: Clustering token %s" % (network_type, focal_token))
-        central_graphs, year_info = dynamic_clustering(years, focal_token, cfg, louvain_cluster, cfg.cluster_window,
-                                                       cfg.num_retain, cfg.ego_radius, network_type=network_type)
-        logging.info("Saving dynamic clustering data")
-
-        workbook = xlsxwriter.Workbook(
-            ''.join([cluster_xls, '/', focal_token, '_', network_type, 'w_', str(cfg.cluster_window), '.xlsx']))
-
-        for year in years:
-            cplot_folder = ''.join([plot_folder, '/cluster_', focal_token, '_', str(year), '_', network_type, '_w_', str(cfg.cluster_window)])
-            cplot_name = ''.join(["Cluster ", str(year), ' ', network_type, ' w ', str(cfg.cluster_window)])
-            draw_ego_network_mem(central_graphs[year], focal_token, 15, cplot_name, cplot_folder, False)
-            worksheet.write_number(0, 0, year)
-            row = 1
-            col = 1
-            worksheet = workbook.add_worksheet()
-            for cluster in year_info[year]:
-                row = 1
-                for token, cent in cluster.items():
-                    worksheet.write_string(row, col, token)
-                    worksheet.write_number(row, col + 1, cent)
-                    row = row + 1
-
-                col = col + 2
-
-        workbook.close()
 
 #%% Ego Plots
 
@@ -124,5 +95,37 @@ for network_type in ["Rgraph-Sum-Rev", "Rgraph-Sum", "Cgraph-Sum"]:
                     worksheet.write_number(row, col, cent*100)
                     row = row + 1
                 col = col + 1
+
+        workbook.close()
+
+
+
+# %% Dynamic Clustering
+for network_type in ["Rgraph-Sum-Rev", "Rgraph-Sum", "Cgraph-Sum", "Cgraph-Sum-Rev"]:
+    for focal_token in cfg.focal_nodes:
+        logging.info("%s: Clustering token %s" % (network_type, focal_token))
+        central_graphs, year_info = dynamic_clustering(years, focal_token, cfg, louvain_cluster, cfg.cluster_window,
+                                                       cfg.num_retain, cfg.ego_radius, network_type=network_type)
+        logging.info("Saving dynamic clustering data")
+
+        workbook = xlsxwriter.Workbook(
+            ''.join([cluster_xls, '/', focal_token, '_', network_type, 'w_', str(cfg.cluster_window), '.xlsx']))
+
+        for year in years:
+            cplot_folder = ''.join([plot_folder, '/cluster_', focal_token, '_', str(year), '_', network_type, '_w_', str(cfg.cluster_window)])
+            cplot_name = ''.join(["Cluster ", str(year), ' ', network_type, ' w ', str(cfg.cluster_window)])
+            draw_ego_network_mem(central_graphs[year], focal_token, 15, cplot_name, cplot_folder, False)
+            worksheet.write_number(0, 0, year)
+            row = 1
+            col = 1
+            worksheet = workbook.add_worksheet()
+            for cluster in year_info[year]:
+                row = 1
+                for token, cent in cluster.items():
+                    worksheet.write_string(row, col, token)
+                    worksheet.write_number(row, col + 1, cent)
+                    row = row + 1
+
+                col = col + 2
 
         workbook.close()

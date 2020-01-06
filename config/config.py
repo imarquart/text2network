@@ -8,10 +8,10 @@ class configuration:
     prune_min=0.01
     cluster_window=3
     ego_radius=3
-    num_retain=40
+    num_retain=50
 
     #%% Plot options:
-    focal_nodes=["leader","leaders","leadership",'manager','management']
+    focal_nodes=["leader","leadership",'manager','management']
     ego_limit=20
 
     #%% Folders:

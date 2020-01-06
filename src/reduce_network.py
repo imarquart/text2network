@@ -100,11 +100,10 @@ def draw_ego_network(network_file,focal_node,limit=15,plot_title="Ego Network",s
     pos = dict(zip(neighbors, coords))
     pos_label = dict(zip(neighbors, coords_label))
 
-    G = nx.ego_graph(graph, focal_node)
     G = nx.subgraph(graph, neighbors)
 
     node_sizes = [v * 90 for v in edge_weights]
-    node_sizes.append(max(node_sizes))
+    node_sizes.append(graph.out_degree[focal_node]*3)
 
     edges, weights = zip(*nx.get_edge_attributes(G, 'weight').items())
     weights=np.array(weights)
