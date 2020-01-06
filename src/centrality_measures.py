@@ -256,7 +256,7 @@ def dynamic_centralities(years, focal_token, cfg, num_retain=15,
             centralities = nx.betweenness_centrality(ego_graph,k=int(np.log(len(list(graph.nodes)))))
             #centralities = {0: 0}
         except:
-            logging.info("No success with betweeness centrality")
+            logging.info("No success with symmetric betweeness centrality")
             centralities = {0: 0}
 
         for node in interest_nodes:
