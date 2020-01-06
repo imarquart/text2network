@@ -42,7 +42,7 @@ def make_symmetric(graph, technique="transpose"):
     elif technique=="min-sym":
         new_graph=nx.Graph()
         new_graph.add_nodes_from(graph.nodes)
-        nodepairs=itertools.combinations(list(graph.nodes))
+        nodepairs=itertools.combinations(list(graph.nodes),r=2)
         for u,v in nodepairs:
             if graph.has_edge(u, v) and graph.has_edge(v, u):
                 min_weight=min(graph.edges[u, v]['weight'],graph.edges[v, u]['weight'])
@@ -51,7 +51,7 @@ def make_symmetric(graph, technique="transpose"):
     elif technique=="max":
         new_graph=nx.Graph()
         new_graph.add_nodes_from(graph.nodes)
-        nodepairs=itertools.combinations(list(graph.nodes))
+        nodepairs=itertools.combinations(list(graph.nodes),r=2)
         for u,v in nodepairs:
             if graph.has_edge(u, v) or graph.has_edge(v, u):
                 min_weight=max(graph.edges[u, v]['weight'],graph.edges[v, u]['weight'])
