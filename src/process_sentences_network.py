@@ -16,7 +16,7 @@ import tqdm
 
 
 def process_sentences_network(tokenizer, bert, text_db, MAX_SEQ_LENGTH, DICT_SIZE, batch_size, nr_workers=0,
-                              cutoff_percent=80):
+                              cutoff_percent=80,max_degree=100):
     """
     Extracts pre-processed sentences, gets predictions by BERT and creates a network
 
@@ -130,6 +130,7 @@ def process_sentences_network(tokenizer, bert, text_db, MAX_SEQ_LENGTH, DICT_SIZ
                     context = context.numpy().flatten()
 
                     # Sparsify
+                    # TODO: try without setting own-link to zero!
                     replacement[token]=0
                     replacement[replacement==np.min(replacement)]=0
                     context[context==np.min(context)]=0
@@ -146,7 +147,7 @@ def process_sentences_network(tokenizer, bert, text_db, MAX_SEQ_LENGTH, DICT_SIZ
                     context_att = simple_norm(context_att)
 
                     # Add values to network
-                    graph,context_graph,attention_graph=add_to_networks(graph,context_graph,attention_graph,replacement,context,context_att,token,cutoff_percent,pos,sequence_id)
+                    graph,context_graph,attention_graph=add_to_networks(graph,context_graph,attention_graph,replacement,context,context_att,token,cutoff_percent,max_degree,pos,sequence_id)
 
 
         del predictions, attn

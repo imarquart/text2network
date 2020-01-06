@@ -1,13 +1,77 @@
 
-
+import itertools
 import numpy as np
 import networkx as nx
+import scipy as sp
+
+def plural_elimination(graph):
+
+    plurals=[x for x in graph.nodes if x[-1]=='s']
 
 
-def add_to_networks(graph, context_graph, attention_graph, replacement, context, context_att,token=0, cutoff_percent=80, pos=0, sequence_id=0):
+    return graph
+
+
+def inverse_edge_weight(u, v, d):
+    edge_wt = d.get('weight', 1)
+    if edge_wt > 0.01:
+        return 1 / edge_wt
+    else:
+        return 1000000
+
+
+def prune_network_edges(graph, edge_weight=0.2):
+    remove = [(a,b) for a,b,c in graph.edges.data() if c['weight'] < edge_weight]
+    try:
+        graph.remove_edges_from(remove)
+        return graph
+    except:
+        graph_c=graph.copy()
+        graph_c.remove_edges_from(remove)
+        return graph_c
+
+def make_symmetric(graph, technique="transpose"):
+
+    if technique=="transpose":
+        M = nx.to_scipy_sparse_matrix(graph)
+        nodes_list = list(graph.nodes)
+        M=(M + M.T)/2 - sp.sparse.diags(M.diagonal(), dtype=int)
+        graph = nx.convert_matrix.from_scipy_sparse_matrix(M)
+        mapping = dict(zip(range(0, len(nodes_list)), nodes_list))
+        graph = nx.relabel_nodes(graph, mapping)
+    elif technique=="min-sym":
+        new_graph=nx.Graph()
+        new_graph.add_nodes_from(graph.nodes)
+        nodepairs=itertools.combinations(list(graph.nodes))
+        for u,v in nodepairs:
+            if graph.has_edge(u, v) and graph.has_edge(v, u):
+                min_weight=min(graph.edges[u, v]['weight'],graph.edges[v, u]['weight'])
+                new_graph.add_edge(u,v,weight=min_weight)
+        graph=new_graph
+    elif technique=="max":
+        new_graph=nx.Graph()
+        new_graph.add_nodes_from(graph.nodes)
+        nodepairs=itertools.combinations(list(graph.nodes))
+        for u,v in nodepairs:
+            if graph.has_edge(u, v) or graph.has_edge(v, u):
+                min_weight=max(graph.edges[u, v]['weight'],graph.edges[v, u]['weight'])
+                new_graph.add_edge(u,v,weight=min_weight)
+        graph=new_graph
+    else:
+        M = nx.to_scipy_sparse_matrix(graph)
+        nodes_list = list(graph.nodes)
+        rows, cols = M.nonzero()
+        M[cols, rows] = M[rows, cols]
+        graph = nx.convert_matrix.from_scipy_sparse_matrix(M)
+        mapping = dict(zip(range(0, len(nodes_list)), nodes_list))
+        graph = nx.relabel_nodes(graph, mapping)
+
+    return graph
+
+def add_to_networks(graph, context_graph, attention_graph, replacement, context, context_att,token=0, cutoff_percent=80, max_degree=100, pos=0, sequence_id=0):
     # Create Adjacency List for Replacement Dist
     cutoff_number, cutoff_probability = calculate_cutoffs(replacement, method="percent",
-                                                          percent=cutoff_percent)
+                                                          percent=cutoff_percent,max_degree=max_degree)
     graph.add_weighted_edges_from(
         get_weighted_edgelist(token, replacement, cutoff_number, cutoff_probability), 'weight',
         seq_id=sequence_id, pos=pos)
@@ -21,14 +85,14 @@ def add_to_networks(graph, context_graph, attention_graph, replacement, context,
 
     # Create Adjacency List for Attention Dist
     cutoff_number, cutoff_probability = calculate_cutoffs(context_att, method="percent",
-                                                          percent=cutoff_percent)
+                                                          percent=cutoff_percent,max_degree=max_degree)
     attention_graph.add_weighted_edges_from(
         get_weighted_edgelist(token, context_att, cutoff_number, cutoff_probability), 'weight',
         seq_id=sequence_id, pos=pos)
 
     return graph, context_graph,attention_graph
 
-def calculate_cutoffs(x, method="mean", percent=100, min_cut=0.1):
+def calculate_cutoffs(x, method="mean", percent=100, max_degree=100,min_cut=0.00005):
     """
     Different methods to calculate cutoff probability and number.
 
@@ -37,7 +101,7 @@ def calculate_cutoffs(x, method="mean", percent=100, min_cut=0.1):
     :return: cutoff_number and probability
     """
     if method == "mean":
-        cutoff_probability = max(np.mean(x), 0.01)
+        cutoff_probability = max(np.mean(x), min_cut)
         cutoff_number = max(np.int(len(x) / 100), 100)
     elif method == "percent":
         sortx = np.sort(x)[::-1]
@@ -49,7 +113,7 @@ def calculate_cutoffs(x, method="mean", percent=100, min_cut=0.1):
         cutoff_probability = min_cut
         cutoff_number = 0
 
-    return cutoff_number, cutoff_probability
+    return min(cutoff_number,max_degree), cutoff_probability
 
 
 def get_weighted_edgelist(token, x, cutoff_number=100, cutoff_probability=0):
@@ -71,7 +135,9 @@ def get_weighted_edgelist(token, x, cutoff_number=100, cutoff_probability=0):
 
     # Cutoff probability (zeros)
     if len(neighbors > 0):
-        neighbors = neighbors[x[neighbors] > cutoff_probability]
+        if cutoff_probability>0:
+            neighbors = neighbors[x[neighbors] > cutoff_probability]
+
         weights = x[neighbors]
         # edgelist = [(token, x) for x in neighbors]
     return [(token, x[0], x[1]) for x in list(zip(neighbors, weights))]

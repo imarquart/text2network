@@ -10,7 +10,7 @@ def create_stopword_list(tokenizer):
     alphabet = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u',
                 'v', 'w', 'x', 'y', 'z']
     alphabet_ids = tokenizer.convert_tokens_to_ids(alphabet)
-    numbers = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'one', 'two', 'three', 'four']
+    numbers = ['0','1', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'one', 'two', 'three', 'four']
     numbers_ids = tokenizer.convert_tokens_to_ids(numbers)
     pronouns = ['we', 'us', 'my', 'yourself', 'you', 'me', 'he', 'her', 'his', 'him', 'she', 'they', 'their', 'them',
                 'me', 'myself', 'himself', 'herself', 'themselves']

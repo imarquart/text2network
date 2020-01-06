@@ -4,6 +4,15 @@ class configuration:
     """
     Simple class to store our options
     """
+    #%% Analysis options:
+    prune_min=0.01
+    cluster_window=3
+    ego_radius=3
+    num_retain=40
+
+    #%% Plot options:
+    focal_nodes=["leader","leaders","leadership",'manager','management']
+    ego_limit=20
 
     #%% Folders:
     model_dir = "D:/NLP/BERT-NLP/NLP/models"
@@ -28,8 +37,9 @@ class configuration:
     do_train=True
 
     #%% BERT Inference Options
-    batch_size=36
+    batch_size=30
 
 
     #%% Network creation options
-    cutoff_percent = 80
+    cutoff_percent = 99
+    max_degree=100
