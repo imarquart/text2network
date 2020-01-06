@@ -88,6 +88,7 @@ def dynamic_centralities(years, focal_token, cfg, num_retain=15,
         graph=graphs[year]
 
         #%% Closeness to leader
+        start_time = time.time()
         proximity={}
         try:
             centralities=graph[focal_token]
@@ -100,6 +101,25 @@ def dynamic_centralities(years, focal_token, cfg, num_retain=15,
                 proximity.update({node: 0})
 
         measures.update({'ProximityFocal': proximity})
+        logging.info("Proximity time in %s seconds" % (time.time() - start_time))
+
+        # %% Katz
+        start_time = time.time()
+        ego_graph=nx.ego_graph(graph,focal_token,cfg.ego_radius)
+        katz = {}
+        alpha = 1 / max(nx.adjacency_spectrum(ego_graph))
+        try:
+            centralities = nx.katz_centrality_numpy(ego_graph, alpha, weight='weight')
+        except:
+            centralities = {0: 0}
+            logging.info("No success with Katz centrality")  #
+        for node in interest_nodes:
+            if node in centralities.keys():
+                katz.update({node: centralities[node]})
+            else:
+                katz.update({node: 0})
+        measures.update({'Katz': katz})
+        logging.info("Katz Centrality time in %s seconds" % (time.time() - start_time))
 
         # %% Constraint
         start_time = time.time()
@@ -189,7 +209,7 @@ def dynamic_centralities(years, focal_token, cfg, num_retain=15,
         measures.update({'InDegree': indegree})
         logging.info("In Degree time in %s seconds" % (time.time() - start_time))
 
-        # %% In degree
+        # %% Out degree
         start_time = time.time()
 
         outdegree = {}
@@ -209,29 +229,9 @@ def dynamic_centralities(years, focal_token, cfg, num_retain=15,
 
         # %% Betweenness
         start_time = time.time()
-
-        between = {}
-        try:
-            centralities = nx.betweenness_centrality(graph)
-            #centralities = {0: 0}
-        except:
-            logging.info("No success with betweeness centrality")
-            centralities = {0: 0}
-
-        for node in interest_nodes:
-            if node in centralities.keys():
-                between.update({node: centralities[node]})
-            else:
-                between.update({node: 0})
-
-        measures.update({'Betweeness': between})
-        logging.info("Betweenness time in %s seconds" % (time.time() - start_time))
-
-        # %% Betweenness
-        start_time = time.time()
-
         sym_between = {}
-        sym_graph=make_symmetric(graph, technique="min-sym")
+        sym_graph=make_symmetric(ego_graph, technique="min-sym")
+        logging.info("Symmetrized graph in %s seconds" % (time.time() - start_time))
         try:
             centralities = nx.betweenness_centrality(sym_graph)
             #centralities = {0: 0}
@@ -245,8 +245,31 @@ def dynamic_centralities(years, focal_token, cfg, num_retain=15,
             else:
                 between.update({node: 0})
 
-        measures.update({'SymBetweeness': between})
+        measures.update({'SymEgoBetweeness': between})
         logging.info("Symmetric Betweenness time in %s seconds" % (time.time() - start_time))
+
+
+
+        # %% Betweenness
+        start_time = time.time()
+
+        between = {}
+        try:
+            centralities = nx.betweenness_centrality(graph,k=int(np.log(len(list(graph.nodes)))))
+            #centralities = {0: 0}
+        except:
+            logging.info("No success with betweeness centrality")
+            centralities = {0: 0}
+
+        for node in interest_nodes:
+            if node in centralities.keys():
+                between.update({node: centralities[node]})
+            else:
+                between.update({node: 0})
+
+        measures.update({'EstBetweeness': between})
+        logging.info("Betweenness time in %s seconds" % (time.time() - start_time))
+
 
         # %% Eigenvector
         start_time = time.time()
@@ -272,16 +295,15 @@ def dynamic_centralities(years, focal_token, cfg, num_retain=15,
         start_time = time.time()
 
         close = {}
-        try:
-            centralities = nx.closeness_centrality(graph)
-            #centralities = {0: 0}
-        except:
-            centralities = {0: 0}
-            logging.info("No success with Closeness centrality")
 
         for node in interest_nodes:
-            if node in centralities.keys():
-                close.update({node: centralities[node]})
+            if node in list(graph.nodes):
+                try:
+                    co = nx.closeness_centrality(graph, node)
+                except:
+                    co = 0
+                    logging.info("No success with Closeness centrality, node %s" % node)
+                close.update({node: co})
             else:
                 close.update({node: 0})
 
@@ -289,21 +311,6 @@ def dynamic_centralities(years, focal_token, cfg, num_retain=15,
         logging.info("closeness time in %s seconds" % (time.time() - start_time))
 
 
-        # %% Katz
-        #start_time = time.time()
-        #katz = {}
-        #try:
-        #    centralities = nx.katz_centrality_numpy(graph)
-        #except:
-        #    centralities = {0: 0}
-        #    logging.info("No success with Katz centrality")#
-        #for node in interest_nodes:
-        #    if node in centralities.keys():
-        #        katz.update({node: centralities[node]})
-        #    else:
-        #        katz.update({node: 0})
-        #measures.update({'Katz': katz})
-        #logging.info("Katz Centrality time in %s seconds" % (time.time() - start_time))
 
         #%% Update year info
         year_info.update({year: measures})

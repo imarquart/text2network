@@ -25,7 +25,7 @@ logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message
 cfg = configuration()
 
 # %% Main Loop:
-years = range(1990, 2016)
+years = range(1990, 2017)
 logging.info("Setting up folder structure")
 cluster_xls = ''.join([cfg.data_folder, '/cluster_xls'])
 plot_folder = ''.join([cfg.data_folder, '/plots/cluster'])
