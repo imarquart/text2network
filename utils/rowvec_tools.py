@@ -4,6 +4,37 @@ import numpy as np
 import networkx as nx
 import scipy as sp
 
+def graph_merge(graph_list, average_links=True):
+    """
+    Merges a list of graphs under the condition that the nodes are the same.
+
+    :param graph_list:
+    :param average_links:
+    :return:
+    """
+    nodes_list = list(graph_list[0].nodes)
+    graph_pairs=itertools.combinations(graph_list,r=2)
+    for g,h in graph_pairs:
+        assert list(g.nodes)==list(h.nodes), "Graphs must have same nodes sets!"
+
+    # Add adjacency matrices
+    for i,g in enumerate(graph_list):
+        if i == 0:
+            A = nx.to_scipy_sparse_matrix(g)
+        else:
+            A = A + nx.to_scipy_sparse_matrix(g)
+
+    if average_links==True:
+        # Average
+        A = A / len(graph_list)
+    A.eliminate_zeros()
+    graph = nx.convert_matrix.from_scipy_sparse_matrix(A)
+    mapping = dict(zip(range(0, len(nodes_list)), nodes_list))
+    graph = nx.relabel_nodes(graph, mapping)
+    return graph
+
+
+
 def plural_elimination(graph):
 
     plurals=[x for x in graph.nodes if x[-1]=='s']
@@ -84,11 +115,12 @@ def add_to_networks(graph, context_graph, attention_graph, replacement, context,
         seq_id=sequence_id, pos=pos)
 
     # Create Adjacency List for Attention Dist
-    cutoff_number, cutoff_probability = calculate_cutoffs(context_att, method="percent",
-                                                          percent=cutoff_percent,max_degree=max_degree)
-    attention_graph.add_weighted_edges_from(
-        get_weighted_edgelist(token, context_att, cutoff_number, cutoff_probability), 'weight',
-        seq_id=sequence_id, pos=pos)
+    # DISABLED
+    #cutoff_number, cutoff_probability = calculate_cutoffs(context_att, method="percent",
+    #                                                      percent=cutoff_percent,max_degree=max_degree)
+    #attention_graph.add_weighted_edges_from(
+    #    get_weighted_edgelist(token, context_att, cutoff_number, cutoff_probability), 'weight',
+    #    seq_id=sequence_id, pos=pos)
 
     return graph, context_graph,attention_graph
 

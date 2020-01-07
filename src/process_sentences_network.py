@@ -96,18 +96,26 @@ def process_sentences_network(tokenizer, bert, text_db, MAX_SEQ_LENGTH, DICT_SIZ
 
 
             #%% Extract attention for sequence
-            seq_attn = attn[sequence_mask, :].cpu()
+            # DISABLED ATTENTION
+            #seq_attn = attn[sequence_mask, :].cpu()
+
             # Curtail to tokens in sequence
             # attention row vectors for each token are of
             # size sequence_size+2, where position 0 is <CLS>
             # and position n+1 is <SEP>, these we ignore
-            seq_attn = seq_attn[:, 1:sequence_size + 1]
+
+            # DISABLED ATTENTION
+            #seq_attn = seq_attn[:, 1:sequence_size + 1]
+
             # Delete diagonal attention
-            seq_attn[torch.eye(sequence_size).bool()] = 0
+            # DISABLED ATTENTION
+            #seq_attn[torch.eye(sequence_size).bool()] = 0
+
             #%% Context element distribution: we sum over all probabilities in a sequence
             seq_ce = torch.ones([sequence_size, sequence_size])
             seq_ce[torch.eye(sequence_size).bool()] = 0
 
+            # TODO: Re-Enable Lines of attention
             for pos, token in enumerate(token_ids[sequence_mask]):
                 # Should all be np
                 token=token.item()
@@ -118,15 +126,21 @@ def process_sentences_network(tokenizer, bert, text_db, MAX_SEQ_LENGTH, DICT_SIZ
                     context_index = np.zeros([MAX_SEQ_LENGTH], dtype=np.bool)
                     context_index[:sequence_size] = True
                     context_dist = dists[context_index, :]
+
                     ## Attention
-                    context_att = (
-                        torch.sum((seq_attn[pos] * context_dist.transpose(-1, 0)).transpose(-1, 0), dim=0).unsqueeze(0))
+                    # DISABLED ATTENTION
+                    #context_att = (
+                    #    torch.sum((seq_attn[pos] * context_dist.transpose(-1, 0)).transpose(-1, 0), dim=0).unsqueeze(0))
+
                     ## Context Element
                     context = (
                         torch.sum((seq_ce[pos] * context_dist.transpose(-1, 0)).transpose(-1, 0), dim=0).unsqueeze(0))
                     # Flatten, since it is one row each
                     replacement = replacement.numpy().flatten()
-                    context_att = context_att.numpy().flatten()
+
+                    # DISABLED ATTENTION
+                    #context_att = context_att.numpy().flatten()
+
                     context = context.numpy().flatten()
 
                     # Sparsify
@@ -134,21 +148,28 @@ def process_sentences_network(tokenizer, bert, text_db, MAX_SEQ_LENGTH, DICT_SIZ
                     replacement[token]=0
                     replacement[replacement==np.min(replacement)]=0
                     context[context==np.min(context)]=0
-                    context_att[context_att==np.min(context_att)]=0
+
+                    # DISABLED ATTENTION
+                    # context_att[context_att==np.min(context_att)]=0
 
                     # Get rid of delnorm links
                     replacement[delwords]=0
                     context[delwords]=0
-                    context_att[delwords]=0
+
+                    # DISABLED ATTENTION
+                    # context_att[delwords]=0
 
                     # We norm the distributions here
                     replacement = simple_norm(replacement)
                     context = simple_norm(context)
-                    context_att = simple_norm(context_att)
+
+                    # DISABLED ATTENTION
+                    # context_att = simple_norm(context_att)
 
                     # Add values to network
-                    graph,context_graph,attention_graph=add_to_networks(graph,context_graph,attention_graph,replacement,context,context_att,token,cutoff_percent,max_degree,pos,sequence_id)
+                    graph,context_graph,attention_graph=add_to_networks(graph,context_graph,attention_graph,replacement,context,context,token,cutoff_percent,max_degree,pos,sequence_id)
 
+            del dists
 
         del predictions, attn
 

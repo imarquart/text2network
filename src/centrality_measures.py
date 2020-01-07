@@ -35,6 +35,8 @@ def dynamic_centralities(years, focal_token, cfg, num_retain=15,
     ego_nodes = []
     graph_nodes = []
     graphs = {}
+    neighbor_set=[]
+    weight_set=[]
     logging.info("Loading graph data.")
     logging.info("Pruning links smaller than %f" % cfg.prune_min)
     for year in years:
@@ -42,18 +44,16 @@ def dynamic_centralities(years, focal_token, cfg, num_retain=15,
         network_file = ''.join([data_folder, '/networks/sums/', network_type, '.gexf'])
         graph = nx.read_gexf(network_file)
         graph = prune_network_edges(graph, edge_weight=cfg.prune_min)
-        graphs.update({year: graph})
-
-    logging.info("Creating list of most connected terms.")
-    neighbor_set=[]
-    weight_set=[]
-    for year in years:
-        neighbors = graphs[year][focal_token]
+        # To save memory, I have changed this such that only one graph is kept in memory
+        #graphs.update({year: graph})
+        logging.info("Creating list of most connected terms.")
+        neighbors = graph[focal_token]
         edge_weights = [x['weight'] for x in neighbors.values()]
         edge_sort = np.argsort(-np.array(edge_weights))
         neighbors = [x for x in neighbors]
         neighbor_set.extend(neighbors)
         weight_set.extend(edge_weights)
+
 
     logging.info("Creating interest set")
     weight_set=np.array(weight_set)
@@ -74,9 +74,9 @@ def dynamic_centralities(years, focal_token, cfg, num_retain=15,
     if focal_token not in interest_nodes: interest_nodes.append(focal_token)
     if "man" not in interest_nodes: interest_nodes.append("man")
     if "men" not in interest_nodes: interest_nodes.append("men")
-    if "male" not in interest_nodes: interest_nodes.append("female")
+    if "male" not in interest_nodes: interest_nodes.append("male")
     if "female" not in interest_nodes: interest_nodes.append("female")
-    if "women" not in interest_nodes: interest_nodes.append("woman")
+    if "women" not in interest_nodes: interest_nodes.append("women")
     if "woman" not in interest_nodes: interest_nodes.append("woman")
 
     year_info = {}
@@ -85,13 +85,18 @@ def dynamic_centralities(years, focal_token, cfg, num_retain=15,
     for t, year in enumerate(years):
         measures={}
         logging.info("Centrality calculation for year %i." % year)
-        graph=graphs[year]
+        data_folder = ''.join([cfg.data_folder, '/', str(year)])
+        network_file = ''.join([data_folder, '/networks/sums/', network_type, '.gexf'])
+        graph = nx.read_gexf(network_file)
+        graph = prune_network_edges(graph, edge_weight=cfg.prune_min)
+        ego_graph = nx.ego_graph(graph, focal_token, cfg.ego_radius)
+
 
         #%% Closeness to leader
         start_time = time.time()
         proximity={}
         try:
-            centralities=graph[focal_token]
+            centralities=ego_graph[focal_token]
         except:
             centralities = {0: 0}
         for node in interest_nodes:
@@ -100,10 +105,9 @@ def dynamic_centralities(years, focal_token, cfg, num_retain=15,
             else:
                 proximity.update({node: 0})
 
-        measures.update({'ProximityFocal': proximity})
+        measures.update({'EgoProximityFocal': proximity})
         logging.info("Proximity time in %s seconds" % (time.time() - start_time))
 
-        ego_graph = nx.ego_graph(graph, focal_token, cfg.ego_radius).copy()
         # %% Katz
         #start_time = time.time()
         #katz = {}
@@ -126,9 +130,9 @@ def dynamic_centralities(years, focal_token, cfg, num_retain=15,
 
         constraint = {}
         for node in interest_nodes:
-            if node in list(graph.nodes):
+            if node in list(ego_graph.nodes):
                 try:
-                    co=nx.local_constraint(graph, focal_token, node, weight='weight')
+                    co=nx.local_constraint(ego_graph, focal_token, node, weight='weight')
                 except:
                     co=0
                     logging.info("No success with Constraint centrality, node %s" % node)
@@ -136,7 +140,7 @@ def dynamic_centralities(years, focal_token, cfg, num_retain=15,
             else:
                 constraint.update({node: 0})
 
-        measures.update({'FocalConstrBy': constraint})
+        measures.update({'EgoFocalConstrBy': constraint})
         logging.info("Constraint time in %s seconds" % (time.time() - start_time))
         # %% Constraint
 
@@ -144,9 +148,9 @@ def dynamic_centralities(years, focal_token, cfg, num_retain=15,
 
         constraint_to = {}
         for node in interest_nodes:
-            if node in list(graph.nodes):
+            if node in list(ego_graph.nodes):
                 try:
-                    co = nx.local_constraint(graph, node , focal_token, weight='weight')
+                    co = nx.local_constraint(ego_graph, node , focal_token, weight='weight')
                 except:
                     co=0
                     logging.info("No success with Constraint-Towards centrality, node %s" % node)
@@ -154,14 +158,14 @@ def dynamic_centralities(years, focal_token, cfg, num_retain=15,
             else:
                 constraint.update({node: 0})
 
-        measures.update({'FocalConstraining': constraint})
+        measures.update({'EgoFocalConstraining': constraint})
         logging.info("Constraint time in %s seconds" % (time.time() - start_time))
 
         #%% Page Rank Weighted
         start_time = time.time()
         pageranks={}
         try:
-            centralities = nx.pagerank_scipy(graph, weight='weight')
+            centralities = nx.pagerank_scipy(ego_graph, weight='weight')
         except:
             centralities = {0:0}
 
@@ -171,14 +175,14 @@ def dynamic_centralities(years, focal_token, cfg, num_retain=15,
             else:
                 pageranks.update({node: 0})
 
-        measures.update({'PageRank-Weighted': pageranks})
+        measures.update({'EgoPageRank-Weighted': pageranks})
         logging.info("PageRank-Weighted time in %s seconds" % (time.time() - start_time))
 
         # %% Page Rank UnWeighted
         start_time = time.time()
         pageranks = {}
         try:
-            centralities = nx.pagerank_scipy(graph,weight=None)
+            centralities = nx.pagerank_scipy(ego_graph,weight=None)
         except:
             centralities = {0: 0}
 
@@ -188,7 +192,7 @@ def dynamic_centralities(years, focal_token, cfg, num_retain=15,
             else:
                 pageranks.update({node: 0})
 
-        measures.update({'PageRank-unweighted': pageranks})
+        measures.update({'EgoPageRank-unweighted': pageranks})
         logging.info("PageRank-unweighted time in %s seconds" % (time.time() - start_time))
 
         # %% In degree
@@ -196,7 +200,7 @@ def dynamic_centralities(years, focal_token, cfg, num_retain=15,
 
         indegree = {}
         try:
-            centralities = nx.in_degree_centrality(graph)
+            centralities = nx.in_degree_centrality(ego_graph)
         except:
             centralities = {0: 0}
 
@@ -206,7 +210,7 @@ def dynamic_centralities(years, focal_token, cfg, num_retain=15,
             else:
                 indegree.update({node: 0})
 
-        measures.update({'InDegree': indegree})
+        measures.update({'EgoInDegree': indegree})
         logging.info("In Degree time in %s seconds" % (time.time() - start_time))
 
         # %% Out degree
@@ -214,7 +218,7 @@ def dynamic_centralities(years, focal_token, cfg, num_retain=15,
 
         outdegree = {}
         try:
-            centralities = nx.out_degree_centrality(graph)
+            centralities = nx.out_degree_centrality(ego_graph)
         except:
             centralities = {0: 0}
 
@@ -224,7 +228,7 @@ def dynamic_centralities(years, focal_token, cfg, num_retain=15,
             else:
                 outdegree.update({node: 0})
 
-        measures.update({'OutDegree': outdegree})
+        measures.update({'EgoOutDegree': outdegree})
         logging.info("Out Degree time in %s seconds" % (time.time() - start_time))
 
         # %% Betweenness
@@ -233,7 +237,7 @@ def dynamic_centralities(years, focal_token, cfg, num_retain=15,
         sym_graph=make_symmetric(ego_graph, technique="min-sym")
         logging.info("Symmetrized graph in %s seconds" % (time.time() - start_time))
         try:
-            centralities = nx.betweenness_centrality(sym_graph,k=int(np.log(len(list(graph.nodes)))))
+            centralities = nx.betweenness_centrality(sym_graph,k=int(np.log(len(list(ego_graph.nodes)))))
             #centralities = {0: 0}
         except:
             logging.info("No success with symmetric betweeness centrality")
@@ -245,7 +249,7 @@ def dynamic_centralities(years, focal_token, cfg, num_retain=15,
             else:
                 sym_between.update({node: 0})
 
-        measures.update({'SymmetricEstEgoBetweeness': sym_between})
+        measures.update({'EgoSymmetricEstBetweeness': sym_between})
         logging.info("Symmetric Betweenness time in %s seconds" % (time.time() - start_time))
 
         # %% Betweenness
@@ -253,7 +257,7 @@ def dynamic_centralities(years, focal_token, cfg, num_retain=15,
 
         between = {}
         try:
-            centralities = nx.betweenness_centrality(ego_graph,k=int(np.log(len(list(graph.nodes)))))
+            centralities = nx.betweenness_centrality(ego_graph,k=int(np.log(len(list(ego_graph.nodes)))))
             #centralities = {0: 0}
         except:
             logging.info("No success with symmetric betweeness centrality")
@@ -265,28 +269,7 @@ def dynamic_centralities(years, focal_token, cfg, num_retain=15,
             else:
                 between.update({node: 0})
 
-        measures.update({'EstEgoBetweeness': between})
-        logging.info("Betweenness time in %s seconds" % (time.time() - start_time))
-
-
-        # %% Betweenness
-        start_time = time.time()
-
-        between = {}
-        try:
-            centralities = nx.betweenness_centrality(graph,k=int(np.log(len(list(graph.nodes)))))
-            #centralities = {0: 0}
-        except:
-            logging.info("No success with betweeness centrality")
-            centralities = {0: 0}
-
-        for node in interest_nodes:
-            if node in centralities.keys():
-                between.update({node: centralities[node]})
-            else:
-                between.update({node: 0})
-
-        measures.update({'EstBetweeness': between})
+        measures.update({'EgoEstBetweeness': between})
         logging.info("Betweenness time in %s seconds" % (time.time() - start_time))
 
 
@@ -295,7 +278,7 @@ def dynamic_centralities(years, focal_token, cfg, num_retain=15,
 
         eigen = {}
         try:
-            centralities = nx.eigenvector_centrality_numpy(graph)
+            centralities = nx.eigenvector_centrality_numpy(ego_graph)
             #centralities = {0: 0}
         except:
             centralities = {0: 0}
@@ -307,7 +290,7 @@ def dynamic_centralities(years, focal_token, cfg, num_retain=15,
             else:
                 eigen.update({node: 0})
 
-        measures.update({'Eigenvector': eigen})
+        measures.update({'EgoEigenvector': eigen})
         logging.info("Eigenvector time in %s seconds" % (time.time() - start_time))
 
         # %% Closeness

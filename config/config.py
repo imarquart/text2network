@@ -9,6 +9,8 @@ class configuration:
     cluster_window=3
     ego_radius=3
     num_retain=50
+    num_retain_cluster=15
+    cluster_levels=2
 
     #%% Plot options:
     focal_nodes=["leader","leadership",'manager','management']
@@ -18,6 +20,9 @@ class configuration:
     model_dir = "D:/NLP/BERT-NLP/NLP/models"
     data_folder = "E:/NLP"
     text_folder = "D:/NLP/BERT-NLP/NLP/data"
+    nw_folder="/networksNoCut"
+    sums_folder=''.join([nw_folder,'/sums'])
+    ma_folder=''.join([nw_folder,'/MAsums'])
 
     #%% Logging
     subprocess_level=logging.INFO
@@ -42,4 +47,8 @@ class configuration:
 
     #%% Network creation options
     cutoff_percent = 99
-    max_degree=100
+    max_degree=25
+
+    #%% Moving Average options
+    ma_order=3
+    average_links=True

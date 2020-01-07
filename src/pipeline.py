@@ -12,7 +12,7 @@ from NLP.src.process_sentences_network import process_sentences_network
 from NLP.utils.load_bert import get_bert_and_tokenizer
 from NLP.utils.hash_file import hash_file,check_step,complete_step
 from NLP.src.run_bert import bert_args, run_bert
-from NLP.src.reduce_network import reduce_network,draw_ego_network
+from NLP.src.reduce_network import reduce_network,draw_ego_network,moving_avg_networks
 import torch
 import networkx as nx
 
@@ -26,7 +26,7 @@ cfg=configuration()
 
 
 #%% Main Loop:
-years=range(1990,2019)
+years=range(1991,2020)
 
 for year in years:
     logging.info("---------- Starting year %i ----------" % year)
@@ -39,8 +39,9 @@ for year in years:
     data_folder=''.join([cfg.data_folder,'/',str(year)])
     bert_folder=''.join([data_folder,'/bert'])
     tensor_folder=''.join([data_folder,'/tensors'])
-    nw_folder=''.join([data_folder,'/networks'])
-    sum_folder=''.join([nw_folder,'/sums'])
+    nw_folder=''.join([data_folder,cfg.nw_folder])
+    sum_folder=''.join([data_folder,cfg.sums_folder])
+    ma_folder=''.join([data_folder,cfg.ma_folder])
     sumsym_folder=''.join([nw_folder,'/sums-sym'])
     sumplur_folder=''.join([nw_folder,'/psums'])
     sumsymplur_folder=''.join([nw_folder,'/psum-sym'])
@@ -135,10 +136,13 @@ for year in years:
         # Save Graphs
         graph_path = os.path.join(nw_folder, "".join(['Rgraph.gexf']))
         nx.write_gexf(graph, graph_path)
+        del graph
         graph_path = os.path.join(nw_folder, "".join(['Cgraph.gexf']))
         nx.write_gexf(context_graph, graph_path)
+        del context_graph
         graph_path = os.path.join(nw_folder, "".join(['Agraph.gexf']))
         nx.write_gexf(attention_graph, graph_path)
+        del attention_graph
 
         logging.info("Network creation finished in %s seconds" % (time.time() - start_time))
         complete_step(nw_folder,hash)
@@ -174,6 +178,19 @@ for year in years:
 
         logging.info("Graph summation finished in %s seconds" % (time.time() - start_time))
         complete_step(sum_folder,hash)
+
+    #%% MA Networks
+
+    logging.info("Moving average networks.")
+    if check_step(ma_folder, hash):
+        logging.info("Moving average graphs found. Skipping.")
+    else:
+        start_time=time.time()
+        for network_type in ["Rgraph-Sum-Rev", "Rgraph-Sum", "Cgraph-Sum", "Cgraph-Sum-Rev", "Agraph-Sum", "Agraph-Sum-Rev"]:
+            logging.info("MA processing on %s" % network_type)
+            moving_avg_networks(years,cfg,cfg.ma_order,network_type,cfg.average_links)
+        logging.info("Graph MA processing finished in %s seconds" % (time.time() - start_time))
+        complete_step(ma_folder, hash)
 
     #%% TODO: Node elimination
 

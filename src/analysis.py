@@ -25,7 +25,8 @@ logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message
 cfg = configuration()
 
 # %% Main Loop:
-years = range(1990, 2017)
+years = range(1990, 2019)
+years=[1991]
 logging.info("Setting up folder structure")
 cluster_xls = ''.join([cfg.data_folder, '/cluster_xls'])
 plot_folder = ''.join([cfg.data_folder, '/plots/cluster'])
@@ -101,31 +102,71 @@ for network_type in ["Rgraph-Sum-Rev", "Rgraph-Sum", "Cgraph-Sum"]:
 
 
 # %% Dynamic Clustering
-for network_type in ["Rgraph-Sum-Rev", "Rgraph-Sum", "Cgraph-Sum", "Cgraph-Sum-Rev"]:
-    for focal_token in cfg.focal_nodes:
+#for network_type in ["Rgraph-Sum-Rev", "Rgraph-Sum", "Cgraph-Sum", "Cgraph-Sum-Rev"]:
+for network_type in ["Rgraph-Sum-Rev"]:
+    for focal_token in ['leader']:
+
+    #for focal_token in cfg.focal_nodes:
         logging.info("%s: Clustering token %s" % (network_type, focal_token))
-        central_graphs, year_info = dynamic_clustering(years, focal_token, cfg, louvain_cluster, cfg.cluster_window,
-                                                       cfg.num_retain, cfg.ego_radius, network_type=network_type)
+        year_info = dynamic_clustering(years, focal_token, cfg, louvain_cluster, '/networks/sums', cfg.cluster_window,
+                                                       cfg.num_retain_cluster, cfg.ego_radius, network_type=network_type, cluster_levels=cfg.cluster_levels)
         logging.info("Saving dynamic clustering data")
 
         workbook = xlsxwriter.Workbook(
             ''.join([cluster_xls, '/', focal_token, '_', network_type, 'w_', str(cfg.cluster_window), '.xlsx']))
 
+        # node info has (proximity,distance,centrality)
         for year in years:
-            cplot_folder = ''.join([plot_folder, '/cluster_', focal_token, '_', str(year), '_', network_type, '_w_', str(cfg.cluster_window)])
-            cplot_name = ''.join(["Cluster ", str(year), ' ', network_type, ' w ', str(cfg.cluster_window)])
-            draw_ego_network_mem(central_graphs[year], focal_token, 15, cplot_name, cplot_folder, False)
+            info=year_info[year]
+            worksheet = workbook.add_worksheet()
+            worksheet.name=str(year)
             worksheet.write_number(0, 0, year)
             row = 1
             col = 1
-            worksheet = workbook.add_worksheet()
-            for cluster in year_info[year]:
-                row = 1
-                for token, cent in cluster.items():
-                    worksheet.write_string(row, col, token)
-                    worksheet.write_number(row, col + 1, cent)
-                    row = row + 1
+            max_row=row
+            nr_clusters=len(info)
+            for level in range(0,cfg.cluster_levels):
+                worksheet.write_string(max_row+1, 0, ''.join(["Level ", str(level)]))
+                col=1
+                if level==0: # Top level cluster
+                    for i in range(0,nr_clusters):
+                        # Each cluster starts at row=1
+                        row = max_row+1
+                        worksheet.write_string(row, col, ''.join(["Cluster ",str(i)]))
+                        row = row +1
+                        nodes=info[i]['nest'][0]
+                        node_info=info[i]['info']
+                        for token in nodes[0]:
+                            worksheet.write_string(row, col, token)
+                            worksheet.write_number(row, col + 1, node_info[token][0])
+                            row = row + 1
+                        col = col + 4
+                    max_row=max(max_row,row)
+                else:
+                    orig_row=max_row+1
 
-                col = col + 2
+                    for i in range(0,nr_clusters):
+                        # Each cluster starts at row=orig_row
+                        # Stagger
+
+                        sub_row=orig_row+i
+                        # Add space
+
+                        nodes=info[i]['nest'][level]
+                        node_info=info[i]['info']
+                        for subclusters in nodes:
+                            row=sub_row
+                            worksheet.write_string(row, col, ''.join(["Cluster ",str(i)]))
+                            row=row+1
+                            for token in subclusters:
+                                worksheet.write_string(row, col, token)
+                                worksheet.write_number(row, col + 1, node_info[token][0])
+                                row = row + 1
+                            max_row=max(row,max_row)
+                            col = col + 2
+                        # Push next cluster out
+                        col = col + 1
+
+
 
         workbook.close()

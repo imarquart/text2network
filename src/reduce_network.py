@@ -2,6 +2,7 @@ import networkx as nx
 import scipy as sp
 from networkx.readwrite.gexf import read_gexf,write_gexf
 from networkx.readwrite.gml import write_gml
+from NLP.utils.rowvec_tools import graph_merge
 import logging
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -130,6 +131,27 @@ def draw_ego_network(network_file,focal_node,limit=15,plot_title="Ego Network",s
         plt.savefig(save_folder)
 
     plt.close()
+
+def moving_avg_networks(years,cfg,ma_order=3,network_type="Rgraph-Sum",average_links=True):
+    graphs={}
+    for year in years:
+        data_folder = ''.join([cfg.data_folder, '/', str(year)])
+        network_file = ''.join([data_folder, cfg.sums_folder,'/', network_type, '.gexf'])
+        graph = nx.read_gexf(network_file)
+        graphs.update({year: graph})
+
+    for year in years:
+        lb=max(years[0],year-ma_order+1)
+        graph_range=range(lb,year+1)
+        merge_list=[]
+        for i in graph_range:
+            merge_list.append(graphs[i])
+        merged_graph=graph_merge(merge_list,average_links=average_links)
+        # Save yearly graph
+        data_folder = ''.join([cfg.data_folder, '/', str(year)])
+        network_file = ''.join([data_folder, cfg.ma_folder, '/', network_type, '.gexf'])
+        graph = nx.write_gexf(merged_graph,network_file)
+
 
 def reduce_network(network_file,reverse=True,method="sum",save_folder=None):
 
