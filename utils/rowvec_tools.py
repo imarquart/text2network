@@ -107,12 +107,14 @@ def add_to_networks(graph, context_graph, attention_graph, replacement, context,
         get_weighted_edgelist(token, replacement, cutoff_number, cutoff_probability), 'weight',
         seq_id=sequence_id, pos=pos)
 
-    # Create Adjacency List for Context Dist
-    cutoff_number, cutoff_probability = calculate_cutoffs(context, method="percent",
-                                                          percent=cutoff_percent)
-    context_graph.add_weighted_edges_from(
-        get_weighted_edgelist(token, context, cutoff_number, cutoff_probability), 'weight',
-        seq_id=sequence_id, pos=pos)
+    # DISABLED
+
+    #Create Adjacency List for Context Dist
+    #cutoff_number, cutoff_probability = calculate_cutoffs(context, method="percent",
+     #                                                     percent=cutoff_percent)
+    #context_graph.add_weighted_edges_from(
+    #    get_weighted_edgelist(token, context, cutoff_number, cutoff_probability), 'weight',
+    #   seq_id=sequence_id, pos=pos)
 
     # Create Adjacency List for Attention Dist
     # DISABLED

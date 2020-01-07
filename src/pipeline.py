@@ -1,4 +1,4 @@
-#%% Imports
+# %% Imports
 
 
 import glob
@@ -10,44 +10,41 @@ from NLP.src.text_processing.preprocess_files_HBR import preprocess_files_HBR
 from NLP.config.config import configuration
 from NLP.src.process_sentences_network import process_sentences_network
 from NLP.utils.load_bert import get_bert_and_tokenizer
-from NLP.utils.hash_file import hash_file,check_step,complete_step
+from NLP.utils.hash_file import hash_file, check_step, complete_step
 from NLP.src.run_bert import bert_args, run_bert
-from NLP.src.reduce_network import reduce_network,draw_ego_network,moving_avg_networks
+from NLP.src.reduce_network import reduce_network, draw_ego_network, moving_avg_networks
 import torch
 import networkx as nx
 
-
-#%% Config
+# %% Config
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                     datefmt='%m/%d/%Y %H:%M:%S',
                     level=logging.INFO)
-cfg=configuration()
+cfg = configuration()
 
-
-
-#%% Main Loop:
-years=range(1991,2020)
+# %% Main Loop:
+years = range(1991, 2020)
 
 for year in years:
     logging.info("---------- Starting year %i ----------" % year)
-    input_folder='D:/NLP/BERT-NLP/NLP/data/HBR/articles/'
-    input_folder=''.join([input_folder,str(year)])
+    input_folder = 'D:/NLP/BERT-NLP/NLP/data/HBR/articles/'
+    input_folder = ''.join([input_folder, str(year)])
 
-    #%% Create folder structure
+    # %% Create folder structure
     logging.info("Setting up folder structure")
-    text_folder=''.join([cfg.text_folder,'/',str(year)])
-    data_folder=''.join([cfg.data_folder,'/',str(year)])
-    bert_folder=''.join([data_folder,'/bert'])
-    tensor_folder=''.join([data_folder,'/tensors'])
-    nw_folder=''.join([data_folder,cfg.nw_folder])
-    sum_folder=''.join([data_folder,cfg.sums_folder])
-    ma_folder=''.join([data_folder,cfg.ma_folder])
-    sumsym_folder=''.join([nw_folder,'/sums-sym'])
-    sumplur_folder=''.join([nw_folder,'/psums'])
-    sumsymplur_folder=''.join([nw_folder,'/psum-sym'])
-    text_file=''.join([text_folder,'/',str(year),'.txt'])
-    text_db=''.join([text_folder,'/',str(year),'.h5'])
-    plot_folder=''.join([cfg.data_folder,'/plots'])
+    text_folder = ''.join([cfg.text_folder, '/', str(year)])
+    data_folder = ''.join([cfg.data_folder, '/', str(year)])
+    bert_folder = ''.join([data_folder, '/bert'])
+    tensor_folder = ''.join([data_folder, '/tensors'])
+    nw_folder = ''.join([data_folder, cfg.nw_folder])
+    sum_folder = ''.join([data_folder, cfg.sums_folder])
+    ma_folder = ''.join([data_folder, cfg.ma_folder])
+    sumsym_folder = ''.join([nw_folder, '/sums-sym'])
+    sumplur_folder = ''.join([nw_folder, '/psums'])
+    sumsymplur_folder = ''.join([nw_folder, '/psum-sym'])
+    text_file = ''.join([text_folder, '/', str(year), '.txt'])
+    text_db = ''.join([text_folder, '/', str(year), '.h5'])
+    plot_folder = ''.join([cfg.data_folder, '/plots'])
 
     if not os.path.exists(text_folder): os.mkdir(text_folder)
     if not os.path.exists(data_folder): os.mkdir(data_folder)
@@ -56,34 +53,33 @@ for year in years:
     if not os.path.exists(nw_folder): os.mkdir(nw_folder)
     if not os.path.exists(sum_folder): os.mkdir(sum_folder)
     if not os.path.exists(plot_folder): os.mkdir(plot_folder)
+    if not os.path.exists(ma_folder): os.mkdir(ma_folder)
 
     logging.info("Copying separate text files into text folder.")
-    read_files = glob.glob(''.join([input_folder,'/*.txt']))
+    read_files = glob.glob(''.join([input_folder, '/*.txt']))
 
     with open(text_file, "wb") as outfile:
         for f in read_files:
             with open(f, "rb") as infile:
                 outfile.write(infile.read())
 
-
-
-    #%% Get file hash
-    hash=hash_file(text_file,hash_factory="md5")
+    # %% Get file hash
+    hash = hash_file(text_file, hash_factory="md5")
     logging.info("File Hash is %s" % hash)
 
-    #%% Preprocess files
+    # %% Preprocess files
     logging.info("Pre-processing text file")
     if check_step(text_folder, hash):
         logging.info("Pre-processing already completed, skipping")
     else:
         start_time = time.time()
         logging.disable(cfg.subprocess_level)
-        preprocess_files_HBR(input_folder,text_db,cfg.max_seq_length,cfg.char_mult,max_seq=cfg.max_seq)
+        preprocess_files_HBR(input_folder, text_db, cfg.max_seq_length, cfg.char_mult, max_seq=cfg.max_seq)
         logging.disable(logging.NOTSET)
         logging.info("Pre-processing finished in %s seconds" % (time.time() - start_time))
-        complete_step(text_folder,hash)
+        complete_step(text_folder, hash)
 
-    #%% Train BERT
+    # %% Train BERT
     logging.info("Training BERT")
     if check_step(bert_folder, hash):
         logging.info("Found trained BERT. Skipping")
@@ -91,18 +87,18 @@ for year in years:
 
         start_time = time.time()
         # Create BERT args
-        args = bert_args(text_file, bert_folder, cfg.do_train, cfg.model_dir, cfg.mlm_probability, cfg.max_seq_length, cfg.loss_limit, cfg.gpu_batch, cfg.epochs,
+        args = bert_args(text_file, bert_folder, cfg.do_train, cfg.model_dir, cfg.mlm_probability, cfg.max_seq_length,
+                         cfg.loss_limit, cfg.gpu_batch, cfg.epochs,
                          cfg.warmup_steps)
         torch.cuda.empty_cache()
         logging.disable(cfg.subprocess_level)
-        results=run_bert(args)
+        results = run_bert(args)
         logging.disable(logging.NOTSET)
         logging.info("BERT results %s" % results)
         logging.info("BERT training finished in %s seconds" % (time.time() - start_time))
-        complete_step(bert_folder,hash)
+        complete_step(bert_folder, hash)
 
-
-    #%% Process files, create networks
+    # %% Process files, create networks
 
     logging.info("Processing text to create networks.")
     if check_step(nw_folder, hash):
@@ -115,10 +111,12 @@ for year in years:
         logging.disable(logging.NOTSET)
         DICT_SIZE = tokenizer.vocab_size
         # Process sentences in BERT and create the networks
-        graph, context_graph, attention_graph = process_sentences_network(tokenizer, bert, text_db, cfg.max_seq_length, DICT_SIZE,
-                                                                      cfg.batch_size,
-                                                                      nr_workers=0,
-                                                                      cutoff_percent=cfg.cutoff_percent,max_degree=cfg.max_degree)
+        graph, context_graph, attention_graph = process_sentences_network(tokenizer, bert, text_db, cfg.max_seq_length,
+                                                                          DICT_SIZE,
+                                                                          cfg.batch_size,
+                                                                          nr_workers=0,
+                                                                          cutoff_percent=cfg.cutoff_percent,
+                                                                          max_degree=cfg.max_degree)
 
         logging.info("Relabeling and saving graphs")
         token_map = {v: k for k, v in tokenizer.vocab.items()}
@@ -135,20 +133,20 @@ for year in years:
 
         # Save Graphs
         graph_path = os.path.join(nw_folder, "".join(['Rgraph.gexf']))
+        logging.info("Attempting to save gefx")
         nx.write_gexf(graph, graph_path)
         del graph
-        graph_path = os.path.join(nw_folder, "".join(['Cgraph.gexf']))
-        nx.write_gexf(context_graph, graph_path)
+        # graph_path = os.path.join(nw_folder, "".join(['Cgraph.gexf']))
+        # nx.write_gexf(context_graph, graph_path)
         del context_graph
-        graph_path = os.path.join(nw_folder, "".join(['Agraph.gexf']))
-        nx.write_gexf(attention_graph, graph_path)
+        # graph_path = os.path.join(nw_folder, "".join(['Agraph.gexf']))
+        # nx.write_gexf(attention_graph, graph_path)
         del attention_graph
 
         logging.info("Network creation finished in %s seconds" % (time.time() - start_time))
-        complete_step(nw_folder,hash)
+        complete_step(nw_folder, hash)
 
-
-    #%% Sum Networks
+    # %% Sum Networks
 
     logging.info("Summing graphs.")
     if check_step(sum_folder, hash):
@@ -158,45 +156,43 @@ for year in years:
         logging.info("Summing R-Graph")
         graph_path = os.path.join(nw_folder, "".join(['Rgraph.gexf']))
         save_folder = os.path.join(sum_folder, "".join(['Rgraph-Sum.gexf']))
-        reduce_network(graph_path, reverse=False, method="sum", save_folder=save_folder)
+        _ = reduce_network(graph_path, reverse=False, method="sum", save_folder=save_folder)
         save_folder = os.path.join(sum_folder, "".join(['Rgraph-Sum-Rev.gexf']))
-        reduce_network(graph_path, reverse=True, method="sum", save_folder=save_folder)
+        _ = reduce_network(graph_path, reverse=True, method="sum", save_folder=save_folder)
 
         logging.info("Summing C-Graph")
-        graph_path = os.path.join(nw_folder, "".join(['Cgraph.gexf']))
-        save_folder = os.path.join(sum_folder, "".join(['Cgraph-Sum.gexf']))
-        reduce_network(graph_path, reverse=False, method="sum", save_folder=save_folder)
-        save_folder = os.path.join(sum_folder, "".join(['Cgraph-Sum-Rev.gexf']))
-        reduce_network(graph_path, reverse=True, method="sum", save_folder=save_folder)
+        # graph_path = os.path.join(nw_folder, "".join(['Cgraph.gexf']))
+        # save_folder = os.path.join(sum_folder, "".join(['Cgraph-Sum.gexf']))
+        # reduce_network(graph_path, reverse=False, method="sum", save_folder=save_folder)
+        # save_folder = os.path.join(sum_folder, "".join(['Cgraph-Sum-Rev.gexf']))
+        # reduce_network(graph_path, reverse=True, method="sum", save_folder=save_folder)
 
         logging.info("Summing A-Graph")
-        graph_path = os.path.join(nw_folder, "".join(['Agraph.gexf']))
-        save_folder = os.path.join(sum_folder, "".join(['Agraph-Sum.gexf']))
-        reduce_network(graph_path, reverse=False, method="sum", save_folder=save_folder)
-        save_folder = os.path.join(sum_folder, "".join(['Agraph-Sum-Rev.gexf']))
-        reduce_network(graph_path, reverse=True, method="sum", save_folder=save_folder)
+        # graph_path = os.path.join(nw_folder, "".join(['Agraph.gexf']))
+        # save_folder = os.path.join(sum_folder, "".join(['Agraph-Sum.gexf']))
+        # reduce_network(graph_path, reverse=False, method="sum", save_folder=save_folder)
+        # save_folder = os.path.join(sum_folder, "".join(['Agraph-Sum-Rev.gexf']))
+        # reduce_network(graph_path, reverse=True, method="sum", save_folder=save_folder)
 
         logging.info("Graph summation finished in %s seconds" % (time.time() - start_time))
-        complete_step(sum_folder,hash)
-
-    #%% MA Networks
-
-    logging.info("Moving average networks.")
-    if check_step(ma_folder, hash):
-        logging.info("Moving average graphs found. Skipping.")
-    else:
-        start_time=time.time()
-        for network_type in ["Rgraph-Sum-Rev", "Rgraph-Sum", "Cgraph-Sum", "Cgraph-Sum-Rev", "Agraph-Sum", "Agraph-Sum-Rev"]:
-            logging.info("MA processing on %s" % network_type)
-            moving_avg_networks(years,cfg,cfg.ma_order,network_type,cfg.average_links)
-        logging.info("Graph MA processing finished in %s seconds" % (time.time() - start_time))
-        complete_step(ma_folder, hash)
-
-    #%% TODO: Node elimination
-
-    #%% TODO: Plural Deletion
-
-
-    #%% TODO: Symmetrization
+        complete_step(sum_folder, hash)
 
     logging.info("---------- Finished year %i ----------" % year)
+# %% MA Networks
+
+if check_step(ma_folder, hash):
+    logging.info("Moving average graphs found. Skipping.")
+else:
+    start_time = time.time()
+    for network_type in ["Rgraph-Sum-Rev", "Rgraph-Sum"]:
+        # for network_type in ["Rgraph-Sum-Rev", "Rgraph-Sum", "Cgraph-Sum", "Cgraph-Sum-Rev", "Agraph-Sum", "Agraph-Sum-Rev"]:
+        logging.info("MA processing on %s" % network_type)
+        moving_avg_networks(years, cfg, cfg.ma_order, network_type, cfg.average_links)
+    logging.info("Graph MA processing finished in %s seconds" % (time.time() - start_time))
+    complete_step(ma_folder, hash)
+
+    # %% TODO: Node elimination
+
+    # %% TODO: Plural Deletion
+
+    # %% TODO: Symmetrization

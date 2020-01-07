@@ -9,6 +9,7 @@ from networkx.algorithms.community.centrality import girvan_newman
 import hdbscan
 from NLP.utils.rowvec_tools import make_symmetric, prune_network_edges, inverse_edge_weight
 import time
+from tqdm import tqdm
 
 
 def dynamic_centralities(years, focal_token, cfg, num_retain=15,
@@ -82,7 +83,7 @@ def dynamic_centralities(years, focal_token, cfg, num_retain=15,
     year_info = {}
     central_graphs = {}
 
-    for t, year in enumerate(years):
+    for t, year in enumerate(tqdm(years)):
         measures={}
         logging.info("Centrality calculation for year %i." % year)
         data_folder = ''.join([cfg.data_folder, '/', str(year)])

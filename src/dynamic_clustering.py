@@ -4,6 +4,7 @@ import numpy as np
 import scipy as scp
 import itertools
 import logging
+from tqdm import tqdm
 from NLP.config.config import configuration
 from networkx.algorithms.community.centrality import girvan_newman
 import hdbscan
@@ -24,15 +25,18 @@ def louvain_cluster(graph):
 
     return [[k for k, v in clustering.items() if v == val] for val in list(set(clustering.values()))]
 
+
 # TODO:
 def hdbclustering(graph):
     A = nx.to_scipy_sparse_matrix(graph)
     nodes_list = list(graph.nodes)
 
-def load_graph(year,cfg,sum_folder,network_type):
+
+def load_graph(year, cfg, sum_folder, network_type):
     data_folder = ''.join([cfg.data_folder, '/', str(year)])
-    network_file = ''.join([data_folder, sum_folder ,'/', network_type, '.gexf'])
+    network_file = ''.join([data_folder, sum_folder, '/', network_type, '.gexf'])
     return nx.read_gexf(network_file)
+
 
 def dynamic_clustering(years, focal_token, cfg, cluster_function, sum_folder, window=3, num_retain=15, ego_radius=2,
                        network_type="Rgraph-Sum", pruning_method="majority", cluster_levels=3):
@@ -53,20 +57,20 @@ def dynamic_clustering(years, focal_token, cfg, cluster_function, sum_folder, wi
     :return:
     """
     # Assorted Lists and dicts
-    ego_graphs = {} # Dict for year:ego graphs
-    cluster_graphs = {} # Dict for year:cluster graphs
+    ego_graphs = {}  # Dict for year:ego graphs
+    cluster_graphs = {}  # Dict for year:cluster graphs
     ego_nodes = []
     graph_nodes = []
-    graphs = {} # Original graphs
+    graphs = {}  # Original graphs
     logging.info("Loading graph data.")
     logging.info("Pruning links smaller than %f" % cfg.prune_min)
     # First we load and prepare the networks. Because these are small compared to RAM, we load them all
     for year in years:
-        graph = load_graph(year,cfg,sum_folder,network_type)
+        graph = load_graph(year, cfg, sum_folder, network_type)
         # Do some pruning here.
         graph = prune_network_edges(graph, edge_weight=cfg.prune_min)
         # Keep only one graph in memory
-        #graphs.update({year: graph})
+        # graphs.update({year: graph})
         # Create a set that is the intersection of all nodes. We need to keep the adjacency matrix consistent
         # so nodes should all be the same!
         if year == years[0]:
@@ -78,7 +82,7 @@ def dynamic_clustering(years, focal_token, cfg, cluster_function, sum_folder, wi
     logging.info("Intersecting graphs, creating interest list.")
     # We now take all subgraphs of the intersection, and we also create the ego networks
     for year in years:
-        graph = load_graph(year,cfg,sum_folder,network_type)
+        graph = load_graph(year, cfg, sum_folder, network_type)
         graph = nx.subgraph(graph, graph_nodes)
         # Create ego network for given year
         # This will not be the final ego network, we only use it to get a
@@ -95,7 +99,7 @@ def dynamic_clustering(years, focal_token, cfg, cluster_function, sum_folder, wi
     for year in years:
         # Create actual ego network from nodes of interest
         # Use copy so it is not just a view of the graph object
-        graph = load_graph(year,cfg,sum_folder,network_type)
+        graph = load_graph(year, cfg, sum_folder, network_type)
         ego_graph = nx.subgraph(graph, ego_nodes).copy()
         ego_graphs.update({year: ego_graph})
         del graph
@@ -152,51 +156,67 @@ def dynamic_clustering(years, focal_token, cfg, cluster_function, sum_folder, wi
         # Now cluster this consensus graph to derive the final clusters
         cluster_it = cluster_function(consensus_graph)
 
-        node_infos =[]
+        node_infos = []
         c_data = []
         # Given final clusters, we compute centralities via page_rank
-        # Add other values to characterize nodes in cluster here
+        egocentralities = nx.pagerank_numpy(ego_graphs[year], weight='weight')
 
-        for cluster in cluster_it:
+        for cluster in tqdm(cluster_it):
             # Single node clusters don't work for any measure, skip
             if len(cluster) >= 2:
-                node_info={}
-                cluster_info={}
-                #%% Get Node Info
+                node_info = {}
+                cluster_info = {}
+                # %% Get Node Info
                 # We first want to create a dictionary of nodes with their
                 # correponding centralities and proximities to the focal node
-                f_cluster=cluster.append(focal_token)
+                f_cluster = cluster.append(focal_token)
                 cluster_subgraph = nx.subgraph(ego_graphs[year], f_cluster)
                 centralities = nx.pagerank_numpy(cluster_subgraph, weight='weight')
                 for v in cluster:
-                    if cluster_subgraph.has_edge(focal_token,v):
-                        try:
-                            proximity=cluster_subgraph[focal_token][v]['weight']
-                        except:
-                            proximity = 0
-                    else:
-                        proximity = 0
                     try:
                         distance = nx.dijkstra_path_length(cluster_subgraph, focal_token, v,
-                                                              weight=inverse_edge_weight)
+                                                           weight=inverse_edge_weight)
                     except:
-                       distance = 0
-                    centrality=centralities[v]
-                    node_info.update({v: (proximity,distance,centrality)})
+                        distance = 0
+
+                    if cluster_subgraph.has_edge(focal_token, v):
+                        # Proximity
+                        try:
+                            proximity = cluster_subgraph[focal_token][v]['weight']
+                        except:
+                            proximity = 0
+
+                        # Constraint
+                        try:
+                            coTo = nx.local_constraint(cluster_subgraph, v, focal_token, weight='weight')
+                            coFrom = nx.local_constraint(cluster_subgraph, focal_token, v, weight='weight')
+
+                        except:
+                            coTo = 0
+                            coFrom = 0
+
+                    else:
+                        proximity = 0
+                        coTo = 0
+                        coFrom = 0
+
+                    centrality = centralities[v]
+                    egocentrality = egocentralities[v]
+                    node_info.update({v: (proximity, distance, centrality, coTo, coFrom, egocentrality)})
                 node_infos.append(node_info)
 
-                #%% Clustering
-                cluster_nest=[]
+                # %% Clustering
+                cluster_nest = []
                 cluster_nest_cut = []
                 cluster_nest.append([cluster])
-                cluster_nest_cut.append([cut_list(cluster,node_info,num_retain)])
+                cluster_nest_cut.append([cut_list(cluster, node_info, num_retain)])
 
-                for i in range(1,cluster_levels):
-                    n_list=[]
-                    n_list_cut=[]
-                    for n_cluster in cluster_nest[i-1]:
+                for i in range(1, cluster_levels):
+                    n_list = []
+                    n_list_cut = []
+                    for n_cluster in cluster_nest[i - 1]:
                         cluster_subgraph = nx.subgraph(ego_graphs[year], n_cluster)
-                        n_cluster_it=cluster_function(cluster_subgraph)
+                        n_cluster_it = cluster_function(cluster_subgraph)
                         for c in n_cluster_it:
                             n_list.append(c)
                             n_list_cut.append(cut_list(c, node_info, num_retain))

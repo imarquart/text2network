@@ -4,6 +4,7 @@ from networkx.readwrite.gexf import read_gexf,write_gexf
 from networkx.readwrite.gml import write_gml
 from NLP.utils.rowvec_tools import graph_merge
 import logging
+from tqdm import tqdm
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
@@ -162,6 +163,7 @@ def reduce_network(network_file,reverse=True,method="sum",save_folder=None):
     if method=="sum":
         nodes=list(network.nodes)
         A = nx.to_scipy_sparse_matrix(network)
+        del network
         graph=nx.convert_matrix.from_scipy_sparse_matrix(A, create_using=nx.DiGraph)
         token_map = {v: nodes[v] for v in graph.nodes}
         graph = nx.relabel_nodes(graph, token_map)

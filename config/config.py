@@ -7,11 +7,11 @@ class configuration:
     #%% Analysis options:
     prune_min=0.01
     cluster_window=3
-    ego_radius=3
+    ego_radius=2
     num_retain=50
-    num_retain_cluster=15
+    num_retain_cluster=50
     cluster_levels=2
-
+    save_cluster_to_xlsx = False
     #%% Plot options:
     focal_nodes=["leader","leadership",'manager','management']
     ego_limit=20
@@ -46,8 +46,8 @@ class configuration:
 
 
     #%% Network creation options
-    cutoff_percent = 99
-    max_degree=25
+    cutoff_percent = 95
+    max_degree=20
 
     #%% Moving Average options
     ma_order=3
