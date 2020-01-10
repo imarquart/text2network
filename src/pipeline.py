@@ -12,9 +12,11 @@ from NLP.src.process_sentences_network import process_sentences_network
 from NLP.utils.load_bert import get_bert_and_tokenizer
 from NLP.utils.hash_file import hash_file, check_step, complete_step
 from NLP.src.run_bert import bert_args, run_bert
-from NLP.src.reduce_network import reduce_network, draw_ego_network, moving_avg_networks
+from NLP.src.reduce_network import reduce_network, moving_avg_networks
+from NLP.src.draw_networks import draw_ego_network
 import torch
 import networkx as nx
+from NLP.src.novelty import entropy_network
 
 # %% Config
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
@@ -23,8 +25,7 @@ logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message
 cfg = configuration()
 
 # %% Main Loop:
-years = range(1991, 2020)
-
+years = cfg.years
 for year in years:
     logging.info("---------- Starting year %i ----------" % year)
     input_folder = 'D:/NLP/BERT-NLP/NLP/data/HBR/articles/'
@@ -38,7 +39,9 @@ for year in years:
     tensor_folder = ''.join([data_folder, '/tensors'])
     nw_folder = ''.join([data_folder, cfg.nw_folder])
     sum_folder = ''.join([data_folder, cfg.sums_folder])
+    np_folder = ''.join([data_folder, cfg.np_folder])
     ma_folder = ''.join([data_folder, cfg.ma_folder])
+    entropy_folder = ''.join([data_folder, cfg.entropy_folder])
     sumsym_folder = ''.join([nw_folder, '/sums-sym'])
     sumplur_folder = ''.join([nw_folder, '/psums'])
     sumsymplur_folder = ''.join([nw_folder, '/psum-sym'])
@@ -52,8 +55,10 @@ for year in years:
     if not os.path.exists(tensor_folder): os.mkdir(tensor_folder)
     if not os.path.exists(nw_folder): os.mkdir(nw_folder)
     if not os.path.exists(sum_folder): os.mkdir(sum_folder)
+    if not os.path.exists(np_folder): os.mkdir(np_folder)
     if not os.path.exists(plot_folder): os.mkdir(plot_folder)
     if not os.path.exists(ma_folder): os.mkdir(ma_folder)
+    if not os.path.exists(entropy_folder): os.mkdir(entropy_folder)
 
     logging.info("Copying separate text files into text folder.")
     read_files = glob.glob(''.join([input_folder, '/*.txt']))
@@ -134,13 +139,25 @@ for year in years:
         # Save Graphs
         graph_path = os.path.join(nw_folder, "".join(['Rgraph.gexf']))
         logging.info("Attempting to save gefx")
-        nx.write_gexf(graph, graph_path)
+        if not os.path.exists(graph_path):
+            nx.write_gexf(graph, graph_path)
+        else:
+            logging.info("Full graph %s exists, please confirm overwrite manually!" % graph_path)
+
         del graph
-        # graph_path = os.path.join(nw_folder, "".join(['Cgraph.gexf']))
-        # nx.write_gexf(context_graph, graph_path)
+        graph_path = os.path.join(nw_folder, "".join(['Cgraph.gexf']))
+        if not os.path.exists(graph_path):
+            nx.write_gexf(context_graph, graph_path)
+        else:
+            logging.info("Full graph %s exists, please confirm overwrite manually!" % graph_path)
+
         del context_graph
-        # graph_path = os.path.join(nw_folder, "".join(['Agraph.gexf']))
-        # nx.write_gexf(attention_graph, graph_path)
+        graph_path = os.path.join(nw_folder, "".join(['Agraph.gexf']))
+        if not os.path.exists(graph_path):
+            nx.write_gexf(attention_graph, graph_path)
+        else:
+            logging.info("Full graph %s exists, please confirm overwrite manually!" % graph_path)
+
         del attention_graph
 
         logging.info("Network creation finished in %s seconds" % (time.time() - start_time))
@@ -153,46 +170,71 @@ for year in years:
         logging.info("Summed graphs found. Skipping.")
     else:
         start_time = time.time()
-        logging.info("Summing R-Graph")
-        graph_path = os.path.join(nw_folder, "".join(['Rgraph.gexf']))
-        save_folder = os.path.join(sum_folder, "".join(['Rgraph-Sum.gexf']))
-        _ = reduce_network(graph_path, reverse=False, method="sum", save_folder=save_folder)
-        save_folder = os.path.join(sum_folder, "".join(['Rgraph-Sum-Rev.gexf']))
-        _ = reduce_network(graph_path, reverse=True, method="sum", save_folder=save_folder)
-
-        logging.info("Summing C-Graph")
-        # graph_path = os.path.join(nw_folder, "".join(['Cgraph.gexf']))
-        # save_folder = os.path.join(sum_folder, "".join(['Cgraph-Sum.gexf']))
-        # reduce_network(graph_path, reverse=False, method="sum", save_folder=save_folder)
-        # save_folder = os.path.join(sum_folder, "".join(['Cgraph-Sum-Rev.gexf']))
-        # reduce_network(graph_path, reverse=True, method="sum", save_folder=save_folder)
-
-        logging.info("Summing A-Graph")
-        # graph_path = os.path.join(nw_folder, "".join(['Agraph.gexf']))
-        # save_folder = os.path.join(sum_folder, "".join(['Agraph-Sum.gexf']))
-        # reduce_network(graph_path, reverse=False, method="sum", save_folder=save_folder)
-        # save_folder = os.path.join(sum_folder, "".join(['Agraph-Sum-Rev.gexf']))
-        # reduce_network(graph_path, reverse=True, method="sum", save_folder=save_folder)
+        for big_graph in ['Rgraph','Cgraph','Agraph']:
+            logging.info("Summing %s" % big_graph)
+            graph_path = os.path.join(nw_folder, "".join([big_graph,'.gexf']))
+            if os.path.exists(graph_path):
+                save_folder = os.path.join(sum_folder, "".join([big_graph,'-Sum.gexf']))
+                _ = reduce_network(graph_path, cfg, reverse=False, method="sum", save_folder=save_folder)
+                save_folder = os.path.join(sum_folder, "".join([big_graph,'-Sum-Rev.gexf']))
+                _ = reduce_network(graph_path, cfg, reverse=True, method="sum", save_folder=save_folder)
+            else:
+                logging.info("Note that path %s was not found for summation" % graph_path)
 
         logging.info("Graph summation finished in %s seconds" % (time.time() - start_time))
         complete_step(sum_folder, hash)
 
+# %% No Plural Networks
+
+    logging.info("Summing graphs without plurals.")
+    if check_step(np_folder, hash):
+        logging.info("Summed graphs found. Skipping.")
+    else:
+        start_time = time.time()
+        for big_graph in ['Rgraph','Cgraph','Agraph']:
+            logging.info("Summing %s" % big_graph)
+            graph_path = os.path.join(nw_folder, "".join([big_graph,'.gexf']))
+            if os.path.exists(graph_path):
+                save_folder = os.path.join(sum_folder, "".join([big_graph,'-Sum-Rev-NP.gexf']))
+                _ = reduce_network(graph_path, cfg, reverse=True, method="sum", save_folder=save_folder,plural_elim=True)
+            else:
+                logging.info("Note that path %s was not found for summation" % graph_path)
+
+        logging.info("Graph plural elimination finished in %s seconds" % (time.time() - start_time))
+        complete_step(np_folder, hash)
+
+
+    # %% Entropy networks
+
+    if check_step(entropy_folder, hash):
+        logging.info("Entropy graphs found. Skipping.")
+    else:
+        start_time = time.time()
+        for network_type in ["Rgraph"]:
+            for focal_token in cfg.focal_nodes:
+                logging.info("Entropy processing on %s" % focal_token)
+                save_folder=''.join([entropy_folder,'/entropy_',focal_token,'_',network_type,'.gexf'])
+                entropy_network(focal_token, year, cfg, network_type, save_folder)
+        logging.info("Entropy processing finished in %s seconds" % (time.time() - start_time))
+        complete_step(entropy_folder, hash)
+
     logging.info("---------- Finished year %i ----------" % year)
+
+
+
+
 # %% MA Networks
 
 if check_step(ma_folder, hash):
     logging.info("Moving average graphs found. Skipping.")
 else:
     start_time = time.time()
-    for network_type in ["Rgraph-Sum-Rev", "Rgraph-Sum"]:
+    for network_type in ["Rgraph-Sum-Rev"]:
         # for network_type in ["Rgraph-Sum-Rev", "Rgraph-Sum", "Cgraph-Sum", "Cgraph-Sum-Rev", "Agraph-Sum", "Agraph-Sum-Rev"]:
         logging.info("MA processing on %s" % network_type)
-        moving_avg_networks(years, cfg, cfg.ma_order, network_type, cfg.average_links)
+        moving_avg_networks(years, cfg, cfg.ma_order, network_type, cfg.average_links,load_all=True)
     logging.info("Graph MA processing finished in %s seconds" % (time.time() - start_time))
+
     complete_step(ma_folder, hash)
-
-    # %% TODO: Node elimination
-
-    # %% TODO: Plural Deletion
 
     # %% TODO: Symmetrization

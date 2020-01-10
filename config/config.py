@@ -5,13 +5,14 @@ class configuration:
     Simple class to store our options
     """
     #%% Analysis options:
-    prune_min=0.01
-    cluster_window=3
-    ego_radius=2
-    num_retain=50
-    num_retain_cluster=50
-    cluster_levels=2
-    save_cluster_to_xlsx = False
+    years=range(1991,2019)
+    prune_min=0.025
+    cluster_windows=[2,3]
+    ego_radius=1
+    num_retain=150
+    num_retain_cluster=150
+    cluster_levels=3
+    save_cluster_to_xlsx = True
     #%% Plot options:
     focal_nodes=["leader","leadership",'manager','management']
     ego_limit=20
@@ -23,7 +24,12 @@ class configuration:
     nw_folder="/networksNoCut"
     sums_folder=''.join([nw_folder,'/sums'])
     ma_folder=''.join([nw_folder,'/MAsums'])
-
+    np_folder = ''.join([nw_folder, '/np_plural_sums'])
+    entropy_folder=''.join([nw_folder,'/entropy'])
+    cluster_xls = ''.join([data_folder,'/cluster_xls'])
+    plot_folder = ''.join([data_folder,'/plots/'])
+    clusterplot_folder = ''.join([data_folder,'/plots/'])
+    egoplot_folder = ''.join([data_folder,'/plots/ego'])
     #%% Logging
     subprocess_level=logging.INFO
 
@@ -48,6 +54,7 @@ class configuration:
     #%% Network creation options
     cutoff_percent = 95
     max_degree=20
+    plural_method="sum"
 
     #%% Moving Average options
     ma_order=3

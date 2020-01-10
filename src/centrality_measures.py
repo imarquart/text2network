@@ -8,15 +8,14 @@ from NLP.config.config import configuration
 from networkx.algorithms.community.centrality import girvan_newman
 import hdbscan
 from NLP.utils.rowvec_tools import make_symmetric, prune_network_edges, inverse_edge_weight
+from NLP.utils.network_tools import load_graph
 import time
 from tqdm import tqdm
 
 
 def dynamic_centralities(years, focal_token, cfg, num_retain=15,
-                       network_type="Rgraph-Sum"):
+                       network_type="Rgraph-Sum",sums_folder="/networksNoCut/sums"):
     """
-    This runs a dynamic cluster across years and smoothes the clusters within each year
-    by running a consensus algorithm across a timed window.
 
     Limitations: Graphs need to the same nodes, thus graphs are intersected toward common nodes
 
@@ -40,14 +39,13 @@ def dynamic_centralities(years, focal_token, cfg, num_retain=15,
     weight_set=[]
     logging.info("Loading graph data.")
     logging.info("Pruning links smaller than %f" % cfg.prune_min)
+    logging.info("Creating list of most connected terms.")
+
     for year in years:
-        data_folder = ''.join([cfg.data_folder, '/', str(year)])
-        network_file = ''.join([data_folder, '/networks/sums/', network_type, '.gexf'])
-        graph = nx.read_gexf(network_file)
+        graph=load_graph(year,cfg,sums_folder,network_type)
         graph = prune_network_edges(graph, edge_weight=cfg.prune_min)
         # To save memory, I have changed this such that only one graph is kept in memory
         #graphs.update({year: graph})
-        logging.info("Creating list of most connected terms.")
         neighbors = graph[focal_token]
         edge_weights = [x['weight'] for x in neighbors.values()]
         edge_sort = np.argsort(-np.array(edge_weights))
@@ -72,25 +70,25 @@ def dynamic_centralities(years, focal_token, cfg, num_retain=15,
             break
 
     interest_nodes=list(interest_set.keys())
+
+    external_list=[
+    'alpha', 'champion', 'competitor', 'force', 'pioneer', 'player', 'quarterback', 'winner',
+    'boss', 'captain', 'commander', 'controller','director', 'general', 'head', 'king', 'master','monarch', 'owner', 'president', 'superior',
+    'believer', 'giant', 'hero', 'magnet', 'speaker', 'star', 'superstar', 'visionary','activist',
+    'challenger', 'razor', 'renegade', 'revolutionary', 'builder', 'coach', 'conductor', 'consultant', 'coordinator', 'mentor', 'parent', 'partner', 'teacher',
+    'designer', 'expert', 'scientist', 'solution','man','men','male','woman','female','women']
+    [interest_nodes.append(x) for x in external_list if x not in interest_nodes]
     if focal_token not in interest_nodes: interest_nodes.append(focal_token)
-    if "man" not in interest_nodes: interest_nodes.append("man")
-    if "men" not in interest_nodes: interest_nodes.append("men")
-    if "male" not in interest_nodes: interest_nodes.append("male")
-    if "female" not in interest_nodes: interest_nodes.append("female")
-    if "women" not in interest_nodes: interest_nodes.append("women")
-    if "woman" not in interest_nodes: interest_nodes.append("woman")
 
     year_info = {}
     central_graphs = {}
-
-    for t, year in enumerate(tqdm(years)):
+    logging.info("Identified %i terms of interest" % len(interest_nodes))
+    for t, year in enumerate(tqdm(years, desc="Centralities per year")):
         measures={}
         logging.info("Centrality calculation for year %i." % year)
-        data_folder = ''.join([cfg.data_folder, '/', str(year)])
-        network_file = ''.join([data_folder, '/networks/sums/', network_type, '.gexf'])
-        graph = nx.read_gexf(network_file)
-        graph = prune_network_edges(graph, edge_weight=cfg.prune_min)
-        ego_graph = nx.ego_graph(graph, focal_token, cfg.ego_radius)
+        ego_graph = load_graph(year,cfg,sums_folder,network_type)
+        ego_graph = prune_network_edges(ego_graph, edge_weight=cfg.prune_min)
+        ego_graph = nx.ego_graph(ego_graph, focal_token, cfg.ego_radius).copy()
 
 
         #%% Closeness to leader
@@ -133,11 +131,11 @@ def dynamic_centralities(years, focal_token, cfg, num_retain=15,
         for node in interest_nodes:
             if node in list(ego_graph.nodes):
                 try:
-                    co=nx.local_constraint(ego_graph, focal_token, node, weight='weight')
+                    co1=nx.local_constraint(ego_graph, focal_token, node, weight='weight')
                 except:
-                    co=0
+                    co1=0
                     logging.info("No success with Constraint centrality, node %s" % node)
-                constraint.update({node: co})
+                constraint.update({node: co1})
             else:
                 constraint.update({node: 0})
 
@@ -155,11 +153,11 @@ def dynamic_centralities(years, focal_token, cfg, num_retain=15,
                 except:
                     co=0
                     logging.info("No success with Constraint-Towards centrality, node %s" % node)
-                constraint.update({node: co})
+                constraint_to.update({node: co})
             else:
-                constraint.update({node: 0})
+                constraint_to.update({node: 0})
 
-        measures.update({'EgoFocalConstraining': constraint})
+        measures.update({'EgoFocalConstraining': constraint_to})
         logging.info("Constraint time in %s seconds" % (time.time() - start_time))
 
         #%% Page Rank Weighted
@@ -238,7 +236,7 @@ def dynamic_centralities(years, focal_token, cfg, num_retain=15,
         sym_graph=make_symmetric(ego_graph, technique="min-sym")
         logging.info("Symmetrized graph in %s seconds" % (time.time() - start_time))
         try:
-            centralities = nx.betweenness_centrality(sym_graph,k=int(np.log(len(list(ego_graph.nodes)))))
+            centralities = nx.betweenness_centrality(sym_graph,k=int(10*np.log(len(list(ego_graph.nodes)))))
             #centralities = {0: 0}
         except:
             logging.info("No success with symmetric betweeness centrality")
@@ -258,10 +256,10 @@ def dynamic_centralities(years, focal_token, cfg, num_retain=15,
 
         between = {}
         try:
-            centralities = nx.betweenness_centrality(ego_graph,k=int(np.log(len(list(ego_graph.nodes)))))
+            centralities = nx.betweenness_centrality(ego_graph,k=int(10*np.log(len(list(ego_graph.nodes)))))
             #centralities = {0: 0}
         except:
-            logging.info("No success with symmetric betweeness centrality")
+            logging.info("No success with  betweeness centrality")
             centralities = {0: 0}
 
         for node in interest_nodes:
@@ -302,7 +300,9 @@ def dynamic_centralities(years, focal_token, cfg, num_retain=15,
         for node in interest_nodes:
             if node in list(ego_graph.nodes):
                 try:
-                    co = nx.closeness_centrality(ego_graph, node)
+                    #co = nx.closeness_centrality(ego_graph, node)
+                    co=0
+
                 except:
                     co = 0
                     logging.info("No success with Closeness centrality, node %s" % node)
