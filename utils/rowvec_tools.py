@@ -29,43 +29,6 @@ def prune_network_edges(graph, edge_weight=0.2):
         graph_c.remove_nodes_from(remove_nodes)
         return graph_c
 
-def make_symmetric(graph, technique="transpose"):
-
-    if technique=="transpose":
-        M = nx.to_scipy_sparse_matrix(graph)
-        nodes_list = list(graph.nodes)
-        M=(M + M.T)/2 - sp.sparse.diags(M.diagonal(), dtype=int)
-        graph = nx.convert_matrix.from_scipy_sparse_matrix(M)
-        mapping = dict(zip(range(0, len(nodes_list)), nodes_list))
-        graph = nx.relabel_nodes(graph, mapping)
-    elif technique=="min-sym":
-        new_graph=nx.Graph()
-        new_graph.add_nodes_from(graph.nodes)
-        nodepairs=itertools.combinations(list(graph.nodes),r=2)
-        for u,v in nodepairs:
-            if graph.has_edge(u, v) and graph.has_edge(v, u):
-                min_weight=min(graph.edges[u, v]['weight'],graph.edges[v, u]['weight'])
-                new_graph.add_edge(u,v,weight=min_weight)
-        graph=new_graph
-    elif technique=="max":
-        new_graph=nx.Graph()
-        new_graph.add_nodes_from(graph.nodes)
-        nodepairs=itertools.combinations(list(graph.nodes),r=2)
-        for u,v in nodepairs:
-            if graph.has_edge(u, v) or graph.has_edge(v, u):
-                min_weight=max(graph.edges[u, v]['weight'],graph.edges[v, u]['weight'])
-                new_graph.add_edge(u,v,weight=min_weight)
-        graph=new_graph
-    else:
-        M = nx.to_scipy_sparse_matrix(graph)
-        nodes_list = list(graph.nodes)
-        rows, cols = M.nonzero()
-        M[cols, rows] = M[rows, cols]
-        graph = nx.convert_matrix.from_scipy_sparse_matrix(M)
-        mapping = dict(zip(range(0, len(nodes_list)), nodes_list))
-        graph = nx.relabel_nodes(graph, mapping)
-
-    return graph
 
 def add_to_networks(graph, context_graph, attention_graph, replacement, context, context_att,token=0, cutoff_percent=80, max_degree=100, pos=0, sequence_id=0):
     # Create Adjacency List for Replacement Dist
@@ -95,7 +58,7 @@ def add_to_networks(graph, context_graph, attention_graph, replacement, context,
 
     return graph, context_graph,attention_graph
 
-def calculate_cutoffs(x, method="mean", percent=100, max_degree=100,min_cut=0.00005):
+def calculate_cutoffs(x, method="mean", percent=100, max_degree=100,min_cut=0.0005):
     """
     Different methods to calculate cutoff probability and number.
 

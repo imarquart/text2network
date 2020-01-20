@@ -1,13 +1,107 @@
-import networkx as nx
-import numpy as np
 import itertools
 import logging
+import os
+import networkx as nx
+import scipy as sp
+
+def load_graph_overall(cfg, sum_folder, network_type):
+    network_file = ''.join([cfg.data_folder, sum_folder, '/', network_type, '.gexf'])
+    logging.info("Loading %s" % network_file)
+    return nx.read_gexf(network_file)
 
 def load_graph(year, cfg, sum_folder, network_type):
     data_folder = ''.join([cfg.data_folder, '/', str(year)])
     network_file = ''.join([data_folder, sum_folder, '/', network_type, '.gexf'])
     logging.info("Loading %s" % network_file)
     return nx.read_gexf(network_file)
+
+def save_graph_year(graph, year, cfg, sum_folder, network_type):
+    data_folder = ''.join([cfg.data_folder, '/', str(year)])
+    network_file = ''.join([data_folder, sum_folder, '/', network_type, '.gexf'])
+    logging.info("Writing %s" % network_file)
+    return nx.write_gexf(graph,network_file)
+
+def save_graph(graph, cfg, subfolder, network_type):
+    data_folder = ''.join([cfg.data_folder])
+    subfolder=''.join([data_folder, subfolder])
+    if not os.path.exists(subfolder): os.mkdir(subfolder)
+    network_file = ''.join([subfolder, '/', network_type, '.gexf'])
+    logging.info("Writing %s" % network_file)
+    return nx.write_gexf(graph,network_file)
+
+def make_symmetric(graph, technique="transpose"):
+
+    if technique=="transpose":
+        M = nx.to_scipy_sparse_matrix(graph)
+        nodes_list = list(graph.nodes)
+        M=(M + M.T)/2 - sp.sparse.diags(M.diagonal(), dtype=int)
+        graph = nx.convert_matrix.from_scipy_sparse_matrix(M)
+        mapping = dict(zip(range(0, len(nodes_list)), nodes_list))
+        graph = nx.relabel_nodes(graph, mapping)
+    elif technique=="min-sym-avg":
+        new_graph=nx.Graph()
+        new_graph.add_nodes_from(graph.nodes)
+        nodepairs=itertools.combinations(list(graph.nodes),r=2)
+        for u,v in nodepairs:
+            if graph.has_edge(u, v) and graph.has_edge(v, u):
+                min_weight=min(graph.edges[u, v]['weight'],graph.edges[v, u]['weight'])
+                avg_weight=(graph.edges[u, v]['weight']+graph.edges[v, u]['weight'])/2
+                new_graph.add_edge(u,v,weight=avg_weight)
+        graph=new_graph
+    elif technique=="min-sym":
+        new_graph=nx.Graph()
+        new_graph.add_nodes_from(graph.nodes)
+        nodepairs=itertools.combinations(list(graph.nodes),r=2)
+        for u,v in nodepairs:
+            if graph.has_edge(u, v) and graph.has_edge(v, u):
+                min_weight=min(graph.edges[u, v]['weight'],graph.edges[v, u]['weight'])
+                new_graph.add_edge(u,v,weight=min_weight)
+        graph=new_graph
+    elif technique=="max-sym":
+        new_graph=nx.Graph()
+        new_graph.add_nodes_from(graph.nodes)
+        nodepairs=itertools.combinations(list(graph.nodes),r=2)
+        for u,v in nodepairs:
+            if graph.has_edge(u, v) and graph.has_edge(v, u):
+                max_weight=max(graph.edges[u, v]['weight'],graph.edges[v, u]['weight'])
+                new_graph.add_edge(u,v,weight=max_weight)
+        graph=new_graph
+    elif technique=="avg-sym":
+        new_graph=nx.Graph()
+        new_graph.add_nodes_from(graph.nodes)
+        nodepairs=itertools.combinations(list(graph.nodes),r=2)
+        for u,v in nodepairs:
+            if graph.has_edge(u, v) or graph.has_edge(v, u):
+                wt=0
+
+                if graph.has_edge(u, v):
+                    wt=wt+graph.edges[u, v]['weight']
+
+                if graph.has_edge(v, u):
+                    wt=wt+graph.edges[v, u]['weight']
+
+                wt=wt/2
+                new_graph.add_edge(u,v,weight=wt)
+        graph=new_graph
+    elif technique=="min":
+        new_graph=nx.DiGraph()
+        new_graph.add_nodes_from(graph.nodes)
+        nodepairs=itertools.combinations(list(graph.nodes),r=2)
+        for u,v in nodepairs:
+            if graph.has_edge(u, v) and graph.has_edge(v, u):
+                new_graph.add_edge(u,v,weight=graph.edges[u, v]['weight'])
+                new_graph.add_edge(v, u, weight=graph.edges[v, u]['weight'])
+        graph=new_graph
+    else:
+        M = nx.to_scipy_sparse_matrix(graph)
+        nodes_list = list(graph.nodes)
+        rows, cols = M.nonzero()
+        M[cols, rows] = M[rows, cols]
+        graph = nx.convert_matrix.from_scipy_sparse_matrix(M)
+        mapping = dict(zip(range(0, len(nodes_list)), nodes_list))
+        graph = nx.relabel_nodes(graph, mapping)
+
+    return graph
 
 def merge_nodes(graph,u,v,method="sum"):
 
@@ -64,15 +158,34 @@ def graph_merge(graph_list, average_links=True, method=None, merge_mode=None):
 
     if merge_mode=="safe":
         graph=graph_list[0].copy()
+        new_graph = nx.Graph()
+        new_graph.add_nodes_from(graph.nodes)
+        if nx.is_weighted(graph) == False:
+            for (u, v, wt) in graph.edges.data('weight'):
+                new_graph.add_edge(u,v,weight=1)
+        else:
+            new_graph=graph.copy()
         for i in range(1,len(graph_list)):
             for (u, v, wt) in graph_list[i].edges.data('weight'):
-                if graph.has_edge(u,v):
-                    graph[u][v]['weight']=wt+graph.get_edge_data(u,v)['weight']
+                if wt==None:
+                    wt=1
+                if new_graph.has_edge(u,v):
+                    new_graph[u][v]['weight']=wt+new_graph[u][v]['weight']
                 else:
-                    graph.add_edge(u,v,weight=wt)
+                    new_graph.add_edge(u,v,weight=wt)
         # Mean
-        if average_links==True:
-            for (u, v, wt) in graph.edges.data('weight'): graph[u][v]['weight']=wt/len(graph_list)
+        new_graph2=new_graph.copy()
+        for (u, v, wt) in new_graph.edges.data('weight'):
+            if average_links==True:
+                new_graph2[u][v]['weight']=wt/len(graph_list)
+            if method=="majority":
+                if new_graph[u][v]['weight'] <= 0.5:
+                    new_graph2.remove_edge(u,v)
+            else:
+                if new_graph[u][v]['weight'] <= 0:
+                    new_graph2.remove_edge(u,v)
+        graph=new_graph2
+
     else:
         nodes_list = list(graph_list[0].nodes)
         graph_pairs = itertools.combinations(graph_list, r=2)
@@ -96,5 +209,6 @@ def graph_merge(graph_list, average_links=True, method=None, merge_mode=None):
         graph = nx.convert_matrix.from_scipy_sparse_matrix(A)
         mapping = dict(zip(range(0, len(nodes_list)), nodes_list))
         graph = nx.relabel_nodes(graph, mapping)
+
     return graph
 

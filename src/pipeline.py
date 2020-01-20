@@ -2,21 +2,21 @@
 
 
 import glob
-import os, time, sys
 import logging
-from shutil import copyfile
-from sys import exit
-from NLP.src.text_processing.preprocess_files_HBR import preprocess_files_HBR
-from NLP.config.config import configuration
-from NLP.src.process_sentences_network import process_sentences_network
-from NLP.utils.load_bert import get_bert_and_tokenizer
-from NLP.utils.hash_file import hash_file, check_step, complete_step
-from NLP.src.run_bert import bert_args, run_bert
-from NLP.src.reduce_network import reduce_network, moving_avg_networks
-from NLP.src.draw_networks import draw_ego_network
-import torch
+import os
+import time
+
 import networkx as nx
+import torch
+
+from NLP.config.config import configuration
 from NLP.src.novelty import entropy_network
+from NLP.src.process_sentences_network import process_sentences_network
+from NLP.src.reduce_network import reduce_network, moving_avg_networks, min_symmetric_network,save_merged_ego_graph
+from NLP.src.run_bert import bert_args, run_bert
+from NLP.src.text_processing.preprocess_files_HBR import preprocess_files_HBR
+from NLP.utils.hash_file import hash_file, check_step, complete_step
+from NLP.utils.load_bert import get_bert_and_tokenizer
 
 # %% Config
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
@@ -42,9 +42,7 @@ for year in years:
     np_folder = ''.join([data_folder, cfg.np_folder])
     ma_folder = ''.join([data_folder, cfg.ma_folder])
     entropy_folder = ''.join([data_folder, cfg.entropy_folder])
-    sumsym_folder = ''.join([nw_folder, '/sums-sym'])
-    sumplur_folder = ''.join([nw_folder, '/psums'])
-    sumsymplur_folder = ''.join([nw_folder, '/psum-sym'])
+    sumsym_folder = ''.join([data_folder, cfg.sumsym_folder])
     text_file = ''.join([text_folder, '/', str(year), '.txt'])
     text_db = ''.join([text_folder, '/', str(year), '.h5'])
     plot_folder = ''.join([cfg.data_folder, '/plots'])
@@ -59,6 +57,7 @@ for year in years:
     if not os.path.exists(plot_folder): os.mkdir(plot_folder)
     if not os.path.exists(ma_folder): os.mkdir(ma_folder)
     if not os.path.exists(entropy_folder): os.mkdir(entropy_folder)
+    if not os.path.exists(sumsym_folder): os.mkdir(sumsym_folder)
 
     logging.info("Copying separate text files into text folder.")
     read_files = glob.glob(''.join([input_folder, '/*.txt']))
@@ -140,13 +139,15 @@ for year in years:
         graph_path = os.path.join(nw_folder, "".join(['Rgraph.gexf']))
         logging.info("Attempting to save gefx")
         if not os.path.exists(graph_path):
-            nx.write_gexf(graph, graph_path)
+            logging.info("Saving to %s" %graph_path)
+            #nx.write_gexf(graph, graph_path)
         else:
             logging.info("Full graph %s exists, please confirm overwrite manually!" % graph_path)
 
         del graph
         graph_path = os.path.join(nw_folder, "".join(['Cgraph.gexf']))
-        if not os.path.exists(graph_path):
+        if not os.path.exists(graph_path) or True:
+            logging.info("Saving to %s" %graph_path)
             nx.write_gexf(context_graph, graph_path)
         else:
             logging.info("Full graph %s exists, please confirm overwrite manually!" % graph_path)
@@ -166,7 +167,7 @@ for year in years:
     # %% Sum Networks
 
     logging.info("Summing graphs.")
-    if check_step(sum_folder, hash):
+    if check_step(sum_folder, hash) and False:
         logging.info("Summed graphs found. Skipping.")
     else:
         start_time = time.time()
@@ -184,18 +185,31 @@ for year in years:
         logging.info("Graph summation finished in %s seconds" % (time.time() - start_time))
         complete_step(sum_folder, hash)
 
-# %% No Plural Networks
+    # %% Symmetrize network
+    if check_step(sumsym_folder, hash):
+        logging.info("Symmetrized graphs found. Skipping.")
+    else:
+        start_time = time.time()
+        for network_type in ["Rgraph-Sum-Rev","Cgraph-Sum-Rev"]:
+            logging.info("Symmetry processing on %s" % network_type)
+            min_symmetric_network(year, cfg, cfg.sums_folder, cfg.sumsym_folder, network_type, method="min-sym-avg")
+            min_symmetric_network(year, cfg, cfg.sums_folder, cfg.sumsym_folder, network_type, method="min")
+        logging.info("Symmetry processing finished in %s seconds" % (time.time() - start_time))
+        complete_step(sumsym_folder, hash)
+
+    # %% No Plural Networks
 
     logging.info("Summing graphs without plurals.")
-    if check_step(np_folder, hash):
+    if check_step(np_folder, hash) or True:
         logging.info("Summed graphs found. Skipping.")
     else:
         start_time = time.time()
         for big_graph in ['Rgraph','Cgraph','Agraph']:
-            logging.info("Summing %s" % big_graph)
             graph_path = os.path.join(nw_folder, "".join([big_graph,'.gexf']))
+            logging.info("Summing %s" % graph_path)
+
             if os.path.exists(graph_path):
-                save_folder = os.path.join(sum_folder, "".join([big_graph,'-Sum-Rev-NP.gexf']))
+                save_folder = os.path.join(np_folder, "".join([big_graph,'-Sum-Rev-NP.gexf']))
                 _ = reduce_network(graph_path, cfg, reverse=True, method="sum", save_folder=save_folder,plural_elim=True)
             else:
                 logging.info("Note that path %s was not found for summation" % graph_path)
@@ -220,12 +234,25 @@ for year in years:
 
     logging.info("---------- Finished year %i ----------" % year)
 
-
-
+# %% Create Mergend networks
+olds_folder="/networks/sums"
+mfolder=''.join([cfg.merged_folder])
+if check_step(mfolder, "1"):
+    logging.info("Merged graphs found. Skipping.")
+else:
+    start_time = time.time()
+    for ego_radius in [1,2]:
+        for network_type in ["Cgraph-Sum-Rev"]:
+            for focal_token in cfg.focal_nodes:
+                logging.info("Merging %s on %s" % (focal_token, network_type))
+                save_merged_ego_graph(range(1991,2019), focal_token, cfg, cfg.merged_folder, olds_folder, ego_radius=ego_radius, links="both",
+                                      network_type=network_type)
+    logging.info("Merged graphs finished in %s seconds" % (time.time() - start_time))
+    #complete_step(mfolder, "1")
 
 # %% MA Networks
 
-if check_step(ma_folder, hash):
+if check_step(ma_folder, "1"):
     logging.info("Moving average graphs found. Skipping.")
 else:
     start_time = time.time()
@@ -235,6 +262,6 @@ else:
         moving_avg_networks(years, cfg, cfg.ma_order, network_type, cfg.average_links,load_all=True)
     logging.info("Graph MA processing finished in %s seconds" % (time.time() - start_time))
 
-    complete_step(ma_folder, hash)
+    complete_step(ma_folder, "1")
 
     # %% TODO: Symmetrization

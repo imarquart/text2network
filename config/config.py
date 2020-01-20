@@ -5,13 +5,14 @@ class configuration:
     Simple class to store our options
     """
     #%% Analysis options:
-    years=range(1991,2019)
+    years=range(1991,2020)
     prune_min=0.025
     cluster_windows=[2,3]
     ego_radius=1
-    num_retain=150
-    num_retain_cluster=150
-    cluster_levels=3
+    num_retain=250
+    num_retain_cluster=250
+    cluster_levels=4
+    cluster_levels_overall = 6
     save_cluster_to_xlsx = True
     #%% Plot options:
     focal_nodes=["leader","leadership",'manager','management']
@@ -22,9 +23,11 @@ class configuration:
     data_folder = "E:/NLP"
     text_folder = "D:/NLP/BERT-NLP/NLP/data"
     nw_folder="/networksNoCut"
+    merged_folder="/merges"
     sums_folder=''.join([nw_folder,'/sums'])
     ma_folder=''.join([nw_folder,'/MAsums'])
     np_folder = ''.join([nw_folder, '/np_plural_sums'])
+    sumsym_folder=''.join([nw_folder, '/sum_sym'])
     entropy_folder=''.join([nw_folder,'/entropy'])
     cluster_xls = ''.join([data_folder,'/cluster_xls'])
     plot_folder = ''.join([data_folder,'/plots/'])
