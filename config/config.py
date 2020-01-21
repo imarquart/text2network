@@ -5,7 +5,7 @@ class configuration:
     Simple class to store our options
     """
     #%% Analysis options:
-    years=range(1991,2020)
+    years=range(1990,2020)
     prune_min=0.025
     cluster_windows=[2,3]
     ego_radius=1
@@ -26,6 +26,7 @@ class configuration:
     merged_folder="/merges"
     sums_folder=''.join([nw_folder,'/sums'])
     ma_folder=''.join([nw_folder,'/MAsums'])
+    embed_folder="/embeddings"
     np_folder = ''.join([nw_folder, '/np_plural_sums'])
     sumsym_folder=''.join([nw_folder, '/sum_sym'])
     entropy_folder=''.join([nw_folder,'/entropy'])
@@ -44,7 +45,7 @@ class configuration:
 
     #%% BERT Training options
     gpu_batch=100
-    epochs=100
+    epochs=200
     loss_limit=0.5
     warmup_steps = 0
     mlm_probability = 0.15
@@ -56,7 +57,7 @@ class configuration:
 
     #%% Network creation options
     cutoff_percent = 95
-    max_degree=20
+    max_degree=30
     plural_method="sum"
 
     #%% Moving Average options

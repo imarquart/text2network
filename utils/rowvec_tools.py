@@ -32,20 +32,20 @@ def prune_network_edges(graph, edge_weight=0.2):
 
 def add_to_networks(graph, context_graph, attention_graph, replacement, context, context_att,token=0, cutoff_percent=80, max_degree=100, pos=0, sequence_id=0):
     # Create Adjacency List for Replacement Dist
-    # DISABLED
-    #cutoff_number, cutoff_probability = calculate_cutoffs(replacement, method="percent",
-     #                                                     percent=cutoff_percent,max_degree=max_degree)
-    #graph.add_weighted_edges_from(
-    #    get_weighted_edgelist(token, replacement, cutoff_number, cutoff_probability), 'weight',
-    #    seq_id=sequence_id, pos=pos)
+
+    cutoff_number, cutoff_probability = calculate_cutoffs(replacement, method="percent",
+                                                         percent=cutoff_percent,max_degree=max_degree)
+    graph.add_weighted_edges_from(
+        get_weighted_edgelist(token, replacement, cutoff_number, cutoff_probability), 'weight',
+        seq_id=sequence_id, pos=pos)
 
 
 
     #Create Adjacency List for Context Dist
     cutoff_number, cutoff_probability = calculate_cutoffs(context, method="percent",
-                                                         percent=cutoff_percent)
+                                                         percent=cutoff_percent-15)
     context_graph.add_weighted_edges_from(
-        get_weighted_edgelist(token, context, cutoff_number, cutoff_probability), 'weight',
+        get_weighted_edgelist(token, context, cutoff_number-15, cutoff_probability), 'weight',
        seq_id=sequence_id, pos=pos)
 
     # DISABLED
@@ -124,9 +124,3 @@ def simple_norm(x):
         return x
 
 
-
-
-def softmax(x):
-    """Compute softmax values for each sets of scores in x."""
-    x = np.exp(x - np.max(x))
-    return np.exp(x) / np.sum(np.exp(x), axis=-1, keepdims=True)
