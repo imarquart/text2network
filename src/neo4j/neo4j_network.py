@@ -53,16 +53,19 @@ class neo4j_network(MutableSequence):
     def __setitem__(self, key, value):
         """Interpret as adding ties in the graph"""
         # We work with token id's here
-        # TODO: Add missing token handling
         if isinstance(key, str): key = self.get_id_from_token(key)
+        assert key in self.ids, "ID of ego token to connect not found. Not in network?"
         try:
             neighbors = [self.get_id_from_token(x[0]) if not isinstance(x[0], int) else x[0] for x in value]
+            print(neighbors)
             weights = [x[2] if isinstance(x[2], float) else x[2]['weight'] for x in value]
             years=[x[1] for x in value]
             token = map(int,np.repeat(key, len(neighbors)))
         except:
             raise ValueError("Adding requires an iterable over tuples e.g. [(neighbor,(weight,year))]")
 
+        # Check if all neighbor tokens present
+        assert set(neighbors) < set(self.ids), "ID of node to connect not found. Not in network?"
         ties=zip(token,neighbors,years,weights)
 
         #TODO Dispatch
@@ -234,25 +237,24 @@ class neo4j_network(MutableSequence):
         # Update dictionaries
         self.token_id_dict.update(dict(zip(self.tokens,self.ids)))
 
-    def get_index_from_token(self,token):
+    def get_index_from_ID(self,id):
         """Index (order) of token in data structures used"""
         # Token has to be string
-        assert isinstance(token, str)
+        assert isinstance(id, int)
         try:
-            id=self.token_id_dict[token]
             index=self.id_index_dict[id]
         except:
-            index=False
+            raise LookupError("".join(["Index of token with id ", str(id), " missing. Token not in network?"]))
         return index.item()
 
-    def get_id_from_token(self, id):
+    def get_token_from_id(self, id):
         """Index (order) of token in data structures used"""
         # Token has to be string
         assert isinstance(id, int)
         try:
             token = self.token_id_dict[id]
         except:
-            token = False
+            raise LookupError("".join(["Token with ID ", str(id), " missing. Token not in network?"]))
         return token
 
     def get_id_from_token(self,token):
@@ -262,5 +264,5 @@ class neo4j_network(MutableSequence):
         try:
             id=self.token_id_dict[token]
         except:
-            id=False
+            raise LookupError("".join(["ID of token ", token, " missing. Token not in network?"]))
         return id

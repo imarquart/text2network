@@ -13,6 +13,9 @@ class Testneo4j_network(TestCase):
         self.ego_token="house"
         self.add_string=[(11, 12, 20000101, {'weight': 0.5}), (11, 13, 20000101, {'weight': 0.5}), (12, 13, 20000101, {'weight': 0.5})]
         self.add_string_ego=[(12, 20000101, {'weight': 0.5}), (13, 20000101, {'weight': 0.5})]
+        self.add_string_ego_missing=[(20, 20000101, {'weight': 0.5}), (13, 20000101, {'weight': 0.5})]
+        self.add_string_ego_missing2=[('elephant', 20000101, {'weight': 0.5}), ('cat', 20000101, {'weight': 0.5})]
+        self.add_string_ego_nodict=[(12, 20000101, 0.5), (13, 20000101, 0.5)]
         self.add_string_ego_names=[('dog', 20000101, {'weight': 0.5}), ('cat', 20000101, {'weight': 0.5})]
         self.add_string_timing = [(12, 20000101, {'weight': 0.5}), (13, 20010101, {'weight': 0.5}),(10, 20020101, {'weight': 0.5})]
 
@@ -49,6 +52,13 @@ class Testneo4j_network(TestCase):
     def test_update_token(self):
         pass
 
+    def test_missing_token(self):
+        """Try add a link from or to token without ID/Token information"""
+        self.assertRaises(AssertionError,self.neo4nw.__setitem__,self.ego_id, self.add_string_ego_missing)
+        self.assertRaises(ValueError,self.neo4nw.__setitem__,self.ego_id, self.add_string_ego_missing2)
+        self.assertRaises(ValueError,self.neo4nw.__setitem__,"Elephant", self.add_string_ego)
+        self.assertRaises(AssertionError,self.neo4nw.__setitem__,22, self.add_string_ego)
+
     def test_add_get_link_token(self):
         """Handle dispatch correctly if token names and not ID's are supplied"""
         self.neo4nw[self.ego_token]=self.add_string_ego_names
@@ -58,10 +68,20 @@ class Testneo4j_network(TestCase):
         comp = [(self.ego_id, x[0], x[2]['weight']) for x in self.add_string_ego]
         self.assertEqual(set(res), set(comp))
 
-    def test_addget_dispatch(self):
-        """Add two ties towards ego node"""
-
+    def test_add_get_dispatch(self):
+        """Add two ties towards ego node, using dict format"""
         self.neo4nw[self.ego_id]=self.add_string_ego
+        self.neo4nw.write_queue()
+        res = self.neo4nw.query_node(self.ego_id)
+        res = [(x[0], x[1], x[3]['weight']) for x in res]
+        comp = [(self.ego_id, x[0], x[2]['weight']) for x in self.add_string_ego]
+        self.assertEqual(set(res), set(comp))
+
+
+    def test_add_get_dispatch_nodict(self):
+        """Add two ties towards ego node, using triplet format"""
+
+        self.neo4nw[self.ego_id]=self.add_string_ego_nodict
         self.neo4nw.write_queue()
         res = self.neo4nw.query_node(self.ego_id)
         res = [(x[0], x[1], x[3]['weight']) for x in res]
