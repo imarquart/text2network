@@ -12,6 +12,7 @@ class Testneo4j_network(TestCase):
         self.ego_id=11
         self.add_string=[(11, 12, 20000101, {'weight': 0.5}), (11, 13, 20000101, {'weight': 0.5}), (12, 13, 20000101, {'weight': 0.5})]
         self.add_string_ego=[(12, 20000101, {'weight': 0.5}), (13, 20000101, {'weight': 0.5})]
+        self.add_string_timing = [(12, 20000101, {'weight': 0.5}), (13, 20010101, {'weight': 0.5}),(10, 20020101, {'weight': 0.5})]
 
 
         self.neo4nw=neo4j_network((db_uri,db_pwd),graph_type)
@@ -104,6 +105,28 @@ class Testneo4j_network(TestCase):
         res=[(x[0],x[1],x[3]['weight']) for x in res]
         comp=[(self.ego_id,x[0],x[2]['weight']) for x in self.add_string_ego]
         self.assertEqual(set(res),set(comp))
+
+    def test_query_time_interval(self):
+        """Add some links across time then query back some of them"""
+        self.neo4nw.insert_edges_query(self.ego_id, self.add_string_timing)
+        self.neo4nw.write_queue()
+        times={"start":20000101,"end":20010101}
+        res = self.neo4nw.query_node(self.ego_id,times)
+
+        res=[(x[0],x[1],x[2],x[3]['weight']) for x in res]
+        comp=[(self.ego_id,x[0],x[1],x[2]['weight']) for x in self.add_string_timing[0:2]]
+        self.assertEqual(set(res),set(comp))
+
+    def test_query_time(self):
+        """Add some links across time then query back one time point"""
+        self.neo4nw.insert_edges_query(self.ego_id, self.add_string_timing)
+        self.neo4nw.write_queue()
+        times = 20010101
+        res = self.neo4nw.query_node(self.ego_id, times)
+
+        res = [(x[0], x[1], x[2], x[3]['weight']) for x in res]
+        comp = [(self.ego_id, x[0], x[1], x[2]['weight']) for x in self.add_string_timing[1:2]]
+        self.assertEqual(set(res), set(comp))
 
     def test_add_link_new_token(self):
         pass

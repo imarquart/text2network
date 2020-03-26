@@ -20,7 +20,7 @@ except:
 class neo4j_network(MutableSequence):
 
     #%% Initialization functions
-    def __init__(self,neo4j_creds, graph_type, batch_size=10,graph_direction="PREDICTED"):
+    def __init__(self,neo4j_creds, graph_type, batch_size=10,graph_direction="FORWARD"):
         self.neo4j_connection,self.neo4j_credentials = neo4j_creds
         # Conditioned graph information
         self.graph_type = graph_type
@@ -71,6 +71,9 @@ class neo4j_network(MutableSequence):
         self.add_query(query)
         query="CREATE CONSTRAINT ON(n:word) ASSERT n.token IS UNIQUE"
         self.add_query(query)
+        query= "CREATE INDEX ON :edge(time)"
+        self.add_query(query)
+
         # Need to write first because create and structure changes can not be batched
         self.write_queue()
         # Create nodes in neo db
@@ -125,60 +128,68 @@ class neo4j_network(MutableSequence):
         self.neo_queue=[]
 
     def query_node(self,id, times=None):
+        """ See query_multiple_nodes"""
         return self.query_multiple_nodes([id],times)
 
     def query_multiple_nodes(self, ids, times=None):
-        assert isinstance(ids,list)
-        if self.graph_direction == "PREDICTED": # Seek nodes that predict ID nodes hence reverse sender/receiver
-            if times is not None:
-                assert isinstance(times,list)
-                params = {"ids": ids, "times":times}
-                query="UNWIND times as time UNWIND $ids AS id MATCH p=(a:word)-[r:PREDICTS {time: time}]->(b:word  {token_id:id}) RETURN b.token_id AS sender,a.token_id AS receiver,r.time AS time,r.weight AS weight"
+        """
+        Query multiple nodes by ID and over a set of time intervals
+        :param ids: list of id's
+        :param times: either a number format YYYYMMDD, or an interval dict {"start":YYYYMMDD,"end":YYYYMMDD}
+        :return: list of tuples (u,v,Time,{weight:x})
+        """
+        assert isinstance(ids, list)
+        if self.graph_direction == "REVERSE":  # Seek nodes that predict ID nodes hence reverse sender/receiver
+            if isinstance(times, dict) or isinstance(times, int):
+                if isinstance(times, dict):  # Interval query
+                    params = {"ids": ids, "times": times}
+                    query = "UNWIND $ids AS id MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word  {token_id:id}) WHERE $times.start <= r.time<= $times.end RETURN b.token_id AS sender,a.token_id AS receiver,r.time AS time,r.weight AS weight"
+                elif isinstance(times, int):
+                    params = {"ids": ids, "times": times}
+                    query = "UNWIND $ids AS id MATCH p=(a:word)-[:onto]->(r:edge {time:$times})-[:onto]->(b:word  {token_id:id}) RETURN b.token_id AS sender,a.token_id AS receiver,r.time AS time,r.weight AS weight"
             else:
-                query="unwind $ids AS id MATCH p=(a:word)-[r:PREDICTS]->(b:word  {token_id:id}) RETURN b.token_id AS sender,a.token_id AS receiver,r.time AS time,r.weight AS weight"
-                params={"ids":ids}
-        else: # Seek nodes that predict nodes
-            if times is not None:
-                assert isinstance(times,list)
-                params = {"ids": ids, "times":times}
-                query="UNWIND times as time UNWIND $ids AS id MATCH p=(a:word)<-[r:PREDICTS {time: time}]-(b:word  {token_id:id}) RETURN b.token_id AS sender,a.token_id as receiver,r.time AS time,r.weight AS weight"
+                query = "unwind $ids AS id MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word  {token_id:id}) RETURN b.token_id AS sender,a.token_id AS receiver,r.time AS time,r.weight AS weight"
+                params = {"ids": ids}
+        else:  # Seek nodes that predict nodes
+            if isinstance(times, dict) or isinstance(times, int):
+                if isinstance(times, dict):  # Interval query
+                    params = {"ids": ids, "times": times}
+                    query = "UNWIND $ids AS id MATCH p=(a:word  {token_id:id})-[:onto]->(r:edge)-[:onto]->(b:word) WHERE $times.start <= r.time<= $times.end RETURN b.token_id AS receiver,a.token_id AS sender,r.time AS time,r.weight AS weight"
+                elif isinstance(times, int):
+                    params = {"ids": ids, "times": times}
+                    query = "UNWIND $ids AS id MATCH p=(a:word  {token_id:id})-[:onto]->(r:edge {time:$times})-[:onto]->(b:word) RETURN b.token_id AS receiver,a.token_id AS sender,r.time AS time,r.weight AS weight"
             else:
-                query="unwind $ids AS id MATCH p=(a:word)<-[r:PREDICTS]-(b:word  {token_id:id}) RETURN b.token_id AS sender,a.token_id as receiver,r.time AS time,r.weight AS weight"
-                params={"ids":ids}
-        res=self.connector.run(query,params)
+                query = "unwind $ids AS id MATCH p=(a:word  {token_id:id})-[:onto]->(r:edge)-[:onto]->(b:word) RETURN  b.token_id AS receiver,a.token_id AS sender,r.time AS time,r.weight AS weight"
+                params = {"ids": ids}
+
+        res = self.connector.run(query, params)
         ties = [(x['sender'], x['receiver'], x['time'], {'weight': x['weight']}) for x in res]
         return ties
 
-    def insert_edges_query_multiple(self,ties):
+
+    def insert_edges_query_multiple(self, ties):
         """
         Allows to add ties across nodes
         :param ties: Set of Tuples (u,v,Time,{"weight":x})
-        :return:
+        :return: None
         """
         # Graph is saved as "PREDICTS", thus we may need to reverse ego/alter here
-        if self.graph_direction=="PREDICTED":
-            params={"ties": [{"ego":x[1],"alter":x[0],"time":str(x[2]),"weight":x[3]['weight']} for x in ties]}
+        if self.graph_direction == "REVERSE":
+            params = {"ties": [{"ego": x[1], "alter": x[0], "time": x[2], "weight": x[3]['weight']} for x in ties]}
         else:
-            params={"ties": [{"ego":x[0],"alter":x[1],"time":str(x[2]),"weight":x[3]['weight']} for x in ties]}
+            params = {"ties": [{"ego": x[0], "alter": x[1], "time": x[2], "weight": x[3]['weight']} for x in ties]}
 
-        query="UNWIND $ties AS tie MATCH (a:word {token_id: tie.ego}) MATCH (b:word {token_id: tie.alter}) WITH a,b,tie MERGE (a)-[:PREDICTS {weight:tie.weight, time:date(tie.time)}]->(b)"
-        self.add_query(query,params)
+        query = "UNWIND $ties AS tie MATCH (a:word {token_id: tie.ego}) MATCH (b:word {token_id: tie.alter}) WITH a,b,tie MERGE (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time})<-[:onto]-(a)"
+        self.add_query(query, params)
 
     def insert_edges_query(self,ego,ties):
         """
         Add ties from a given ego node u->v
-        TODO: Refactor into above function
         :param ties: Set of Tuples (v,Time,{"weight":x})
-        :return:
+        :return: None
         """
-        # Graph is saved as "PREDICTS", thus we may need to reverse ego/alter here
-        if self.graph_direction=="PREDICTED":
-            params = {"ties": [{"alter": x[0], "time": str(x[1]), "weight": x[2]['weight']} for x in ties], "ego": ego}
-            query = "MATCH (a:word {token_id: $ego}) WITH a UNWIND $ties AS tie MATCH (b:word {token_id: tie.alter}) WITH a,b,tie MERGE (a)<-[:PREDICTS {weight:tie.weight, time:date(tie.time)}]-(b)"
-        else:
-            params={"ties": [{"alter":x[0],"time":str(x[1]), "weight": x[2]['weight']} for x in ties], "ego":ego}
-            query="MATCH (a:word {token_id: $ego}) WITH a UNWIND $ties AS tie MATCH (b:word {token_id: tie.alter}) WITH a,b,tie MERGE (a)-[:PREDICTS {weight:tie.weight, time:date(tie.time)}]->(b)"
-        self.add_query(query,params)
+        ties=[(ego,x[0],x[1],x[2]) for x in ties]
+        self.insert_edges_query_multiple(ties)
 
 
 
