@@ -51,7 +51,23 @@ class neo4j_network(MutableSequence):
         pass
 
     def __setitem__(self, key, value):
-        pass
+        """Interpret as adding ties in the graph"""
+        # We work with token id's here
+        # TODO: Add missing token handling
+        if isinstance(key, str): key = self.get_id_from_token(key)
+        try:
+            neighbors = [self.get_id_from_token(x[0]) if not isinstance(x[0], int) else x[0] for x in value]
+            weights = [x[2] if isinstance(x[2], float) else x[2]['weight'] for x in value]
+            years=[x[1] for x in value]
+            token = map(int,np.repeat(key, len(neighbors)))
+        except:
+            raise ValueError("Adding requires an iterable over tuples e.g. [(neighbor,(weight,year))]")
+
+        ties=zip(token,neighbors,years,weights)
+
+        #TODO Dispatch
+        if self.graph==None:
+            self.insert_edges_query_multiple(ties)
 
     def __getitem__(self, i):
         pass
@@ -170,14 +186,14 @@ class neo4j_network(MutableSequence):
     def insert_edges_query_multiple(self, ties):
         """
         Allows to add ties across nodes
-        :param ties: Set of Tuples (u,v,Time,{"weight":x})
+        :param ties: Set of Tuples (u,v,Time,weight)
         :return: None
         """
         # Graph is saved as "PREDICTS", thus we may need to reverse ego/alter here
         if self.graph_direction == "REVERSE":
-            params = {"ties": [{"ego": x[1], "alter": x[0], "time": x[2], "weight": x[3]['weight']} for x in ties]}
+            params = {"ties": [{"ego": x[1], "alter": x[0], "time": x[2], "weight": x[3]} for x in ties]}
         else:
-            params = {"ties": [{"ego": x[0], "alter": x[1], "time": x[2], "weight": x[3]['weight']} for x in ties]}
+            params = {"ties": [{"ego": x[0], "alter": x[1], "time": x[2], "weight": x[3]} for x in ties]}
 
         query = "UNWIND $ties AS tie MATCH (a:word {token_id: tie.ego}) MATCH (b:word {token_id: tie.alter}) WITH a,b,tie MERGE (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time})<-[:onto]-(a)"
         self.add_query(query, params)
@@ -218,3 +234,33 @@ class neo4j_network(MutableSequence):
         # Update dictionaries
         self.token_id_dict.update(dict(zip(self.tokens,self.ids)))
 
+    def get_index_from_token(self,token):
+        """Index (order) of token in data structures used"""
+        # Token has to be string
+        assert isinstance(token, str)
+        try:
+            id=self.token_id_dict[token]
+            index=self.id_index_dict[id]
+        except:
+            index=False
+        return index.item()
+
+    def get_id_from_token(self, id):
+        """Index (order) of token in data structures used"""
+        # Token has to be string
+        assert isinstance(id, int)
+        try:
+            token = self.token_id_dict[id]
+        except:
+            token = False
+        return token
+
+    def get_id_from_token(self,token):
+        """Index (order) of token in data structures used"""
+        # Token has to be string
+        assert isinstance(token, str)
+        try:
+            id=self.token_id_dict[token]
+        except:
+            id=False
+        return id

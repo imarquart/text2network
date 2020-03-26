@@ -10,8 +10,10 @@ class Testneo4j_network(TestCase):
         self.tokens=["car","house","dog","cat"]
         self.token_ids=[10,11,12,13]
         self.ego_id=11
+        self.ego_token="house"
         self.add_string=[(11, 12, 20000101, {'weight': 0.5}), (11, 13, 20000101, {'weight': 0.5}), (12, 13, 20000101, {'weight': 0.5})]
         self.add_string_ego=[(12, 20000101, {'weight': 0.5}), (13, 20000101, {'weight': 0.5})]
+        self.add_string_ego_names=[('dog', 20000101, {'weight': 0.5}), ('cat', 20000101, {'weight': 0.5})]
         self.add_string_timing = [(12, 20000101, {'weight': 0.5}), (13, 20010101, {'weight': 0.5}),(10, 20020101, {'weight': 0.5})]
 
 
@@ -25,6 +27,7 @@ class Testneo4j_network(TestCase):
         self.neo4nw.connector.run(query)
         # Setup network
         self.neo4nw.setup_neo_db(self.tokens,self.token_ids)
+        self.neo4nw.init_tokens()
 
 
 
@@ -40,15 +43,6 @@ class Testneo4j_network(TestCase):
         self.assertTrue(set(self.neo4nw.ids) == set(self.token_ids))
         self.assertTrue(set(self.neo4nw.tokens) == set(self.tokens))
 
-    def test_get_token_from_db(self):
-        pass
-
-    def test_get_token_from_memory(self):
-        pass
-
-    def test_confirm_stack_write(selfs):
-        pass
-
     def test_add_token(self):
         pass
 
@@ -56,7 +50,23 @@ class Testneo4j_network(TestCase):
         pass
 
     def test_add_get_link_token(self):
-        pass
+        """Handle dispatch correctly if token names and not ID's are supplied"""
+        self.neo4nw[self.ego_token]=self.add_string_ego_names
+        self.neo4nw.write_queue()
+        res = self.neo4nw.query_node(self.ego_id)
+        res = [(x[0], x[1], x[3]['weight']) for x in res]
+        comp = [(self.ego_id, x[0], x[2]['weight']) for x in self.add_string_ego]
+        self.assertEqual(set(res), set(comp))
+
+    def test_addget_dispatch(self):
+        """Add two ties towards ego node"""
+
+        self.neo4nw[self.ego_id]=self.add_string_ego
+        self.neo4nw.write_queue()
+        res = self.neo4nw.query_node(self.ego_id)
+        res = [(x[0], x[1], x[3]['weight']) for x in res]
+        comp = [(self.ego_id, x[0], x[2]['weight']) for x in self.add_string_ego]
+        self.assertEqual(set(res), set(comp))
 
     def test_add_get_link_id(self):
         """We add a list of edges between 3 nodes and check it is returned correctly (same format)"""
