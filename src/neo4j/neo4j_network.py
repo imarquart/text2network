@@ -57,20 +57,20 @@ class neo4j_network(MutableSequence):
         assert key in self.ids, "ID of ego token to connect not found. Not in network?"
         try:
             neighbors = [self.get_id_from_token(x[0]) if not isinstance(x[0], int) else x[0] for x in value]
-            print(neighbors)
-            weights = [x[2] if isinstance(x[2], float) else x[2]['weight'] for x in value]
+            weights = [{'weight':x[2]} if isinstance(x[2], (int,float)) else x[2] for x in value]
             years=[x[1] for x in value]
             token = map(int,np.repeat(key, len(neighbors)))
         except:
-            raise ValueError("Adding requires an iterable over tuples e.g. [(neighbor,(weight,year))]")
+            raise ValueError("Adding requires an iterable over tuples e.g. [(neighbor,time, weight))]")
 
         # Check if all neighbor tokens present
         assert set(neighbors) < set(self.ids), "ID of node to connect not found. Not in network?"
         ties=zip(token,neighbors,years,weights)
 
-        #TODO Dispatch
-        if self.graph==None:
-            self.insert_edges_query_multiple(ties)
+        #TODO Dispatch if graph conditioned
+
+        # Add ties to query
+        self.insert_edges_query_multiple(ties)
 
     def __getitem__(self, i):
         pass
@@ -194,9 +194,9 @@ class neo4j_network(MutableSequence):
         """
         # Graph is saved as "PREDICTS", thus we may need to reverse ego/alter here
         if self.graph_direction == "REVERSE":
-            params = {"ties": [{"ego": x[1], "alter": x[0], "time": x[2], "weight": x[3]} for x in ties]}
+            params = {"ties": [{"ego": x[1], "alter": x[0], "time": x[2], "weight": x[3]['weight']} for x in ties]}
         else:
-            params = {"ties": [{"ego": x[0], "alter": x[1], "time": x[2], "weight": x[3]} for x in ties]}
+            params = {"ties": [{"ego": x[0], "alter": x[1], "time": x[2], "weight": x[3]['weight']} for x in ties]}
 
         query = "UNWIND $ties AS tie MATCH (a:word {token_id: tie.ego}) MATCH (b:word {token_id: tie.alter}) WITH a,b,tie MERGE (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time})<-[:onto]-(a)"
         self.add_query(query, params)

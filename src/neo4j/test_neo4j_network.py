@@ -56,7 +56,7 @@ class Testneo4j_network(TestCase):
         """Try add a link from or to token without ID/Token information"""
         self.assertRaises(AssertionError,self.neo4nw.__setitem__,self.ego_id, self.add_string_ego_missing)
         self.assertRaises(ValueError,self.neo4nw.__setitem__,self.ego_id, self.add_string_ego_missing2)
-        self.assertRaises(ValueError,self.neo4nw.__setitem__,"Elephant", self.add_string_ego)
+        self.assertRaises(LookupError,self.neo4nw.__setitem__,"Elephant", self.add_string_ego)
         self.assertRaises(AssertionError,self.neo4nw.__setitem__,22, self.add_string_ego)
 
     def test_add_get_link_token(self):
