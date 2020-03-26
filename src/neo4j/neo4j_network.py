@@ -89,13 +89,30 @@ class neo4j_network(MutableSequence):
         self.update_dicts()
 
     #%% Neo4J interaction
+    # All function that interact with neo are here, dispatched as needed from above
+    # TODO: Set internal, allow access only via dispatch
+
     def add_query(self,query,params=None):
+        """
+        Add a single query to queue
+        :param query: Neo4j query
+        :param params: Associates parameters
+        :return:
+        """
         self.add_queries([query],[params])
 
     def add_queries(self,query,params=None):
+        """
+        Add a list of query to queue
+        :param query: list - Neo4j queries
+        :param params: list - Associates parameters corresponding to queries
+        :return:
+        """
         assert isinstance(query,list)
 
+
         if params is not None:
+            assert isinstance(params, list)
             statements=[neo4j.Statement(q,p) for (q,p) in zip(query,params)]
             self.neo_queue.extend(statements)
         else:
