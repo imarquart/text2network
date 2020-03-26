@@ -85,7 +85,7 @@ for year in years:
 
     # %% Train BERT
     logging.info("Training BERT")
-    if check_step(bert_folder, hash) and False:
+    if (check_step(bert_folder, hash) and False) or year in range(1990,2002):
         logging.info("Found trained BERT. Skipping")
     else:
 
@@ -105,7 +105,7 @@ for year in years:
     # %% Process files, create networks
 
     logging.info("Processing text to create networks.")
-    if check_step(nw_folder, hash) and False:
+    if (check_step(nw_folder, hash) and False) or year in range(1990,2002):
         logging.info("Processed results found. Skipping.")
     else:
         start_time = time.time()
@@ -140,7 +140,7 @@ for year in years:
         logging.info("Attempting to save gefx")
         if not os.path.exists(graph_path) or True:
             logging.info("Saving to %s" %graph_path)
-            #nx.write_gexf(graph, graph_path)
+            nx.write_gexf(graph, graph_path)
         else:
             logging.info("Full graph %s exists, please confirm overwrite manually!" % graph_path)
 
@@ -167,11 +167,11 @@ for year in years:
     # %% Sum Networks
 
     logging.info("Summing graphs.")
-    if check_step(sum_folder, hash) or False:
+    if (check_step(sum_folder, hash) and False) or year in range(1990,2002):
         logging.info("Summed graphs found. Skipping.")
     else:
         start_time = time.time()
-        for big_graph in ['Rgraph','Cgraph','Agraph']:
+        for big_graph in ['Rgraph','Cgraph']:
             logging.info("Summing %s" % big_graph)
             graph_path = os.path.join(nw_folder, "".join([big_graph,'.gexf']))
             if os.path.exists(graph_path):
@@ -186,7 +186,7 @@ for year in years:
         complete_step(sum_folder, hash)
 
     # %% Symmetrize network
-    if check_step(sumsym_folder, hash) and False:
+    if (check_step(sumsym_folder,hash) and False) or year in range(1990,2001):
         logging.info("Symmetrized graphs found. Skipping.")
     else:
         start_time = time.time()
@@ -200,11 +200,11 @@ for year in years:
     # %% No Plural Networks
 
     logging.info("Summing graphs without plurals.")
-    if check_step(np_folder, hash) and False:
+    if (check_step(np_folder,hash) and False) or year in range(1990,2001):
         logging.info("Summed graphs found. Skipping.")
     else:
         start_time = time.time()
-        for big_graph in ['Rgraph','Cgraph','Agraph']:
+        for big_graph in ['Rgraph','Cgraph']:
             graph_path = os.path.join(nw_folder, "".join([big_graph,'.gexf']))
             logging.info("Summing %s" % graph_path)
 
@@ -220,7 +220,7 @@ for year in years:
 
     # %% Entropy networks
 
-    if check_step(entropy_folder, hash) and False:
+    if (check_step(entropy_folder,hash) and False) or year in range(1990,2001):
         logging.info("Entropy graphs found. Skipping.")
     else:
         start_time = time.time()
@@ -245,7 +245,7 @@ else:
         for network_type in ["Rgraph-Sum-Rev","Cgraph-Sum-Rev"]:
             for focal_token in cfg.focal_nodes:
                 logging.info("Merging %s on %s" % (focal_token, network_type))
-                save_merged_ego_graph(range(1991,2019), focal_token, cfg, cfg.merged_folder, olds_folder, ego_radius=ego_radius, links="both",
+                save_merged_ego_graph(range(1990,2019), focal_token, cfg, cfg.merged_folder, olds_folder, ego_radius=ego_radius, links="both",
                                       network_type=network_type)
     logging.info("Merged graphs finished in %s seconds" % (time.time() - start_time))
     #complete_step(mfolder, "1")

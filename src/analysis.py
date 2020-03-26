@@ -155,8 +155,10 @@ for network_type in ["Rgraph-Sum-Rev"]:
     for cluster_window in cfg.cluster_windows:
         for focal_token in cfg.focal_nodes:
             logging.info("%s: Clustering token %s, window %i" % (network_type, focal_token, cluster_window))
-            network_file = ''.join([network_type, '_order', str(cfg.ma_order)])
-            year_info = dynamic_clustering(years, focal_token, cfg, louvain_cluster, cfg.ma_folder, cluster_window,
+            #network_file = ''.join([network_type, '_order', str(cfg.ma_order)])
+            network_file = ''.join([network_type])
+
+            year_info = dynamic_clustering(years, focal_token, cfg, louvain_cluster, cfg.sums_folder, cluster_window,
                                            cfg.num_retain_cluster, cfg.ego_radius, network_type=network_file,
                                            cluster_levels=cfg.cluster_levels)
             filename = ''.join([cluster_xls, '/', focal_token, '_', network_type, 'w_', str(cluster_window), '_order',

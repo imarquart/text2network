@@ -396,8 +396,9 @@ def dynamic_clustering(years, focal_token, cfg, cluster_function, sum_folder, wi
 
                 for v in tqdm(cluster, desc="Single Node Measures", leave=False, position=0):
                     try:
-                        distance = max(1000, nx.dijkstra_path_length(cluster_subgraph, focal_token, v,
-                                                                     weight=inverse_edge_weight))
+                        #distance = max(1000, nx.dijkstra_path_length(cluster_subgraph, focal_token, v,
+                        #                                             weight=inverse_edge_weight))
+                        distance = 0
                     except:
                         distance = 0
 
@@ -410,8 +411,10 @@ def dynamic_clustering(years, focal_token, cfg, cluster_function, sum_folder, wi
 
                         # Constraint
                         try:
-                            coTo = nx.local_constraint(cluster_subgraph, v, focal_token, weight='weight')
-                            coFrom = nx.local_constraint(cluster_subgraph, focal_token, v, weight='weight')
+                            #coTo = nx.local_constraint(cluster_subgraph, v, focal_token, weight='weight')
+                            #coFrom = nx.local_constraint(cluster_subgraph, focal_token, v, weight='weight')
+                            coTo = 0
+                            coFrom = 0
 
                         except:
                             coTo = 0
