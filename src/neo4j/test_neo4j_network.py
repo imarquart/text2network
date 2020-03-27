@@ -78,6 +78,46 @@ class Testneo4j_network(TestCase):
         self.assertEqual(set(res), set(comp))
 
 
+    def test_get_formats(self):
+        """Tests the different ways to query nodes"""
+        # Add some nodes
+        self.neo4nw[self.ego_id]=self.add_string_ego
+        self.neo4nw.write_queue()
+        yy=self.add_string_ego[0][1]
+
+        comp = [(self.ego_id, x[0], x[2]['weight']) for x in self.add_string_ego]
+
+        # Check normal get
+        res=self.neo4nw[self.ego_id]
+        print("res=self.neo4nw[self.ego_id] ")
+        print(res)
+        res = [(x[0], x[1], x[3]['weight']) for x in res]
+        self.assertEqual(set(res), set(comp))
+        # Check get with date
+        res=self.neo4nw[self.ego_id,yy]
+        print("res=self.neo4nw[self.ego_id,yy] ")
+        print(res)
+        res = [(x[0], x[1], x[3]['weight']) for x in res]
+        self.assertEqual(set(res), set(comp))
+        # Check get with date range
+        res=self.neo4nw[self.ego_id,{'start':yy-10,'end':yy+10}]
+        print("res=self.neo4nw[self.ego_id,{'start':yy-10,'end':yy+10}] ")
+        print(res)
+        res = [(x[0], x[1], x[3]['weight']) for x in res]
+        self.assertEqual(set(res), set(comp))
+        # Check get with token range
+        res=self.neo4nw[[self.ego_id-1,self.ego_id,self.ego_id+1],yy]
+        print("res=self.neo4nw[[self.ego_id-1,self.ego_id,self.ego_id+1],yy] ")
+        print(res)
+        res = [(x[0], x[1], x[3]['weight']) for x in res]
+        self.assertEqual(set(res), set(comp))
+        # Check get with list of strings
+        res = self.neo4nw[self.tokens, yy]
+        print("res = self.neo4nw[self.tokens, yy] ")
+        print(res)
+        res = [(x[0], x[1], x[3]['weight']) for x in res]
+        self.assertEqual(set(res), set(comp))
+
     def test_add_get_dispatch_nodict(self):
         """Add two ties towards ego node, using triplet format"""
 

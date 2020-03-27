@@ -51,8 +51,12 @@ class neo4j_network(MutableSequence):
         pass
 
     def __setitem__(self, key, value):
-        """Interpret as adding ties in the graph"""
-        # We work with token id's here
+        """
+        Set links of node
+        :param key: id or token of node
+        :param value: list of tuples [(neighbor,time, weight))] or [(neighbor,time, {'weight':weight}))]
+        :return:
+        """
         if isinstance(key, str): key = self.get_id_from_token(key)
         assert key in self.ids, "ID of ego token to connect not found. Not in network?"
         try:
@@ -70,11 +74,38 @@ class neo4j_network(MutableSequence):
         #TODO Dispatch if graph conditioned
 
         # Add ties to query
-        self.insert_edges_query_multiple(ties)
+        self.insert_edges_multiple(ties)
 
     def __getitem__(self, i):
-        pass
+        """
+        Retrieve node information with input checking
+        :param i: int or list or nodes, or tuple of nodes with timestamp. Format as int YYYYMMDD, or dict with {'start:'<YYYYMMDD>, 'end':<YYYYMMDD>.
+        :return: NetworkX compatible node format
+        """
+        # Are time formats submitted? Handle those and check inputs
+        if isinstance(i,tuple):
+            assert len(i)==2, "Please format a call as <token>,<YYYYMMDD> or <token>,{'start:'<YYYYMMDD>, 'end':<YYYYMMDD>"
+            if not isinstance(i[1],dict):
+                assert len(str(i[1]))==8 and isinstance(i[1], int) , "Please timestamp as <YYYYMMDD>, or{'start:'<YYYYMMDD>, 'end':<YYYYMMDD>"
+            year=i[1]
+            i=i[0]
+        else:
+            year=None
+        if isinstance(i,(list,tuple,range)):
+            i = [self.get_id_from_token(x) if not isinstance(x, int) else x for x in i]
+        elif isinstance(i, str):
+            i = [self.get_id_from_token(i)]
+        else:
+            assert isinstance(i, int), "Please format a call as <token> or <token_id>"
+            i = [i]
 
+
+
+        # TODO Dispatch in case of graph
+        if self.graph is None:
+            return self.query_multiple_nodes(i,year)
+        else:
+            pass
     def __len__(self):
         pass
 
@@ -157,7 +188,7 @@ class neo4j_network(MutableSequence):
         :param times: either a number format YYYYMMDD, or an interval dict {"start":YYYYMMDD,"end":YYYYMMDD}
         :return: list of tuples (u,v,Time,{weight:x})
         """
-        assert isinstance(ids, list)
+        #assert isinstance(ids, list) remove checking here, should be done in dispatch functions
         if self.graph_direction == "REVERSE":  # Seek nodes that predict ID nodes hence reverse sender/receiver
             if isinstance(times, dict) or isinstance(times, int):
                 if isinstance(times, dict):  # Interval query
@@ -186,7 +217,7 @@ class neo4j_network(MutableSequence):
         return ties
 
 
-    def insert_edges_query_multiple(self, ties):
+    def insert_edges_multiple(self, ties):
         """
         Allows to add ties across nodes
         :param ties: Set of Tuples (u,v,Time,weight)
@@ -201,14 +232,14 @@ class neo4j_network(MutableSequence):
         query = "UNWIND $ties AS tie MATCH (a:word {token_id: tie.ego}) MATCH (b:word {token_id: tie.alter}) WITH a,b,tie MERGE (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time})<-[:onto]-(a)"
         self.add_query(query, params)
 
-    def insert_edges_query(self,ego,ties):
+    def insert_edges(self,ego,ties):
         """
         Add ties from a given ego node u->v
         :param ties: Set of Tuples (v,Time,{"weight":x})
         :return: None
         """
         ties=[(ego,x[0],x[1],x[2]) for x in ties]
-        self.insert_edges_query_multiple(ties)
+        self.insert_edges_multiple(ties)
 
 
 
