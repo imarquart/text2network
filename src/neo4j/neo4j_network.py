@@ -20,7 +20,7 @@ except:
 class neo4j_network(MutableSequence):
 
     # %% Initialization functions
-    def __init__(self, neo4j_creds, batch_size=1000,graph_type= "networkx", graph_direction="FORWARD", write_before_query=True):
+    def __init__(self, neo4j_creds, batch_size=1000000,graph_type= "networkx", graph_direction="FORWARD", write_before_query=True):
         self.neo4j_connection, self.neo4j_credentials = neo4j_creds
         self.write_before_query = write_before_query
         # Conditioned graph information

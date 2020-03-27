@@ -54,4 +54,4 @@ def get_weighted_edgelist(token, x, time, cutoff_number=100, cutoff_probability=
             neighbors = neighbors[x[neighbors] > cutoff_probability]
         weights = x[neighbors]
 
-    return [(token, x[0], time, {'weight': x[1]}) for x in list(zip(neighbors, weights))]
+    return [(int(token), int(x[0]), time, {'weight': float(x[1])}) for x in list(zip(neighbors, weights))]

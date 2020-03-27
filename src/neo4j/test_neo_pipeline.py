@@ -104,19 +104,23 @@ if __name__ == "__main__":
         # %% Process files, create networks
 
         logging.info("Processing text to create networks.")
-        if (check_step(nw_folder, hash)):
+        if (check_step(nw_folder, hash) and False):
             logging.info("Processed results found. Skipping.")
         else:
+            db_uri = "http://localhost:7474"
+            db_pwd = ('neo4j', 'nlp')
+            neo_creds=(db_uri, db_pwd)
             start_time = time.time()
             torch.cuda.empty_cache()
             logging.disable(cfg.subprocess_level)
             tokenizer, bert = get_bert_and_tokenizer(bert_folder, True)
             logging.disable(logging.NOTSET)
             DICT_SIZE = tokenizer.vocab_size
+            years=20000101
             # Process sentences in BERT and create the networks
-            process_sentences_neo4j(tokenizer, bert, text_db, cfg.max_seq_length,
+            process_sentences_neo4j(tokenizer, bert, text_db, neo_creds, years, cfg.max_seq_length,
                                                                               DICT_SIZE,
                                                                               cfg.batch_size,
                                                                               nr_workers=0,
-                                                                              cutoff_percent=cfg.cutoff_percent,
-                                                                              max_degree=cfg.max_degree)
+                                                                              cutoff_percent=80,
+                                                                              max_degree=100)

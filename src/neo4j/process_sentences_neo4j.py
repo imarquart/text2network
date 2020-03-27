@@ -7,6 +7,7 @@ import time
 import logging
 from NLP.src.neo4j.neo4j_network import neo4j_network
 
+
 from NLP.utils.rowvec_tools import simple_norm
 from NLP.src.neo4j.neo_row_tools import  get_weighted_edgelist, calculate_cutoffs
 from NLP.src.datasets.text_dataset import text_dataset, text_dataset_collate_batchsample
@@ -17,7 +18,7 @@ from NLP.utils.delwords import create_stopword_list
 import tqdm
 
 
-def process_sentences_neo4j(tokenizer, bert, text_db, neo4j_db, MAX_SEQ_LENGTH, DICT_SIZE, batch_size, nr_workers=0,
+def process_sentences_neo4j(tokenizer, bert, text_db, neo4j_db, year, MAX_SEQ_LENGTH, DICT_SIZE, batch_size, nr_workers=0,
                               cutoff_percent=80,max_degree=100):
     """
     Extracts pre-processed sentences, gets predictions by BERT and creates a network
@@ -57,8 +58,10 @@ def process_sentences_neo4j(tokenizer, bert, text_db, neo4j_db, MAX_SEQ_LENGTH, 
 
     # Initgraph
 
-    neograph=neo4j_network(neo4j_db, "graph_type")
-    neograph.setup_neo_db(list(tokenizer.vocab.keys()), list(tokenizer.vocab.values()))
+    neograph=neo4j_network(neo4j_db)
+    tokens=list(tokenizer.vocab.keys())
+    tokens=[x.translate(x.maketrans({"\"": '#e1#', "'": '#e2#', "\\": '#e3#'})) for x in tokens]
+    neograph.setup_neo_db(tokens, list(tokenizer.vocab.values()))
 
     # Counter for timing
     model_timings = []
@@ -116,7 +119,7 @@ def process_sentences_neo4j(tokenizer, bert, text_db, neo4j_db, MAX_SEQ_LENGTH, 
                     # Add values to network
                     cutoff_number, cutoff_probability = calculate_cutoffs(replacement, method="percent",
                                                                           percent=cutoff_percent, max_degree=max_degree)
-                    ties=get_weighted_edgelist(token, replacement, time, cutoff_number, cutoff_probability)
+                    ties=get_weighted_edgelist(token, replacement, year, cutoff_number, cutoff_probability)
                     neograph.insert_edges_multiple(ties)
             del dists
 
