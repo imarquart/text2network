@@ -9,9 +9,7 @@ import networkx as nx
 import torch
 
 from NLP.config.config import configuration
-from NLP.src.novelty import entropy_network
-from NLP.src.process_sentences_network import process_sentences_network
-from NLP.src.reduce_network import reduce_network, moving_avg_networks, min_symmetric_network,save_merged_ego_graph
+from NLP.src.neo4j.process_sentences_neo4j import process_sentences_neo4j
 from NLP.src.run_bert import bert_args, run_bert
 from NLP.src.text_processing.preprocess_files_HBR import preprocess_files_HBR
 from NLP.utils.hash_file import hash_file, check_step, complete_step
@@ -86,7 +84,7 @@ if __name__ == "__main__":
 
         # %% Train BERT
         logging.info("Training BERT")
-        if (check_step(bert_folder, hash) and False) or year in range(1990,2002):
+        if (check_step(bert_folder, hash)):
             logging.info("Found trained BERT. Skipping")
         else:
 
@@ -106,7 +104,7 @@ if __name__ == "__main__":
         # %% Process files, create networks
 
         logging.info("Processing text to create networks.")
-        if (check_step(nw_folder, hash) and False) or year in range(1990,2002):
+        if (check_step(nw_folder, hash)):
             logging.info("Processed results found. Skipping.")
         else:
             start_time = time.time()
@@ -116,7 +114,7 @@ if __name__ == "__main__":
             logging.disable(logging.NOTSET)
             DICT_SIZE = tokenizer.vocab_size
             # Process sentences in BERT and create the networks
-            graph, context_graph, attention_graph = process_sentences_network(tokenizer, bert, text_db, cfg.max_seq_length,
+            process_sentences_neo4j(tokenizer, bert, text_db, cfg.max_seq_length,
                                                                               DICT_SIZE,
                                                                               cfg.batch_size,
                                                                               nr_workers=0,

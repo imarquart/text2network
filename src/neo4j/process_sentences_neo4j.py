@@ -5,8 +5,10 @@ import numpy as np
 import tables
 import time
 import logging
-import networkx as nx
-from NLP.utils.rowvec_tools import simple_norm, get_weighted_edgelist, calculate_cutoffs, add_to_networks
+from NLP.src.neo4j.neo4j_network import neo4j_network
+
+from NLP.utils.rowvec_tools import simple_norm
+from NLP.src.neo4j.neo_row_tools import  get_weighted_edgelist, calculate_cutoffs
 from NLP.src.datasets.text_dataset import text_dataset, text_dataset_collate_batchsample
 from NLP.src.datasets.dataloaderX import DataLoaderX
 from NLP.src.text_processing.get_bert_tensor import get_bert_tensor
@@ -52,14 +54,11 @@ def process_sentences_neo4j(tokenizer, bert, text_db, neo4j_db, MAX_SEQ_LENGTH, 
 
     # Create Stopwords
     delwords = create_stopword_list(tokenizer)
-    # Create Graphs
-    graph = nx.MultiDiGraph()
-    context_graph = nx.MultiDiGraph()
-    attention_graph = nx.MultiDiGraph()
 
-    graph.add_nodes_from(range(0, tokenizer.vocab_size))
-    context_graph.add_nodes_from(range(0, tokenizer.vocab_size))
-    attention_graph.add_nodes_from(range(0, tokenizer.vocab_size))
+    # Initgraph
+
+    neograph=neo4j_network(neo4j_db, "graph_type")
+    neograph.setup_neo_db(list(tokenizer.vocab.keys()), list(tokenizer.vocab.values()))
 
     # Counter for timing
     model_timings = []
@@ -94,68 +93,35 @@ def process_sentences_neo4j(tokenizer, bert, text_db, neo4j_db, MAX_SEQ_LENGTH, 
             dists = torch.zeros([MAX_SEQ_LENGTH, DICT_SIZE], requires_grad=False)
             dists[:sequence_size, :] = predictions[sequence_mask, :]
 
-
-            #%% Extract attention for sequence
-            seq_attn = attn[sequence_mask, :].cpu()
-            # Curtail to tokens in sequence
-            # attention row vectors for each token are of
-            # size sequence_size+2, where position 0 is <CLS>
-            # and position n+1 is <SEP>, these we ignore
-            seq_attn = seq_attn[:, 1:sequence_size + 1]
-            # Delete diagonal attention
-            seq_attn[torch.eye(sequence_size).bool()] = 0
-
-            #%% Context element distribution: we sum over all probabilities in a sequence
-            seq_ce = torch.ones([sequence_size, sequence_size])
-            seq_ce[torch.eye(sequence_size).bool()] = 0
-
-            # TODO: Re-Enable Lines of attention
             for pos, token in enumerate(token_ids[sequence_mask]):
                 # Should all be np
                 token=token.item()
                 if token not in delwords:
                     replacement = dists[pos, :]
 
-                    ## Context distributions
-                    context_index = np.zeros([MAX_SEQ_LENGTH], dtype=np.bool)
-                    context_index[:sequence_size] = True
-                    context_dist = dists[context_index, :]
-
-                    ## Attention
-                    context_att = (
-                        torch.sum((seq_attn[pos] * context_dist.transpose(-1, 0)).transpose(-1, 0), dim=0).unsqueeze(0))
-
-                    ## Context Element
-                    context = (
-                        torch.sum((seq_ce[pos] * context_dist.transpose(-1, 0)).transpose(-1, 0), dim=0).unsqueeze(0))
                     # Flatten, since it is one row each
                     replacement = replacement.numpy().flatten()
-                    context_att = context_att.numpy().flatten()
-                    context = context.numpy().flatten()
 
                     # Sparsify
                     # TODO: try without setting own-link to zero!
                     replacement[token]=0
                     replacement[replacement==np.min(replacement)]=0
-                    context[context==np.min(context)]=0
-                    context_att[context_att==np.min(context_att)]=0
 
                     # Get rid of delnorm links
                     replacement[delwords]=0
-                    context[delwords]=0
-                    context_att[delwords]=0
 
                     # We norm the distributions here
                     replacement = simple_norm(replacement)
-                    context = simple_norm(context)
-                    context_att = simple_norm(context_att)
 
                     # Add values to network
-                    graph,context_graph,attention_graph=add_to_networks(graph,context_graph,attention_graph,replacement,context,context,token,cutoff_percent,max_degree,pos,sequence_id)
-
+                    cutoff_number, cutoff_probability = calculate_cutoffs(replacement, method="percent",
+                                                                          percent=cutoff_percent, max_degree=max_degree)
+                    ties=get_weighted_edgelist(token, replacement, time, cutoff_number, cutoff_probability)
+                    neograph.insert_edges_multiple(ties)
             del dists
 
         del predictions, attn
+        neograph.write_queue()
 
         # compute processing time
         process_timings.append(time.time() - start_time - prepare_time - load_time)

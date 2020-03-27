@@ -22,7 +22,7 @@ class Testneo4j_network(TestCase):
         self.add_string_timing = [(12, 20000101, {'weight': 0.5}), (13, 20010101, {'weight': 0.5}),
                                   (10, 20020101, {'weight': 0.5})]
 
-        self.neo4nw = neo4j_network((db_uri, db_pwd), graph_type)
+        self.neo4nw = neo4j_network((db_uri, db_pwd))
         self.setup_network()
 
     def setup_network(self):
