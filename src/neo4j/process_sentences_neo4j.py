@@ -138,4 +138,3 @@ def process_sentences_neo4j(tokenizer, bert, text_db, neo4j_db, year, MAX_SEQ_LE
     logging.info("Average Processing Time: %s seconds" % (np.mean(process_timings)))
     logging.info("Ratio Load/Operations: %s seconds" % (np.mean(load_timings) / np.mean(process_timings + model_timings)))
 
-    return graph, context_graph, attention_graph

@@ -44,6 +44,8 @@ class neo4j_network(MutableSequence):
         self.neo_queue = []
         self.neo_batch_size = batch_size
         self.connector = neo4j.Connector(self.neo4j_connection, self.neo4j_credentials)
+        # Init tokens
+        self.init_tokens()
         # Init parent class
         super().__init__()
 
