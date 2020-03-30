@@ -117,20 +117,21 @@ def process_sentences_neo4j(tokenizer, bert, text_db, neo4j_db, year, MAX_SEQ_LE
                     replacement = simple_norm(replacement)
 
                     # Add values to network
+                    # TODO implement sequence id and pos properties on network
                     cutoff_number, cutoff_probability = calculate_cutoffs(replacement, method="percent",
                                                                           percent=cutoff_percent, max_degree=max_degree)
-                    ties=get_weighted_edgelist(token, replacement, year, cutoff_number, cutoff_probability)
+                    ties=get_weighted_edgelist(token, replacement, year, cutoff_number, cutoff_probability,sequence_id,pos)
                     neograph.insert_edges_multiple(ties)
             del dists
 
         del predictions, attn
-        neograph.write_queue()
 
         # compute processing time
         process_timings.append(time.time() - start_time - prepare_time - load_time)
         # New start time
         start_time = time.time()
-
+    # Write remaining
+    neograph.write_queue()
     dataset.close()
 
     logging.info("Average Load Time: %s seconds" % (np.mean(load_timings)))

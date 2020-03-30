@@ -31,7 +31,7 @@ def calculate_cutoffs(x, method="mean", percent=100, max_degree=100,min_cut=0.00
     return min(cutoff_number,max_degree), cutoff_probability
 
 
-def get_weighted_edgelist(token, x, time, cutoff_number=100, cutoff_probability=0):
+def get_weighted_edgelist(token, x, time, cutoff_number=100, cutoff_probability=0, seq_id=0, pos=0):
     """
     Sort probability distribution to get the most likely neighbor nodes.
     Return a networksx weighted edge list for a given focal token as node.
@@ -54,4 +54,4 @@ def get_weighted_edgelist(token, x, time, cutoff_number=100, cutoff_probability=
             neighbors = neighbors[x[neighbors] > cutoff_probability]
         weights = x[neighbors]
 
-    return [(int(token), int(x[0]), time, {'weight': float(x[1])}) for x in list(zip(neighbors, weights))]
+    return [(int(token), int(x[0]), time, {'weight': float(x[1]), 'p1': seq_id, 'p2': pos}) for x in list(zip(neighbors, weights))]
