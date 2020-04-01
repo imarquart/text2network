@@ -4,9 +4,11 @@ import glob
 import logging
 import os
 import time
+import asyncio
 
 import networkx as nx
 import torch
+from NLP.src.neo4j.neo4j_network import neo4j_network
 
 from NLP.config.config import configuration
 from NLP.src.neo4j.process_sentences_neo4j import process_sentences_neo4j
@@ -14,6 +16,9 @@ from NLP.src.run_bert import bert_args, run_bert
 from NLP.src.text_processing.preprocess_files_HBR import preprocess_files_HBR
 from NLP.utils.hash_file import hash_file, check_step, complete_step
 from NLP.utils.load_bert import get_bert_and_tokenizer
+
+
+
 
 # %% Config
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
@@ -107,20 +112,45 @@ if __name__ == "__main__":
         if (check_step(nw_folder, hash) and False):
             logging.info("Processed results found. Skipping.")
         else:
-            db_uri = "http://localhost:7474"
-            db_pwd = ('neo4j', 'nlp')
-            neo_creds=(db_uri, db_pwd)
-            start_time = time.time()
-            torch.cuda.empty_cache()
-            logging.disable(cfg.subprocess_level)
-            tokenizer, bert = get_bert_and_tokenizer(bert_folder, True)
-            logging.disable(logging.NOTSET)
-            DICT_SIZE = tokenizer.vocab_size
-            years=20000101
-            # Process sentences in BERT and create the networks
-            process_sentences_neo4j(tokenizer, bert, text_db, neo_creds, years, cfg.max_seq_length,
-                                                                              DICT_SIZE,
-                                                                              cfg.batch_size,
-                                                                              nr_workers=0,
-                                                                              cutoff_percent=80,
-                                                                              max_degree=100)
+            for q_size in [100,200,300,500,1000,10000,100000]:
+                db_uri = "http://localhost:7474"
+                db_pwd = ('neo4j', 'nlp')
+                neo_creds=(db_uri, db_pwd)
+                start_time = time.time()
+                torch.cuda.empty_cache()
+                logging.disable(cfg.subprocess_level)
+                tokenizer, bert = get_bert_and_tokenizer(bert_folder, True)
+                logging.disable(logging.NOTSET)
+                DICT_SIZE = tokenizer.vocab_size
+                years=20000101
+
+
+                # Init Network
+                neograph = neo4j_network(neo_creds, queue_size=q_size)
+
+                query = "MATCH (n) DETACH DELETE n"
+                neograph.connector.run(query)
+
+
+                # Setup network
+                tokens = list(tokenizer.vocab.keys())
+                tokens = [x.translate(x.maketrans({"\"": '#e1#', "'": '#e2#', "\\": '#e3#'})) for x in tokens]
+                neograph.setup_neo_db(tokens, list(tokenizer.vocab.values()))
+                start_time = time.time()
+
+                # Process sentences in BERT and create the networks
+                process_sentences_neo4j(tokenizer, bert, text_db, neograph, years, cfg.max_seq_length,
+                                                                                  DICT_SIZE,
+                                                                                  cfg.batch_size,
+                                                                                  nr_workers=0,
+                                                                                  cutoff_percent=90,
+                                                                                  max_degree=100)
+                logging.info("Network creation finished in %s seconds for q_size %i" % (time.time() - start_time, q_size))
+
+
+                #Check results
+                nr_nodes=neograph.connector.run("MATCH (n) RETURN count(n) AS nodes")[0]['nodes']
+                nr_ties=neograph.connector.run("MATCH ()-->() RETURN count(*) AS ties")[0]['ties']
+                logging.info("Network has %i nodes and %i ties" % (nr_nodes,nr_ties))
+
+

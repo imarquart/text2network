@@ -5,6 +5,9 @@ from NLP.utils.twowaydict import TwoWayDict
 import numpy as np
 import neo4j
 import copy
+import asyncio
+
+
 
 try:
     import networkx as nx
@@ -20,7 +23,7 @@ except:
 class neo4j_network(MutableSequence):
 
     # %% Initialization functions
-    def __init__(self, neo4j_creds, batch_size=1000000,graph_type= "networkx", graph_direction="FORWARD", write_before_query=True, queue_size=100000):
+    def __init__(self, neo4j_creds, batch_size=10000,graph_type= "networkx", graph_direction="FORWARD", write_before_query=True, queue_size=100000):
         self.neo4j_connection, self.neo4j_credentials = neo4j_creds
         self.write_before_query = write_before_query
         # Conditioned graph information
@@ -156,21 +159,26 @@ class neo4j_network(MutableSequence):
         :return: None
         """
         logging.info("Creating indecies and nodes in Neo4j database.")
+        constr=[x['name'] for x in self.connector.run("CALL db.constraints")]
         # Create uniqueness constraints
-        query = "CREATE CONSTRAINT ON(n:word) ASSERT n.token_id IS UNIQUE"
-        self.add_query(query)
-        query = "CREATE CONSTRAINT ON(n:word) ASSERT n.token IS UNIQUE"
-        self.add_query(query)
-        query = "CREATE INDEX ON :edge(time)"
-        self.add_query(query)
+        if 'id_con' not in constr:
+            query = "CREATE CONSTRAINT id_con ON(n:word) ASSERT n.token_id IS UNIQUE"
+            self.add_query(query)
+        if 'tk_con' not in constr:
+            query = "CREATE CONSTRAINT tk_con ON(n:word) ASSERT n.token IS UNIQUE"
+            self.add_query(query)
+        constr=[x['name'] for x in self.connector.run("CALL db.indexes")]
+        if 'timeindex' not in constr:
+            query = "CREATE INDEX timeindex FOR (a:edge) ON (a.time)"
+            self.add_query(query)
 
         # Need to write first because create and structure changes can not be batched
-        self.write_queue()
+        self.non_con_write_queue()
         # Create nodes in neo db
         queries = [''.join(["MERGE (n:word {token_id: ", str(id), ", token: '", tok, "'})"]) for tok, id in
                    zip(tokens, token_ids)]
         self.add_queries(queries)
-        self.write_queue()
+        self.non_con_write_queue()
         self.init_tokens()
 
     # %% Initializations
@@ -213,13 +221,63 @@ class neo4j_network(MutableSequence):
             self.neo_queue.extend(statements)
 
         if len(self.neo_queue) >= self.queue_size:
-            logging.info("Queue has reached size %i, writing..." % self.queue_size)
+            #
             self.write_queue()
+
+    def background(f):
+        def wrapped(*args, **kwargs):
+            return asyncio.get_event_loop().run_in_executor(None, f, *args, **kwargs)
+        return wrapped
+
+    #@background
+
+    async def queue_worker(self, w_id,queue):
+        while True:
+            loop = asyncio.get_event_loop()
+            #logging.info("Worker %s getting from queue" % w_id)
+            statement= await queue.get()
+            #logging.info("Worker %s has statement from queue from queue" % w_id)
+
+            #future1 = loop.run_in_executor(None, self.connector.run_multiple, statement)
+            #response1 = await future1
+            #asyncio.run asyncio.coroutine(self.connector.run_multiple)(statement)
+            self.connector.run_multiple(statement)
+            #print("Fake put")
+            logging.info("Worker %s completed task" % w_id)
+
+            queue.task_done()
+
+    async def post_queue(self):
+        queue = asyncio.Queue()
+        # This is a test
+        for x in self.neo_queue:
+            queue.put_nowait(x)
+
+        logging.info("Prepared %i requests" % len(self.neo_queue))
+        tasks = []
+        for i in range(self.neo_batch_size):
+            task = asyncio.create_task(self.queue_worker(f'worker-{i}', queue))
+            tasks.append(task)
+        await queue.join()
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
 
     def write_queue(self):
         # This may or may not be optimized by using parameters and individual queries.
         if len(self.neo_queue) > 0:
-            res = self.connector.run_multiple(self.neo_queue, self.neo_batch_size)
+            #if len(self.neo_queue) > 5000: logging.info("Writing queue of size %i, ..." % self.queue_size)
+            self.connector.run_multiple(self.neo_queue, self.neo_batch_size)
+            #res = self.connector.run_multiple(self.neo_queue)
+            #asyncio.run(self.post_queue())
+            self.neo_queue = []
+
+    def non_con_write_queue(self):
+        # This may or may not be optimized by using parameters and individual queries.
+        if len(self.neo_queue) > 0:
+            #if len(self.neo_queue) > 5000: logging.info("Writing queue of size %i, ..." % self.queue_size)
+            #self.connector.run_multiple(self.neo_queue, self.neo_batch_size)
+            res = self.connector.run_multiple(self.neo_queue)
             self.neo_queue = []
 
     def query_node(self, id, times=None):

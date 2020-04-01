@@ -6,6 +6,7 @@ import tables
 import time
 import logging
 from NLP.src.neo4j.neo4j_network import neo4j_network
+import asyncio
 
 
 from NLP.utils.rowvec_tools import simple_norm
@@ -18,8 +19,17 @@ from NLP.utils.delwords import create_stopword_list
 import tqdm
 
 
-def process_sentences_neo4j(tokenizer, bert, text_db, neo4j_db, year, MAX_SEQ_LENGTH, DICT_SIZE, batch_size, nr_workers=0,
-                              cutoff_percent=80,max_degree=100):
+async def wait_for_event_loop():
+    tasks = []
+    logging.info('Total tasks: %i' % len(asyncio.Task.all_tasks()))
+    nr_task =len([task for task in asyncio.Task.all_tasks() if not task.done()])
+    while nr_task > 1:
+        logging.info('Active tasks: %i' % nr_task)
+        nr_task = len([task for task in asyncio.Task.all_tasks() if not task.done()])
+        await asyncio.sleep(0.2)
+
+def process_sentences_neo4j(tokenizer, bert, text_db, neograph, year, MAX_SEQ_LENGTH, DICT_SIZE, batch_size, nr_workers=0,
+                              cutoff_percent=99,max_degree=50):
     """
     Extracts pre-processed sentences, gets predictions by BERT and creates a network
 
@@ -40,7 +50,8 @@ def process_sentences_neo4j(tokenizer, bert, text_db, neo4j_db, year, MAX_SEQ_LE
     tables.set_blosc_max_threads(15)
 
     # %% Initialize text dataset
-    dataset = text_dataset(text_db, tokenizer, MAX_SEQ_LENGTH)
+    # !!! TODO REMOVE MAXN !!!
+    dataset = text_dataset(text_db, tokenizer, MAX_SEQ_LENGTH,maxn=50)
     logging.info("Number of sentences found: %i"%dataset.nitems)
     batch_sampler = BatchSampler(SequentialSampler(range(0, dataset.nitems)), batch_size=batch_size, drop_last=False)
     dataloader = DataLoaderX(dataset=dataset, batch_size=None, sampler=batch_sampler, num_workers=nr_workers,
@@ -58,10 +69,7 @@ def process_sentences_neo4j(tokenizer, bert, text_db, neo4j_db, year, MAX_SEQ_LE
 
     # Initgraph
 
-    neograph=neo4j_network(neo4j_db)
-    tokens=list(tokenizer.vocab.keys())
-    tokens=[x.translate(x.maketrans({"\"": '#e1#', "'": '#e2#', "\\": '#e3#'})) for x in tokens]
-    neograph.setup_neo_db(tokens, list(tokenizer.vocab.values()))
+
 
     # Counter for timing
     model_timings = []
@@ -125,13 +133,16 @@ def process_sentences_neo4j(tokenizer, bert, text_db, neo4j_db, year, MAX_SEQ_LE
             del dists
 
         del predictions, attn
-
+        #neograph.write_queue()
         # compute processing time
         process_timings.append(time.time() - start_time - prepare_time - load_time)
         # New start time
         start_time = time.time()
+
+
     # Write remaining
     neograph.write_queue()
+
     dataset.close()
 
     logging.info("Average Load Time: %s seconds" % (np.mean(load_timings)))

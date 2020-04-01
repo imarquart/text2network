@@ -109,7 +109,7 @@ class text_dataset_subset(Dataset):
 
 
 class text_dataset(Dataset):
-    def __init__(self, data_path, tokenizer=None, fixed_seq_length=None):
+    def __init__(self, data_path, tokenizer=None, fixed_seq_length=None, maxn=None):
         self.data_path = data_path
         self.tokenizer = tokenizer
         self.fixed_seq_length = fixed_seq_length
@@ -117,7 +117,10 @@ class text_dataset(Dataset):
         # We open table once to get #items, but close it again
         # Bc multithreading requires opening within getitem
         self.tables = tables.open_file(self.data_path, mode="r")
-        self.nitems = self.tables.root.textdata.table.nrows
+        if maxn is not None:
+            self.nitems=min(self.tables.root.textdata.table.nrows,maxn)
+        else:
+            self.nitems = self.tables.root.textdata.table.nrows
         self.tables.close()
 
         # Init data as empty
