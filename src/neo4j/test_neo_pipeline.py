@@ -112,7 +112,7 @@ if __name__ == "__main__":
         if (check_step(nw_folder, hash) and False):
             logging.info("Processed results found. Skipping.")
         else:
-            for q_size in [100,200,300,500,1000,10000,100000]:
+            for q_size in [100]:
                 db_uri = "http://localhost:7474"
                 db_pwd = ('neo4j', 'nlp')
                 neo_creds=(db_uri, db_pwd)
@@ -128,14 +128,15 @@ if __name__ == "__main__":
                 # Init Network
                 neograph = neo4j_network(neo_creds, queue_size=q_size)
 
-                query = "MATCH (n) DETACH DELETE n"
+                #query = "MATCH (n) DETACH DELETE n"
+                query = "MATCH ()-[r]->(p:edge)-[q]->() DELETE r,p,q"
                 neograph.connector.run(query)
 
 
                 # Setup network
                 tokens = list(tokenizer.vocab.keys())
                 tokens = [x.translate(x.maketrans({"\"": '#e1#', "'": '#e2#', "\\": '#e3#'})) for x in tokens]
-                neograph.setup_neo_db(tokens, list(tokenizer.vocab.values()))
+                #neograph.setup_neo_db(tokens, list(tokenizer.vocab.values()))
                 start_time = time.time()
 
                 # Process sentences in BERT and create the networks

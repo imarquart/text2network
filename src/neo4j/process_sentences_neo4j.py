@@ -133,7 +133,7 @@ def process_sentences_neo4j(tokenizer, bert, text_db, neograph, year, MAX_SEQ_LE
             del dists
 
         del predictions, attn
-        #neograph.write_queue()
+        neograph.write_queue()
         # compute processing time
         process_timings.append(time.time() - start_time - prepare_time - load_time)
         # New start time
@@ -141,7 +141,7 @@ def process_sentences_neo4j(tokenizer, bert, text_db, neograph, year, MAX_SEQ_LE
 
 
     # Write remaining
-    neograph.write_queue()
+    #neograph.non_con_write_queue()
 
     dataset.close()
 

@@ -6,8 +6,10 @@ import numpy as np
 import neo4j
 import copy
 import asyncio
-
-
+from collections import deque
+import requests
+import time
+import aiohttp
 
 try:
     import networkx as nx
@@ -19,11 +21,20 @@ try:
 except:
     ig = None
 
+class workers():
+    def __init__(self):
+        self.nr_workers=0
+
+    def increase(self):
+        self.nr_workers=self.nr_workers+1
+
+    def decrease(self):
+        self.nr_workers=max(0,self.nr_workers-1)
 
 class neo4j_network(MutableSequence):
 
     # %% Initialization functions
-    def __init__(self, neo4j_creds, batch_size=10000,graph_type= "networkx", graph_direction="FORWARD", write_before_query=True, queue_size=100000):
+    def __init__(self, neo4j_creds, batch_size=10,graph_type= "networkx", graph_direction="FORWARD", write_before_query=True, queue_size=100000):
         self.neo4j_connection, self.neo4j_credentials = neo4j_creds
         self.write_before_query = write_before_query
         # Conditioned graph information
@@ -45,6 +56,8 @@ class neo4j_network(MutableSequence):
 
         # Neo4J Internals
         self.neo_queue = []
+        self.queue = deque()
+        self.workers=workers()
         self.neo_batch_size = batch_size
         self.queue_size = queue_size
         self.connector = neo4j.Connector(self.neo4j_connection, self.neo4j_credentials)
@@ -215,70 +228,101 @@ class neo4j_network(MutableSequence):
         if params is not None:
             assert isinstance(params, list)
             statements = [neo4j.Statement(q, p) for (q, p) in zip(query, params)]
-            self.neo_queue.extend(statements)
+            self.queue.append(statements)
+            #self.neo_queue.extend(statements)
         else:
             statements = [neo4j.Statement(q) for (q) in query]
-            self.neo_queue.extend(statements)
+            self.queue.append(statements)
+            #self.neo_queue.extend(statements)
 
-        if len(self.neo_queue) >= self.queue_size:
-            #
-            self.write_queue()
+        #if len(self.neo_queue) >= self.queue_size:
+        #    #
+        #    self.write_queue()
 
     def background(f):
         def wrapped(*args, **kwargs):
-            return asyncio.get_event_loop().run_in_executor(None, f, *args, **kwargs)
+            return asyncio.get_event_loop().run_in_executor(None, f, *args)
         return wrapped
 
     #@background
+    def post_items(self,items):
+        if len(items) > 0:
+            self.workers.increase()
+            #res = self.connector.post(items)
+            default_host = 'http://localhost:7474'
+            default_path = '/db/data/transaction/commit'
+            endpoint = default_host + default_path
+            credentials = ('neo4j', 'nlp')
+            requests.post(self.connector.endpoint, json={'statements': items}, auth=self.connector.credentials)
+            self.workers.decrease()
 
-    async def queue_worker(self, w_id,queue):
-        while True:
-            loop = asyncio.get_event_loop()
-            #logging.info("Worker %s getting from queue" % w_id)
-            statement= await queue.get()
-            #logging.info("Worker %s has statement from queue from queue" % w_id)
+    async def putter(self,session, items):
+        logging.info("Putting items %i" % len(items))
+        att=aiohttp.BasicAuth('neo4j','nlp')
+        default_host = 'http://localhost:7474'
+        default_path = '/db/data/transaction/commit'
+        endpoint = default_host + default_path
+        credentials = ('neo4j', 'nlp')
+        async with session.post(endpoint, json={'statements': items}, auth=att ) as response:
+            return await response.text()
 
-            #future1 = loop.run_in_executor(None, self.connector.run_multiple, statement)
-            #response1 = await future1
-            #asyncio.run asyncio.coroutine(self.connector.run_multiple)(statement)
-            self.connector.run_multiple(statement)
-            #print("Fake put")
-            logging.info("Worker %s completed task" % w_id)
-
-            queue.task_done()
-
-    async def post_queue(self):
-        queue = asyncio.Queue()
-        # This is a test
-        for x in self.neo_queue:
-            queue.put_nowait(x)
-
-        logging.info("Prepared %i requests" % len(self.neo_queue))
+    async def post_loop(self, items):
         tasks = []
-        for i in range(self.neo_batch_size):
-            task = asyncio.create_task(self.queue_worker(f'worker-{i}', queue))
-            tasks.append(task)
-        await queue.join()
-        for task in tasks:
-            task.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
+        logging.info("Trying to create %i tasks" % len(items))
+        async with aiohttp.ClientSession() as session:
+            for stat in items:
+                tasks.append(self.putter(session, stat))
+            responses = await asyncio.gather(*tasks)
+            print(responses)
+            logging.info("Got responses %i" % len(responses))
 
+
+    #@background
     def write_queue(self):
         # This may or may not be optimized by using parameters and individual queries.
-        if len(self.neo_queue) > 0:
-            #if len(self.neo_queue) > 5000: logging.info("Writing queue of size %i, ..." % self.queue_size)
-            self.connector.run_multiple(self.neo_queue, self.neo_batch_size)
-            #res = self.connector.run_multiple(self.neo_queue)
-            #asyncio.run(self.post_queue())
-            self.neo_queue = []
+        items=[]
+        while (self.workers.nr_workers < self.neo_batch_size) and len(self.queue)>0:
+            item=[]
+            for i in range(self.queue_size):
+                try:
+                    item.extend(self.queue.pop())
+                except IndexError:
+                    i=self.queue_size
+            items.append(item)
+            logging.info("Preparing call length %i, remaining items %i" % (len(item),len(self.queue)))
+
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(self.post_loop(items))
+        #self.post_items(item.copy())  # Add "Worker"
+
+        #if len(self.neo_queue) > 0:
+        #    #if len(self.neo_queue) > 5000: logging.info("Writing queue of size %i, ..." % self.queue_size)
+        #    self.connector.run_multiple(self.neo_queue, self.neo_batch_size)
+        #    #res = self.connector.run_multiple(self.neo_queue)
+        #    #asyncio.run(self.post_queue())
+        #    self.neo_queue = []
 
     def non_con_write_queue(self):
+        logging.info("Number of workers active %i" % self.workers.nr_workers)
+        logging.info("Number of queries in queue %i" % len(self.queue))
+        while self.workers.nr_workers>0:
+            time.sleep(1)
+
+        logging.info("Finished waiting for workers %i" % len(self.queue))
+        finished=False
+        while finished==False:
+            try:
+                items=self.queue.pop()
+                res = self.connector.run_multiple(items)
+            except IndexError:
+                finished=True
+
         # This may or may not be optimized by using parameters and individual queries.
-        if len(self.neo_queue) > 0:
-            #if len(self.neo_queue) > 5000: logging.info("Writing queue of size %i, ..." % self.queue_size)
-            #self.connector.run_multiple(self.neo_queue, self.neo_batch_size)
-            res = self.connector.run_multiple(self.neo_queue)
-            self.neo_queue = []
+        #if len(self.neo_queue) > 0:
+        #    #if len(self.neo_queue) > 5000: logging.info("Writing queue of size %i, ..." % self.queue_size)
+        #    #self.connector.run_multiple(self.neo_queue, self.neo_batch_size)
+        #    res = self.connector.run_multiple(self.neo_queue)
+        #    self.neo_queue = []
 
     def query_node(self, id, times=None):
         """ See query_multiple_nodes"""
