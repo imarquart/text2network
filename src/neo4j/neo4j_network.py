@@ -21,20 +21,12 @@ try:
 except:
     ig = None
 
-class workers():
-    def __init__(self):
-        self.nr_workers=0
-
-    def increase(self):
-        self.nr_workers=self.nr_workers+1
-
-    def decrease(self):
-        self.nr_workers=max(0,self.nr_workers-1)
 
 class neo4j_network(MutableSequence):
 
     # %% Initialization functions
-    def __init__(self, neo4j_creds, batch_size=10,graph_type= "networkx", graph_direction="FORWARD", write_before_query=True, queue_size=100000):
+    def __init__(self, neo4j_creds, graph_type="networkx", graph_direction="FORWARD", write_before_query=True,
+                 neo_batch_size=1000000, queue_size=10000, tie_query_limit=100000):
         self.neo4j_connection, self.neo4j_credentials = neo4j_creds
         self.write_before_query = write_before_query
         # Conditioned graph information
@@ -55,10 +47,10 @@ class neo4j_network(MutableSequence):
         self.neo_tokens = []
 
         # Neo4J Internals
+        self.tie_query_limit = tie_query_limit
         self.neo_queue = []
-        self.queue = deque()
-        self.workers=workers()
-        self.neo_batch_size = batch_size
+        self.tie_queue = deque()
+        self.neo_batch_size = neo_batch_size
         self.queue_size = queue_size
         self.connector = neo4j.Connector(self.neo4j_connection, self.neo4j_credentials)
         # Init tokens
@@ -172,7 +164,7 @@ class neo4j_network(MutableSequence):
         :return: None
         """
         logging.info("Creating indecies and nodes in Neo4j database.")
-        constr=[x['name'] for x in self.connector.run("CALL db.constraints")]
+        constr = [x['name'] for x in self.connector.run("CALL db.constraints")]
         # Create uniqueness constraints
         if 'id_con' not in constr:
             query = "CREATE CONSTRAINT id_con ON(n:word) ASSERT n.token_id IS UNIQUE"
@@ -180,7 +172,7 @@ class neo4j_network(MutableSequence):
         if 'tk_con' not in constr:
             query = "CREATE CONSTRAINT tk_con ON(n:word) ASSERT n.token IS UNIQUE"
             self.add_query(query)
-        constr=[x['name'] for x in self.connector.run("CALL db.indexes")]
+        constr = [x['name'] for x in self.connector.run("CALL db.indexes")]
         if 'timeindex' not in constr:
             query = "CREATE INDEX timeindex FOR (a:edge) ON (a.time)"
             self.add_query(query)
@@ -207,6 +199,34 @@ class neo4j_network(MutableSequence):
     # All function that interact with neo are here, dispatched as needed from above
     # TODO: Set internal, allow access only via dispatch
 
+    def reduce_tie_query(self):
+        queries = []
+        params = []
+        for x in self.tie_queue:
+            queries.append(x[0])
+            params.append(x[1])
+
+        query_types = np.unique(queries).tolist()
+        for qtype in query_types:
+            mask = queries == np.array([qtype])
+            subparams = [x['ties'] for x in np.array(params)[mask]]
+            newparams = {'ties': np.concatenate(subparams).tolist()}
+            self.add_query(qtype, newparams)
+
+        self.tie_queue.clear()
+
+
+    def add_tie_query(self, query, params):
+        """
+           Add a list of query to queue
+           :param query: list - Neo4j queries
+           :param params: list - Associates parameters corresponding to queries
+           :return:
+           """
+        self.tie_queue.append((query, params))
+        if len(self.tie_queue)  >= self.tie_query_limit:
+            self.reduce_tie_query()
+
     def add_query(self, query, params=None):
         """
         Add a single query to queue
@@ -228,101 +248,21 @@ class neo4j_network(MutableSequence):
         if params is not None:
             assert isinstance(params, list)
             statements = [neo4j.Statement(q, p) for (q, p) in zip(query, params)]
-            self.queue.append(statements)
-            #self.neo_queue.extend(statements)
+            self.neo_queue.extend(statements)
         else:
             statements = [neo4j.Statement(q) for (q) in query]
-            self.queue.append(statements)
-            #self.neo_queue.extend(statements)
+            self.neo_queue.extend(statements)
 
-        #if len(self.neo_queue) >= self.queue_size:
-        #    #
-        #    self.write_queue()
+        if len(self.neo_queue) > self.queue_size:
+            self.write_queue()
 
-    def background(f):
-        def wrapped(*args, **kwargs):
-            return asyncio.get_event_loop().run_in_executor(None, f, *args)
-        return wrapped
-
-    #@background
-    def post_items(self,items):
-        if len(items) > 0:
-            self.workers.increase()
-            #res = self.connector.post(items)
-            default_host = 'http://localhost:7474'
-            default_path = '/db/data/transaction/commit'
-            endpoint = default_host + default_path
-            credentials = ('neo4j', 'nlp')
-            requests.post(self.connector.endpoint, json={'statements': items}, auth=self.connector.credentials)
-            self.workers.decrease()
-
-    async def putter(self,session, items):
-        logging.info("Putting items %i" % len(items))
-        att=aiohttp.BasicAuth('neo4j','nlp')
-        default_host = 'http://localhost:7474'
-        default_path = '/db/data/transaction/commit'
-        endpoint = default_host + default_path
-        credentials = ('neo4j', 'nlp')
-        async with session.post(endpoint, json={'statements': items}, auth=att ) as response:
-            return await response.text()
-
-    async def post_loop(self, items):
-        tasks = []
-        logging.info("Trying to create %i tasks" % len(items))
-        async with aiohttp.ClientSession() as session:
-            for stat in items:
-                tasks.append(self.putter(session, stat))
-            responses = await asyncio.gather(*tasks)
-            print(responses)
-            logging.info("Got responses %i" % len(responses))
-
-
-    #@background
     def write_queue(self):
-        # This may or may not be optimized by using parameters and individual queries.
-        items=[]
-        while (self.workers.nr_workers < self.neo_batch_size) and len(self.queue)>0:
-            item=[]
-            for i in range(self.queue_size):
-                try:
-                    item.extend(self.queue.pop())
-                except IndexError:
-                    i=self.queue_size
-            items.append(item)
-            logging.info("Preparing call length %i, remaining items %i" % (len(item),len(self.queue)))
-
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(self.post_loop(items))
-        #self.post_items(item.copy())  # Add "Worker"
-
-        #if len(self.neo_queue) > 0:
-        #    #if len(self.neo_queue) > 5000: logging.info("Writing queue of size %i, ..." % self.queue_size)
-        #    self.connector.run_multiple(self.neo_queue, self.neo_batch_size)
-        #    #res = self.connector.run_multiple(self.neo_queue)
-        #    #asyncio.run(self.post_queue())
-        #    self.neo_queue = []
+        if len(self.neo_queue) > 0:
+            self.connector.run_multiple(self.neo_queue, self.neo_batch_size)
+            self.neo_queue = []
 
     def non_con_write_queue(self):
-        logging.info("Number of workers active %i" % self.workers.nr_workers)
-        logging.info("Number of queries in queue %i" % len(self.queue))
-        while self.workers.nr_workers>0:
-            time.sleep(1)
-
-        logging.info("Finished waiting for workers %i" % len(self.queue))
-        finished=False
-        while finished==False:
-            try:
-                items=self.queue.pop()
-                res = self.connector.run_multiple(items)
-            except IndexError:
-                finished=True
-
-        # This may or may not be optimized by using parameters and individual queries.
-        #if len(self.neo_queue) > 0:
-        #    #if len(self.neo_queue) > 5000: logging.info("Writing queue of size %i, ..." % self.queue_size)
-        #    #self.connector.run_multiple(self.neo_queue, self.neo_batch_size)
-        #    res = self.connector.run_multiple(self.neo_queue)
-        #    self.neo_queue = []
+        self.write_queue()
 
     def query_node(self, id, times=None):
         """ See query_multiple_nodes"""
@@ -360,7 +300,8 @@ class neo4j_network(MutableSequence):
                 params = {"ids": ids}
 
         res = self.connector.run(query, params)
-        ties = [(x['sender'], x['receiver'], x['time'], {'weight': x['weight'], 'p1': x['param1'], 'p2': x['param2']}) for x in res]
+        ties = [(x['sender'], x['receiver'], x['time'], {'weight': x['weight'], 'p1': x['param1'], 'p2': x['param2']})
+                for x in res]
         return ties
 
     def insert_edges_multiple(self, ties):
@@ -382,8 +323,9 @@ class neo4j_network(MutableSequence):
         params = {"ties": ties_formatted}
 
         query = "UNWIND $ties AS tie MATCH (a:word {token_id: tie.ego}) MATCH (b:word {token_id: tie.alter}) WITH a,b,tie MERGE (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, p1:tie.p1,p2:tie.p2})<-[:onto]-(a)"
-        self.add_query(query, params)
 
+        # self.add_query(query, params)
+        self.add_tie_query(query, params)
         # TODO graph dispatch
 
     def insert_edges(self, ego, ties):

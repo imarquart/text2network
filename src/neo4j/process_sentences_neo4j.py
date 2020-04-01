@@ -28,7 +28,7 @@ async def wait_for_event_loop():
         nr_task = len([task for task in asyncio.Task.all_tasks() if not task.done()])
         await asyncio.sleep(0.2)
 
-def process_sentences_neo4j(tokenizer, bert, text_db, neograph, year, MAX_SEQ_LENGTH, DICT_SIZE, batch_size, nr_workers=0,
+def process_sentences_neo4j(tokenizer, bert, text_db, neograph, year, MAX_SEQ_LENGTH, DICT_SIZE, batch_size, maxn=None, nr_workers=0,
                               cutoff_percent=99,max_degree=50):
     """
     Extracts pre-processed sentences, gets predictions by BERT and creates a network
@@ -51,7 +51,7 @@ def process_sentences_neo4j(tokenizer, bert, text_db, neograph, year, MAX_SEQ_LE
 
     # %% Initialize text dataset
     # !!! TODO REMOVE MAXN !!!
-    dataset = text_dataset(text_db, tokenizer, MAX_SEQ_LENGTH,maxn=50)
+    dataset = text_dataset(text_db, tokenizer, MAX_SEQ_LENGTH,maxn=maxn)
     logging.info("Number of sentences found: %i"%dataset.nitems)
     batch_sampler = BatchSampler(SequentialSampler(range(0, dataset.nitems)), batch_size=batch_size, drop_last=False)
     dataloader = DataLoaderX(dataset=dataset, batch_size=None, sampler=batch_sampler, num_workers=nr_workers,
@@ -133,7 +133,7 @@ def process_sentences_neo4j(tokenizer, bert, text_db, neograph, year, MAX_SEQ_LE
             del dists
 
         del predictions, attn
-        neograph.write_queue()
+        #neograph.write_queue()
         # compute processing time
         process_timings.append(time.time() - start_time - prepare_time - load_time)
         # New start time
@@ -141,12 +141,12 @@ def process_sentences_neo4j(tokenizer, bert, text_db, neograph, year, MAX_SEQ_LE
 
 
     # Write remaining
-    #neograph.non_con_write_queue()
+    neograph.write_queue()
 
     dataset.close()
 
-    logging.info("Average Load Time: %s seconds" % (np.mean(load_timings)))
-    logging.info("Average Model Time: %s seconds" % (np.mean(model_timings)))
-    logging.info("Average Processing Time: %s seconds" % (np.mean(process_timings)))
-    logging.info("Ratio Load/Operations: %s seconds" % (np.mean(load_timings) / np.mean(process_timings + model_timings)))
+    #logging.info("Average Load Time: %s seconds" % (np.mean(load_timings)))
+    #logging.info("Average Model Time: %s seconds" % (np.mean(model_timings)))
+    #logging.info("Average Processing Time: %s seconds" % (np.mean(process_timings)))
+    #logging.info("Ratio Load/Operations: %s seconds" % (np.mean(load_timings) / np.mean(process_timings + model_timings)))
 
