@@ -17,15 +17,11 @@ from NLP.src.text_processing.preprocess_files_HBR import preprocess_files_HBR
 from NLP.utils.hash_file import hash_file, check_step, complete_step
 from NLP.utils.load_bert import get_bert_and_tokenizer
 
-
-
-
 # %% Config
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                     datefmt='%m/%d/%Y %H:%M:%S',
                     level=logging.INFO)
 cfg = configuration()
-
 
 if __name__ == "__main__":
     # %% Main Loop:
@@ -95,7 +91,8 @@ if __name__ == "__main__":
 
             start_time = time.time()
             # Create BERT args
-            args = bert_args(text_file, bert_folder, cfg.do_train, cfg.model_dir, cfg.mlm_probability, cfg.max_seq_length,
+            args = bert_args(text_file, bert_folder, cfg.do_train, cfg.model_dir, cfg.mlm_probability,
+                             cfg.max_seq_length,
                              cfg.loss_limit, cfg.gpu_batch, cfg.epochs,
                              cfg.warmup_steps)
             torch.cuda.empty_cache()
@@ -112,46 +109,47 @@ if __name__ == "__main__":
         if (check_step(nw_folder, hash) and False):
             logging.info("Processed results found. Skipping.")
         else:
-            for q_size in [100]:
-                db_uri = "http://localhost:7474"
-                db_pwd = ('neo4j', 'nlp')
-                neo_creds=(db_uri, db_pwd)
-                start_time = time.time()
-                torch.cuda.empty_cache()
-                logging.disable(cfg.subprocess_level)
-                tokenizer, bert = get_bert_and_tokenizer(bert_folder, True)
-                logging.disable(logging.NOTSET)
-                DICT_SIZE = tokenizer.vocab_size
-                years=20000101
+            results = []
+            for q_size in [100, 200, 500, 1000, 2000, 10000]:
+                for t_size in [1, 2, 5, 10, 50, 100,200,1000]:
+                    db_uri = "http://localhost:7474"
+                    db_pwd = ('neo4j', 'nlp')
+                    neo_creds = (db_uri, db_pwd)
+                    start_time = time.time()
+                    torch.cuda.empty_cache()
+                    logging.disable(cfg.subprocess_level)
+                    tokenizer, bert = get_bert_and_tokenizer(bert_folder, True)
+                    logging.disable(logging.NOTSET)
+                    DICT_SIZE = tokenizer.vocab_size
+                    years = 20000101
 
+                    # Init Network
+                    neograph = neo4j_network(neo_creds, queue_size=q_size, tie_query_limit=t_size)
 
-                # Init Network
-                neograph = neo4j_network(neo_creds, queue_size=q_size)
+                    # query = "MATCH (n) DETACH DELETE n"
+                    query = "MATCH ()-[r]->(p:edge)-[q]->() DELETE r,p,q"
+                    neograph.connector.run(query)
 
-                #query = "MATCH (n) DETACH DELETE n"
-                query = "MATCH ()-[r]->(p:edge)-[q]->() DELETE r,p,q"
-                neograph.connector.run(query)
+                    # Setup network
+                    tokens = list(tokenizer.vocab.keys())
+                    tokens = [x.translate(x.maketrans({"\"": '#e1#', "'": '#e2#', "\\": '#e3#'})) for x in tokens]
+                    # neograph.setup_neo_db(tokens, list(tokenizer.vocab.values()))
+                    start_time = time.time()
 
+                    # Process sentences in BERT and create the networks
+                    process_sentences_neo4j(tokenizer, bert, text_db, neograph, years, cfg.max_seq_length,
+                                            DICT_SIZE,
+                                            cfg.batch_size, maxn=50,
+                                            nr_workers=0,
+                                            cutoff_percent=90,
+                                            max_degree=100)
+                    logging.info("Network creation finished in %s seconds for q_size %i and t_size %i" % (
+                    time.time() - start_time, q_size, t_size))
 
-                # Setup network
-                tokens = list(tokenizer.vocab.keys())
-                tokens = [x.translate(x.maketrans({"\"": '#e1#', "'": '#e2#', "\\": '#e3#'})) for x in tokens]
-                #neograph.setup_neo_db(tokens, list(tokenizer.vocab.values()))
-                start_time = time.time()
+                    # Check results
+                    nr_nodes = neograph.connector.run("MATCH (n) RETURN count(n) AS nodes")[0]['nodes']
+                    nr_ties = neograph.connector.run("MATCH ()-->() RETURN count(*) AS ties")[0]['ties']
+                    logging.info("Network has %i nodes and %i ties" % (nr_nodes, nr_ties))
+                    results.append(((q_size, t_size, time.time() - start_time, nr_nodes, nr_ties)))
 
-                # Process sentences in BERT and create the networks
-                process_sentences_neo4j(tokenizer, bert, text_db, neograph, years, cfg.max_seq_length,
-                                                                                  DICT_SIZE,
-                                                                                  cfg.batch_size,
-                                                                                  nr_workers=0,
-                                                                                  cutoff_percent=90,
-                                                                                  max_degree=100)
-                logging.info("Network creation finished in %s seconds for q_size %i" % (time.time() - start_time, q_size))
-
-
-                #Check results
-                nr_nodes=neograph.connector.run("MATCH (n) RETURN count(n) AS nodes")[0]['nodes']
-                nr_ties=neograph.connector.run("MATCH ()-->() RETURN count(*) AS ties")[0]['ties']
-                logging.info("Network has %i nodes and %i ties" % (nr_nodes,nr_ties))
-
-
+            print(*results, sep="\n")
