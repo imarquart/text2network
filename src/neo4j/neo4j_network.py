@@ -26,7 +26,7 @@ class neo4j_network(MutableSequence):
 
     # %% Initialization functions
     def __init__(self, neo4j_creds, graph_type="networkx", graph_direction="FORWARD", write_before_query=True,
-                 neo_batch_size=1000000, queue_size=10000, tie_query_limit=100000):
+                 neo_batch_size=None, queue_size=10000, tie_query_limit=100000):
         self.neo4j_connection, self.neo4j_credentials = neo4j_creds
         self.write_before_query = write_before_query
         # Conditioned graph information
@@ -101,7 +101,7 @@ class neo4j_network(MutableSequence):
 
             # Check if all neighbor tokens present
             assert set(neighbors) < set(self.ids), "ID of node to connect not found. Not in network?"
-            ties = zip(token, neighbors, years, weights)
+            ties = list(zip(token, neighbors, years, weights))
 
             # TODO Dispatch if graph conditioned
 
@@ -304,7 +304,35 @@ class neo4j_network(MutableSequence):
                 for x in res]
         return ties
 
-    def insert_edges_multiple(self, ties):
+    def insert_edges_multiple(self,ties):
+        if self.graph_direction == "REVERSE":
+            egos=np.array([x[1] for x in ties])
+            alters=np.array([x[0] for x in ties])
+        else:
+            egos=np.array([x[0] for x in ties])
+            alters=np.array([x[1] for x in ties])
+        times=np.array([x[2] for x in ties])
+        dicts=np.array([x[3] for x in ties])
+
+        unique_egos=np.unique(egos)
+        sets=[]
+        for u_ego in unique_egos:
+            mask=egos==u_ego
+            subalters=alters[mask]
+            subtimes=times[mask]
+            subdicts=dicts[mask]
+            ties_formatted = [{"alter": int(x[0]), "time": int(x[1]), "weight": float(x[2]['weight']),
+                               "p1": (int(x[2]['p1']) if len(x[2]) > 1 else 0), "p2": (int(x[2]['p2']) if len(x[2]) > 2 else 0)}
+                              for x in zip(subalters.tolist(),subtimes.tolist(),subdicts.tolist())]
+            set={'ego':int(u_ego),'ties':ties_formatted}
+            sets.append(set)
+        params={"sets":sets}
+        query = "UNWIND $sets as set MATCH (a:word {token_id: set.ego}) WITH a,set UNWIND set.ties as tie MATCH (b:word {token_id: tie.alter}) MERGE (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, p1:tie.p1,p2:tie.p2})<-[:onto]-(a)"
+
+        self.add_query(query, params)
+
+
+    def insert_edges_multiple_old(self, ties):
         """
         Allows to add ties across nodes
         :param ties: Set of Tuples (u,v,Time,{weight:, p1:, p22:})
@@ -324,8 +352,8 @@ class neo4j_network(MutableSequence):
 
         query = "UNWIND $ties AS tie MATCH (a:word {token_id: tie.ego}) MATCH (b:word {token_id: tie.alter}) WITH a,b,tie MERGE (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, p1:tie.p1,p2:tie.p2})<-[:onto]-(a)"
 
-        # self.add_query(query, params)
-        self.add_tie_query(query, params)
+        self.add_query(query, params)
+        #self.add_tie_query(query, params)
         # TODO graph dispatch
 
     def insert_edges(self, ego, ties):

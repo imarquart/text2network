@@ -93,6 +93,7 @@ def process_sentences_neo4j(tokenizer, bert, text_db, neograph, year, MAX_SEQ_LE
 
         # %% Sequence Table
         # Iterate over sequences
+        batch_ties=[]
         for sequence_id in np.unique(seq_ids):
             sequence_mask = seq_ids == sequence_id
             sequence_size = sum(sequence_mask)
@@ -103,7 +104,7 @@ def process_sentences_neo4j(tokenizer, bert, text_db, neograph, year, MAX_SEQ_LE
             # Pad and add distributions per token, we need to save to maximum sequence size
             dists = torch.zeros([MAX_SEQ_LENGTH, DICT_SIZE], requires_grad=False)
             dists[:sequence_size, :] = predictions[sequence_mask, :]
-
+            sentence_ties=[]
             for pos, token in enumerate(token_ids[sequence_mask]):
                 # Should all be np
                 token=token.item()
@@ -130,6 +131,8 @@ def process_sentences_neo4j(tokenizer, bert, text_db, neograph, year, MAX_SEQ_LE
                                                                           percent=cutoff_percent, max_degree=max_degree)
                     ties=get_weighted_edgelist(token, replacement, year, cutoff_number, cutoff_probability,sequence_id,pos)
                     neograph.insert_edges_multiple(ties)
+
+
             del dists
 
         del predictions, attn

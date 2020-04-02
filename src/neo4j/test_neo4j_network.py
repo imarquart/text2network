@@ -16,6 +16,8 @@ class Testneo4j_network(TestCase):
                            (12, 13, 20000101, {'weight': 0.5})]
         self.add_string_ego = [(12, 20000101, {'weight': 0.5}), (13, 20000101, {'weight': 0.5})]
         self.add_string_ego_param = [(12, 20000101, {'weight': 0.5, 'p1': 15})]
+        self.add_string_param = [(11, 12, 20000101, {'weight': 0.5, 'p1': 15}), (11, 13, 20000101, {'weight': 0.5, 'p1': 15}),
+                           (12, 13, 20000101, {'weight': 0.5, 'p1': 15})]
         self.add_string_ego_missing = [(20, 20000101, {'weight': 0.5}), (13, 20000101, {'weight': 0.5})]
         self.add_string_ego_missing2 = [('elephant', 20000101, {'weight': 0.5}), ('cat', 20000101, {'weight': 0.5})]
         self.add_string_ego_nodict = [(12, 20000101, 0.5), (13, 20000101, 0.5)]
@@ -103,6 +105,8 @@ class Testneo4j_network(TestCase):
         self.neo4nw[self.ego_id] = self.add_string_ego_param
         self.neo4nw.write_queue()
         res = self.neo4nw.query_node(self.ego_id)
+        print(res)
+        print(self.add_string_ego_param)
         res = [(x[0], x[1], x[3]['weight'], x[3]['p1']) for x in res]
         comp = [(self.ego_id, x[0], x[2]['weight'],x[2]['p1']) for x in self.add_string_ego_param]
         self.assertEqual(set(res[0]), set(comp[0]))
