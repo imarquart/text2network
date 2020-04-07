@@ -32,7 +32,7 @@ class neo4j_network(MutableSequence):
         # Conditioned graph information
         self.graph_type = graph_type
         self.graph = None
-        self.conditioned = None
+        self.conditioned = False
         self.years = []
         self.graph_direction = graph_direction
         # Dictionaries and token/id saved in memory

@@ -7,7 +7,8 @@ import time
 import logging
 from NLP.src.neo4j.neo4j_network import neo4j_network
 import asyncio
-
+from joblib import Parallel, delayed
+import multiprocessing
 
 from NLP.utils.rowvec_tools import simple_norm
 from NLP.src.neo4j.neo_row_tools import  get_weighted_edgelist, calculate_cutoffs
@@ -28,8 +29,8 @@ async def wait_for_event_loop():
         nr_task = len([task for task in asyncio.Task.all_tasks() if not task.done()])
         await asyncio.sleep(0.2)
 
-def process_sentences_neo4j(tokenizer, bert, text_db, neograph, year, MAX_SEQ_LENGTH, DICT_SIZE, batch_size, maxn=None, nr_workers=0,
-                              cutoff_percent=99,max_degree=50):
+def process_sentences_neo4j_par(tokenizer, bert, text_db, neograph, year, MAX_SEQ_LENGTH, DICT_SIZE, batch_size, maxn=None, nr_workers=0,
+                              cutoff_percent=99,max_degree=50, par=True):
     """
     Extracts pre-processed sentences, gets predictions by BERT and creates a network
 
@@ -93,29 +94,38 @@ def process_sentences_neo4j(tokenizer, bert, text_db, neograph, year, MAX_SEQ_LE
 
         # %% Sequence Table
         # Iterate over sequences
+        sequence_id_container=[]
+        dists_container=[]
+        token_id_container=[]
         for sequence_id in np.unique(seq_ids):
             sequence_mask = seq_ids == sequence_id
             sequence_size = sum(sequence_mask)
 
-            # Pad and add sequence of IDs
-            # TODO: Sanity check I don't need this anymore
-            #idx = torch.zeros([1, MAX_SEQ_LENGTH], requires_grad=False, dtype=torch.int32)
-            #idx[0, :sequence_size] = token_ids[sequence_mask]
             # Pad and add distributions per token, we need to save to maximum sequence size
-            dists = torch.zeros([MAX_SEQ_LENGTH, DICT_SIZE], requires_grad=False)
+            dists = np.zeros([MAX_SEQ_LENGTH, DICT_SIZE])
             dists[:sequence_size, :] = predictions[sequence_mask, :]
-            sentence_ties=[]
+            dists_container.append(dists.copy())
+            token_id_container.append(token_ids[sequence_mask])
+            sequence_id_container.append(sequence_id)
+        del sequence_size,sequence_mask,dists,sequence_id
 
+        inputs=list(zip(sequence_id_container,dists_container,token_id_container))
+
+        def calculate_ties(input_vec):
+            sequence_id=input_vec[0]
+            dists=input_vec[1]
+            idx=input_vec[2]
+            results=[]
             # TODO: This should probably not be a loop
             # but done smartly with matrices and so forth
-            for pos, token in enumerate(token_ids[sequence_mask]):
+            for pos, token in enumerate(idx):
                 # Should all be np
                 token=token.item()
                 if token not in delwords:
                     replacement = dists[pos, :]
 
                     # Flatten, since it is one row each
-                    replacement = replacement.numpy().flatten()
+                    replacement = replacement.flatten()
 
                     # Sparsify
                     # TODO: try without setting own-link to zero!
@@ -133,10 +143,23 @@ def process_sentences_neo4j(tokenizer, bert, text_db, neograph, year, MAX_SEQ_LE
                     cutoff_number, cutoff_probability = calculate_cutoffs(replacement, method="percent",
                                                                           percent=cutoff_percent, max_degree=max_degree)
                     ties=get_weighted_edgelist(token, replacement, year, cutoff_number, cutoff_probability,sequence_id,pos)
-                    neograph.insert_edges_multiple(ties)
+                    #neograph.insert_edges_multiple(ties)
+                    results.append(ties)
+            return results
 
+        num_cores = 8
+        if par==True:
+            results = Parallel(n_jobs=num_cores)(delayed(calculate_ties)(i) for i in inputs)
+        elif par=="Threading":
+            results = Parallel(n_jobs=num_cores,prefer="threads")(delayed(calculate_ties)(i) for i in inputs)
+        else:
+            results=[]
+            for i in inputs:
+                results.append(calculate_ties(i))
 
-            del dists
+        for tie_vec in results:
+            for ties in tie_vec:
+                neograph.insert_edges_multiple(ties)
 
         del predictions #, attn, token_ids, seq_ids, batch
         #neograph.write_queue()
