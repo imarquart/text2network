@@ -76,6 +76,7 @@ def get_bert_tensor(args, bert,tokens,pad_token_id,mask_token_id,device=torch.de
     del list_eye
 
     # Get predictions
+    bert.eval()
     with torch.no_grad():
         loss, predictions, attn= bert(tokens, masked_lm_labels=labels, token_type_ids=segments)
 
@@ -105,4 +106,4 @@ def get_bert_tensor(args, bert,tokens,pad_token_id,mask_token_id,device=torch.de
     attn=attn[eyes.bool(),:]
     # Note attention is now of (nr_tokens,sequence_size+2)
     # because we added <SEP> and <CLS> tokens
-    return predictions.to(torch.device('cpu')), attn.cpu()
+    return predictions.cpu(), attn.cpu()

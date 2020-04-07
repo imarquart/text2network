@@ -23,9 +23,22 @@ logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message
                     level=logging.INFO)
 cfg = configuration()
 
+# Init Network
+q_size=200
+t_size = 1
+db_uri = "http://localhost:7474"
+db_pwd = ('neo4j', 'nlp')
+neo_creds = (db_uri, db_pwd)
+neograph = neo4j_network(neo_creds, queue_size=q_size, tie_query_limit=t_size)
+# query = "MATCH (n) DETACH DELETE n"
+#query = "MATCH ()-[r]->(p:edge)-[q]->() DELETE r,p,q"
+#neograph.connector.run(query)
+
+del neograph
+
 if __name__ == "__main__":
     # %% Main Loop:
-    years = [2000]
+    years = range(1990,2020)
     for year in years:
         logging.info("---------- Starting year %i ----------" % year)
         input_folder = 'D:/NLP/BERT-NLP/NLP/data/HBR/articles/'
@@ -110,25 +123,32 @@ if __name__ == "__main__":
             logging.info("Processed results found. Skipping.")
         else:
             results = []
-            for q_size in [1,10,50,100, 200, 500, 1000]:
-                t_size=1
-                db_uri = "http://localhost:7474"
-                db_pwd = ('neo4j', 'nlp')
-                neo_creds = (db_uri, db_pwd)
+            for q_size in [150]:
+
                 start_time = time.time()
                 torch.cuda.empty_cache()
                 logging.disable(cfg.subprocess_level)
                 tokenizer, bert = get_bert_and_tokenizer(bert_folder, True)
                 logging.disable(logging.NOTSET)
                 DICT_SIZE = tokenizer.vocab_size
-                years = 20000101
+                year_var = int(''.join([str(year),"0101"]))
 
-                # Init Network
+                # Re-setup graph
                 neograph = neo4j_network(neo_creds, queue_size=q_size, tie_query_limit=t_size)
 
-                # query = "MATCH (n) DETACH DELETE n"
-                query = "MATCH ()-[r]->(p:edge)-[q]->() DELETE r,p,q"
+                # DEBUG
+                nr_nodes = neograph.connector.run("MATCH (n) RETURN count(n) AS nodes")[0]['nodes']
+                nr_ties = neograph.connector.run("MATCH ()-->() RETURN count(*) AS ties")[0]['ties']
+                logging.info("Before cleaning: Network has %i nodes and %i ties" % (nr_nodes, nr_ties))
+
+                # Delete previous year entries
+                query = ''.join(["MATCH (p:edge {time:",str(year_var),"}) WHERE p.time=",str(year_var)," DETACH DELETE p"])
                 neograph.connector.run(query)
+
+                # DEBUG
+                nr_nodes = neograph.connector.run("MATCH (n) RETURN count(n) AS nodes")[0]['nodes']
+                nr_ties = neograph.connector.run("MATCH ()-->() RETURN count(*) AS ties")[0]['ties']
+                logging.info("After cleaning: Network has %i nodes and %i ties" % (nr_nodes, nr_ties))
 
                 # Setup network
                 tokens = list(tokenizer.vocab.keys())
@@ -137,19 +157,22 @@ if __name__ == "__main__":
                 start_time = time.time()
 
                 # Process sentences in BERT and create the networks
-                process_sentences_neo4j(tokenizer, bert, text_db, neograph, years, cfg.max_seq_length,
+                process_sentences_neo4j(tokenizer, bert, text_db, neograph, year_var, cfg.max_seq_length,
                                         DICT_SIZE,
-                                        cfg.batch_size, maxn=50,
+                                        cfg.batch_size, maxn=None,
                                         nr_workers=0,
-                                        cutoff_percent=90,
-                                        max_degree=100)
+                                        cutoff_percent=80,
+                                        max_degree=50)
+                del tokenizer,bert
                 logging.info("Network creation finished in %s seconds for q_size %i and t_size %i" % (
                     time.time() - start_time, q_size, t_size))
-
+                torch.cuda.empty_cache()
                 # Check results
                 nr_nodes = neograph.connector.run("MATCH (n) RETURN count(n) AS nodes")[0]['nodes']
                 nr_ties = neograph.connector.run("MATCH ()-->() RETURN count(*) AS ties")[0]['ties']
-                logging.info("Network has %i nodes and %i ties" % (nr_nodes, nr_ties))
-                results.append(((q_size, t_size, time.time() - start_time, nr_nodes, nr_ties)))
+                logging.info("After execution: Network has %i nodes and %i ties" % (nr_nodes, nr_ties))
+                results.append(((year_var,q_size, t_size, time.time() - start_time, nr_nodes, nr_ties)))
+                print(*results, sep="\n")
+                del neograph
 
-            print(*results, sep="\n")
+    print(*results, sep="\n")

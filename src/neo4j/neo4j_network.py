@@ -26,7 +26,7 @@ class neo4j_network(MutableSequence):
 
     # %% Initialization functions
     def __init__(self, neo4j_creds, graph_type="networkx", graph_direction="FORWARD", write_before_query=True,
-                 neo_batch_size=None, queue_size=10000, tie_query_limit=100000):
+                 neo_batch_size=None, queue_size=10000, tie_query_limit=100000, tie_creation="UNSAFE"):
         self.neo4j_connection, self.neo4j_credentials = neo4j_creds
         self.write_before_query = write_before_query
         # Conditioned graph information
@@ -46,7 +46,13 @@ class neo4j_network(MutableSequence):
         self.neo_ids = []
         self.neo_tokens = []
 
+
         # Neo4J Internals
+        # Pick Merge or Create. Create will double ties but Merge becomes very slow for large networks
+        if tie_creation=="SAFE":
+            self.creation_statement="MERGE"
+        else:
+            self.creation_statement="CREATE"
         self.tie_query_limit = tie_query_limit
         self.neo_queue = []
         self.tie_queue = deque()
@@ -253,7 +259,8 @@ class neo4j_network(MutableSequence):
             statements = [neo4j.Statement(q) for (q) in query]
             self.neo_queue.extend(statements)
 
-        if len(self.neo_queue) > self.queue_size:
+        # Check for queue size if not conditioned!
+        if (len(self.neo_queue) > self.queue_size) and (self.conditioned == False):
             self.write_queue()
 
     def write_queue(self):
@@ -316,18 +323,26 @@ class neo4j_network(MutableSequence):
 
         unique_egos=np.unique(egos)
         sets=[]
-        for u_ego in unique_egos:
-            mask=egos==u_ego
-            subalters=alters[mask]
-            subtimes=times[mask]
-            subdicts=dicts[mask]
+        if len(unique_egos)==1:
             ties_formatted = [{"alter": int(x[0]), "time": int(x[1]), "weight": float(x[2]['weight']),
-                               "p1": (int(x[2]['p1']) if len(x[2]) > 1 else 0), "p2": (int(x[2]['p2']) if len(x[2]) > 2 else 0)}
-                              for x in zip(subalters.tolist(),subtimes.tolist(),subdicts.tolist())]
-            set={'ego':int(u_ego),'ties':ties_formatted}
-            sets.append(set)
-        params={"sets":sets}
-        query = "UNWIND $sets as set MATCH (a:word {token_id: set.ego}) WITH a,set UNWIND set.ties as tie MATCH (b:word {token_id: tie.alter}) MERGE (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, p1:tie.p1,p2:tie.p2})<-[:onto]-(a)"
+                               "p1": (int(x[2]['p1']) if len(x[2]) > 1 else 0),
+                               "p2": (int(x[2]['p2']) if len(x[2]) > 2 else 0)}
+                              for x in zip(alters.tolist(), times.tolist(), dicts.tolist())]
+            params = {"ego": int(egos[0]), "ties":ties_formatted}
+            query = ''.join([" MATCH (a:word {token_id: $ego}) WITH a UNWIND $ties as tie MATCH (b:word {token_id: tie.alter}) ",self.creation_statement," (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, p1:tie.p1,p2:tie.p2})<-[:onto]-(a)"])
+        else:
+            for u_ego in unique_egos:
+                mask=egos==u_ego
+                subalters=alters[mask]
+                subtimes=times[mask]
+                subdicts=dicts[mask]
+                ties_formatted = [{"alter": int(x[0]), "time": int(x[1]), "weight": float(x[2]['weight']),
+                                   "p1": (int(x[2]['p1']) if len(x[2]) > 1 else 0), "p2": (int(x[2]['p2']) if len(x[2]) > 2 else 0)}
+                                  for x in zip(subalters.tolist(),subtimes.tolist(),subdicts.tolist())]
+                set={'ego':int(u_ego),'ties':ties_formatted}
+                sets.append(set)
+            params={"sets":sets}
+            query = ''.join(["UNWIND $sets as set MATCH (a:word {token_id: set.ego}) WITH a,set UNWIND set.ties as tie MATCH (b:word {token_id: tie.alter}) ",self.creation_statement,"  (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, p1:tie.p1,p2:tie.p2})<-[:onto]-(a)"])
 
         self.add_query(query, params)
 
@@ -396,11 +411,20 @@ class neo4j_network(MutableSequence):
 
         # Continue conditioning
 
-    def decondition(self):
+    def decondition(self, write=True):
         # Reset token lists to original state.
         self.ids = self.neo_ids
         self.tokens = self.neo_tokens
         self.token_id_dict = self.neo_token_id_dict
+
+        # Decondition
+
+        if write==True:
+            self.write_queue()
+        else:
+            self.neo_queue=[]
+
+
 
     # %% Utility functioncs
 

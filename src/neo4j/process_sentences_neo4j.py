@@ -105,6 +105,9 @@ def process_sentences_neo4j(tokenizer, bert, text_db, neograph, year, MAX_SEQ_LE
             dists = torch.zeros([MAX_SEQ_LENGTH, DICT_SIZE], requires_grad=False)
             dists[:sequence_size, :] = predictions[sequence_mask, :]
             sentence_ties=[]
+
+            # TODO: This should probably not be a loop
+            # but done smartly with matrices and so forth
             for pos, token in enumerate(token_ids[sequence_mask]):
                 # Should all be np
                 token=token.item()
@@ -135,7 +138,7 @@ def process_sentences_neo4j(tokenizer, bert, text_db, neograph, year, MAX_SEQ_LE
 
             del dists
 
-        del predictions, attn
+        del predictions #, attn, token_ids, seq_ids, batch
         #neograph.write_queue()
         # compute processing time
         process_timings.append(time.time() - start_time - prepare_time - load_time)
@@ -145,9 +148,10 @@ def process_sentences_neo4j(tokenizer, bert, text_db, neograph, year, MAX_SEQ_LE
 
     # Write remaining
     neograph.write_queue()
+    torch.cuda.empty_cache()
 
     dataset.close()
-
+    del dataloader, dataset, batch_sampler
     #logging.info("Average Load Time: %s seconds" % (np.mean(load_timings)))
     #logging.info("Average Model Time: %s seconds" % (np.mean(model_timings)))
     #logging.info("Average Processing Time: %s seconds" % (np.mean(process_timings)))
