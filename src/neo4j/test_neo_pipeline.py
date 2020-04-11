@@ -26,7 +26,7 @@ cfg = configuration()
 if __name__ == "__main__":
 
     # Init Network
-    q_size = 200
+    q_size = 150
     t_size = 1
     maxn = None
     par = "nonpar"
@@ -35,14 +35,14 @@ if __name__ == "__main__":
     neo_creds = (db_uri, db_pwd)
     neograph = neo4j_network(neo_creds, queue_size=q_size, tie_query_limit=t_size)
     # query = "MATCH (n) DETACH DELETE n"
-    #query = "MATCH ()-[r]->(p:edge)-[q]->() DELETE r,p,q"
-    #neograph.connector.run(query)
+    # query = "MATCH ()-[r]->(p:edge)-[q]->() DELETE r,p,q"
+    # neograph.connector.run(query)
 
     del neograph
 
     # %% Main Loop:
     years = range(1990, 2020)
-    #years = [1990, 1991]
+    years = [1990]
     results = []
     for year in years:
         logging.info("---------- Starting year %i ----------" % year)
@@ -127,7 +127,7 @@ if __name__ == "__main__":
         if (check_step(nw_folder, hash) and False):
             logging.info("Processed results found. Skipping.")
         else:
-            # q_size=150
+            q_size = 150
             start_time = time.time()
             torch.cuda.empty_cache()
             logging.disable(cfg.subprocess_level)
@@ -157,34 +157,28 @@ if __name__ == "__main__":
             # Setup network
             tokens = list(tokenizer.vocab.keys())
             tokens = [x.translate(x.maketrans({"\"": '#e1#', "'": '#e2#', "\\": '#e3#'})) for x in tokens]
-            neograph.setup_neo_db(tokens, list(tokenizer.vocab.values()))
+            # neograph.setup_neo_db(tokens, list(tokenizer.vocab.values()))
             start_time = time.time()
 
             # Process sentences in BERT and create the networks
-            if par == "nonpar":
-                process_sentences_neo4j(tokenizer, bert, text_db, neograph, year_var, cfg.max_seq_length,
+            process_sentences_neo4j(tokenizer, bert, text_db, neograph, year_var, cfg.max_seq_length,
                                         DICT_SIZE,
                                         cfg.batch_size, maxn=maxn,
                                         nr_workers=0,
                                         cutoff_percent=80,
                                         max_degree=50)
-            else:
-                process_sentences_neo4j_par(tokenizer, bert, text_db, neograph, year_var, cfg.max_seq_length,
-                                            DICT_SIZE,
-                                            cfg.batch_size, maxn=maxn,
-                                            nr_workers=0,
-                                            cutoff_percent=80,
-                                            max_degree=50, par=par)
-            logging.info("Network creation finished in %s seconds for q_size %i and t_size %i" % (
-                time.time() - start_time, q_size, t_size))
+            logging.info("Par %s Network creation finished in %s seconds for q_size %i and t_size %i" % (par,
+                                                                                                         time.time() - start_time,
+                                                                                                         q_size,
+                                                                                                         t_size))
             del tokenizer, bert
             torch.cuda.empty_cache()
             # Check results
             nr_nodes = neograph.connector.run("MATCH (n) RETURN count(n) AS nodes")[0]['nodes']
             nr_ties = neograph.connector.run("MATCH ()-->() RETURN count(*) AS ties")[0]['ties']
             logging.info("After execution: Network has %i nodes and %i ties" % (nr_nodes, nr_ties))
-            results.append(((par, year_var, q_size, t_size, time.time() - start_time, nr_nodes, nr_ties)))
-            #print(*results, sep="\n")
+            results.append(((par, year_var, q_size, maxn, time.time() - start_time, nr_nodes, nr_ties)))
+            # print(*results, sep="\n")
             del neograph
 
     print(*results, sep="\n")

@@ -266,6 +266,8 @@ class neo4j_network(MutableSequence):
     def write_queue(self):
         if len(self.neo_queue) > 0:
             self.connector.run_multiple(self.neo_queue, self.neo_batch_size)
+
+
             self.neo_queue = []
 
     def non_con_write_queue(self):
@@ -319,7 +321,7 @@ class neo4j_network(MutableSequence):
             egos=np.array([x[0] for x in ties])
             alters=np.array([x[1] for x in ties])
         times=np.array([x[2] for x in ties])
-        dicts=np.array([x[3] for x in ties])
+        dicts = np.array([x[3] for x in ties])
 
         unique_egos=np.unique(egos)
         sets=[]
@@ -346,30 +348,43 @@ class neo4j_network(MutableSequence):
 
         self.add_query(query, params)
 
-
-    def insert_edges_multiple_old(self, ties):
-        """
-        Allows to add ties across nodes
-        :param ties: Set of Tuples (u,v,Time,{weight:, p1:, p22:})
-        :return: None
-        """
-        # Graph is saved as "PREDICTS", thus we may need to reverse ego/alter here
-        # We allow for up to two parameters
+    def insert_edges_multiple_jit(self,ties):
         if self.graph_direction == "REVERSE":
-            ties_formatted = [{"ego": x[1], "alter": x[0], "time": x[2], "weight": x[3]['weight'],
-                               "p1": (x[3]['p1'] if len(x[3]) > 1 else 0), "p2": (x[3]['p2'] if len(x[3]) > 2 else 0)}
-                              for x in ties]
+            egos=np.array([x[1] for x in ties])
+            alters=np.array([x[0] for x in ties])
         else:
-            ties_formatted = [{"ego": x[0], "alter": x[1], "time": x[2], "weight": x[3]['weight'],
-                               "p1": (x[3]['p1'] if len(x[3]) > 1 else 0), "p2": (x[3]['p2'] if len(x[3]) > 2 else 0)}
-                              for x in ties]
-        params = {"ties": ties_formatted}
+            egos=np.array([x[0] for x in ties])
+            alters=np.array([x[1] for x in ties])
+        times=np.array([x[2] for x in ties])
+        weights = np.array([x[3] for x in ties])
+        param1 = np.array([x[4] for x in ties])
+        param2= np.array([x[5] for x in ties])
 
-        query = "UNWIND $ties AS tie MATCH (a:word {token_id: tie.ego}) MATCH (b:word {token_id: tie.alter}) WITH a,b,tie MERGE (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, p1:tie.p1,p2:tie.p2})<-[:onto]-(a)"
+        unique_egos=np.unique(egos)
+        sets=[]
+        for u_ego in unique_egos:
+            mask=egos==u_ego
+            subalters=alters[mask]
+            subtimes=times[mask]
+            subweights=weights[mask]
+            subp1 = param1[mask]
+            subp2 = param2[mask]
 
-        self.add_query(query, params)
-        #self.add_tie_query(query, params)
-        # TODO graph dispatch
+            ties_formatted = [{"alter": int(x[0]), "time": int(x[1]), "weight": float(x[2]),
+                               "p1": int(x[3]), "p2": int(x[4])}
+                              for x in zip(subalters.tolist(),subtimes.tolist(),subweights.tolist(),subp1.tolist(),subp2.tolist())]
+            ties_formatted = [{"alter": int(x[0]), "time": int(x[1]), "weight": float(x[2]),
+                               "p1": 0, "p2": 0}
+                              for x in zip(subalters.tolist(),subtimes.tolist(),subweights.tolist())]
+            params={'ego':int(u_ego),'ties':ties_formatted}
+            query = ''.join([" MATCH (a:word {token_id: $ego}) WITH a UNWIND $ties as tie MATCH (b:word {token_id: tie.alter}) ",self.creation_statement," (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, p1:tie.p1,p2:tie.p2})<-[:onto]-(a)"])
+            self.add_query(query, params.copy())
+            #sets.append(set)
+        #params={"sets":sets}
+        #query = ''.join(["UNWIND $sets as set MATCH (a:word {token_id: set.ego}) WITH a,set UNWIND set.ties as tie MATCH (b:word {token_id: tie.alter}) ",self.creation_statement,"  (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, p1:tie.p1,p2:tie.p2})<-[:onto]-(a)"])
+
+        #self.add_query(query, params)
+
 
     def insert_edges(self, ego, ties):
         """

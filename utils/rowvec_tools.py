@@ -117,10 +117,11 @@ def softmax(x):
 
 def simple_norm(x):
     """Just want to start at zero and sum to 1, without norming anything else"""
+    x_org=x
     x = x - np.min(x, axis=-1)
     if np.sum(x, axis=-1) > 0:
         return x / np.sum(x, axis=-1)
     else:
-        return x
+        return x_org
 
 
