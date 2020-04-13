@@ -25,7 +25,7 @@ except:
 class neo4j_network(MutableSequence):
 
     # %% Initialization functions
-    def __init__(self, neo4j_creds, graph_type="networkx", graph_direction="FORWARD", write_before_query=True,
+    def __init__(self, neo4j_creds, graph_type="networkx", graph_direction="FORWARD", agg_operator="SUM", write_before_query=True,
                  neo_batch_size=None, queue_size=10000, tie_query_limit=100000, tie_creation="UNSAFE"):
         self.neo4j_connection, self.neo4j_credentials = neo4j_creds
         self.write_before_query = write_before_query
@@ -35,6 +35,7 @@ class neo4j_network(MutableSequence):
         self.conditioned = False
         self.years = []
         self.graph_direction = graph_direction
+        self.aggregate_operator=agg_operator
         # Dictionaries and token/id saved in memory
         self.token_id_dict = TwoWayDict()
         # Since both are numerical, we need to use a single way dict here
@@ -53,9 +54,7 @@ class neo4j_network(MutableSequence):
             self.creation_statement="MERGE"
         else:
             self.creation_statement="CREATE"
-        self.tie_query_limit = tie_query_limit
         self.neo_queue = []
-        self.tie_queue = deque()
         self.neo_batch_size = neo_batch_size
         self.queue_size = queue_size
         self.connector = neo4j.Connector(self.neo4j_connection, self.neo4j_credentials)
@@ -71,9 +70,7 @@ class neo4j_network(MutableSequence):
         :param key: Token or Token id
         :return:
         """
-        if isinstance(key, str): key = self.get_id_from_token(key)
-        assert key in self.ids, "ID of ego token to connect not found. Not in network?"
-        self.remove_token(key)
+        self.remove(key)
 
     def remove(self, key):
         """
@@ -81,7 +78,7 @@ class neo4j_network(MutableSequence):
         :param key: Token or Token id
         :return:
         """
-        if isinstance(key, str): key = self.get_id_from_token(key)
+        key = self.ensure_ids(key)
         assert key in self.ids, "ID of ego token to connect not found. Not in network?"
         self.remove_token(key)
 
@@ -95,10 +92,12 @@ class neo4j_network(MutableSequence):
         if isinstance(key, str) and isinstance(value, int):  # Wants to add a node
             self.add_token(value, key)
         else:
-            if isinstance(key, str): key = self.get_id_from_token(key)
+            key=self.ensure_ids(key)
             assert key in self.ids, "ID of ego token to connect not found. Not in network?"
             try:
-                neighbors = [self.get_id_from_token(x[0]) if not isinstance(x[0], int) else x[0] for x in value]
+
+                neighbors = [ x[0] for x in value]
+                neighbors = self.ensure_ids(neighbors)
                 weights = [{'weight': x[2]} if isinstance(x[2], (int, float)) else x[2] for x in value]
                 years = [x[1] for x in value]
                 token = map(int, np.repeat(key, len(neighbors)))
@@ -134,16 +133,13 @@ class neo4j_network(MutableSequence):
             i = i[0]
         else:
             year = None
-        if isinstance(i, (list, tuple, range)):
-            i = [self.get_id_from_token(x) if not isinstance(x, int) else x for x in i]
-        elif isinstance(i, str):
-            i = [self.get_id_from_token(i)]
+        if isinstance(i, (list, tuple, range,str,int)):
+            i = self.ensure_ids(i)
         else:
-            assert isinstance(i, int), "Please format a call as <token> or <token_id>"
-            i = [i]
+            raise AssertionError("Please format a call as <token> or <token_id>")
 
         # TODO Dispatch in case of graph
-        if self.graph is None:
+        if self.conditioned==False:
             return self.query_multiple_nodes(i, year)
         else:
             pass
@@ -205,34 +201,6 @@ class neo4j_network(MutableSequence):
     # All function that interact with neo are here, dispatched as needed from above
     # TODO: Set internal, allow access only via dispatch
 
-    def reduce_tie_query(self):
-        queries = []
-        params = []
-        for x in self.tie_queue:
-            queries.append(x[0])
-            params.append(x[1])
-
-        query_types = np.unique(queries).tolist()
-        for qtype in query_types:
-            mask = queries == np.array([qtype])
-            subparams = [x['ties'] for x in np.array(params)[mask]]
-            newparams = {'ties': np.concatenate(subparams).tolist()}
-            self.add_query(qtype, newparams)
-
-        self.tie_queue.clear()
-
-
-    def add_tie_query(self, query, params):
-        """
-           Add a list of query to queue
-           :param query: list - Neo4j queries
-           :param params: list - Associates parameters corresponding to queries
-           :return:
-           """
-        self.tie_queue.append((query, params))
-        if len(self.tie_queue)  >= self.tie_query_limit:
-            self.reduce_tie_query()
-
     def add_query(self, query, params=None):
         """
         Add a single query to queue
@@ -273,43 +241,59 @@ class neo4j_network(MutableSequence):
     def non_con_write_queue(self):
         self.write_queue()
 
-    def query_node(self, id, times=None):
+    def query_node(self, id, times=None,  weight_cutoff=None):
         """ See query_multiple_nodes"""
-        return self.query_multiple_nodes([id], times)
+        return self.query_multiple_nodes([id], times,  weight_cutoff)
 
-    def query_multiple_nodes(self, ids, times=None):
+    def query_multiple_nodes(self, ids, times=None, weight_cutoff=None):
         """
         Query multiple nodes by ID and over a set of time intervals
         :param ids: list of id's
         :param times: either a number format YYYYMMDD, or an interval dict {"start":YYYYMMDD,"end":YYYYMMDD}
         :return: list of tuples (u,v,Time,{weight:x})
         """
-        # assert isinstance(ids, list) remove checking here, should be done in dispatch functions
-        if self.graph_direction == "REVERSE":  # Seek nodes that predict ID nodes hence reverse sender/receiver
-            if isinstance(times, dict) or isinstance(times, int):
-                if isinstance(times, dict):  # Interval query
-                    params = {"ids": ids, "times": times}
-                    query = "UNWIND $ids AS id MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word  {token_id:id}) WHERE $times.start <= r.time<= $times.end RETURN b.token_id AS sender,a.token_id AS receiver,r.time AS time,r.p1 AS param1, r.p2 AS param2"
-                elif isinstance(times, int):
-                    params = {"ids": ids, "times": times}
-                    query = "UNWIND $ids AS id MATCH p=(a:word)-[:onto]->(r:edge {time:$times})-[:onto]->(b:word  {token_id:id}) RETURN b.token_id AS sender,a.token_id AS receiver,r.time AS time,r.weight AS weight,r.p1 AS param1, r.p2 AS param2"
+        # Allow cutoff value of (non-aggregated) weights and set up time-interval query
+        if weight_cutoff is not None:
+            where_query = ''.join([" WHERE r.weight >=", str(weight_cutoff), " "])
+            if isinstance(times, dict):
+                where_query =''.join([where_query, " AND  $times.start <= r.time<= $times.end "])
+        else:
+            if isinstance(times, dict):
+                where_query="WHERE  $times.start <= r.time<= $times.end "
             else:
-                query = "unwind $ids AS id MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word  {token_id:id}) RETURN b.token_id AS sender,a.token_id AS receiver,r.time AS time,r.weight AS weight,r.p1 AS param1, r.p2 AS param2"
-                params = {"ids": ids}
-        else:  # Seek nodes that predict nodes
-            if isinstance(times, dict) or isinstance(times, int):
-                if isinstance(times, dict):  # Interval query
-                    params = {"ids": ids, "times": times}
-                    query = "UNWIND $ids AS id MATCH p=(a:word  {token_id:id})-[:onto]->(r:edge)-[:onto]->(b:word) WHERE $times.start <= r.time<= $times.end RETURN b.token_id AS receiver,a.token_id AS sender,r.time AS time,r.weight AS weight,r.p1 AS param1, r.p2 AS param2"
-                elif isinstance(times, int):
-                    params = {"ids": ids, "times": times}
-                    query = "UNWIND $ids AS id MATCH p=(a:word  {token_id:id})-[:onto]->(r:edge {time:$times})-[:onto]->(b:word) RETURN b.token_id AS receiver,a.token_id AS sender,r.time AS time,r.weight AS weight,r.p1 AS param1, r.p2 AS param2"
+                where_query=""
+        # Create params with or without time
+        if isinstance(times, dict) or isinstance(times, int):
+            params = {"ids": ids, "times": times}
+        else:
+            params = {"ids": ids}
+        # Create query depending on graph direction and whether time variable is queried via where or node property
+        if self.graph_direction == "REVERSE":  # Seek alters that predict ID nodes hence reverse sender/receiver
+            return_query=''.join([" RETURN b.token_id AS sender,a.token_id AS receiver,count(r.time) AS occurrences,", self.aggregate_operator, "(r.weight) AS agg_weight order by agg_weight"])
+            if isinstance(times, int):
+                match_query = "UNWIND $ids AS id MATCH p=(a:word)-[:onto]->(r:edge {time:$times})-[:onto]->(b:word  {token_id:id}) "
             else:
-                query = "unwind $ids AS id MATCH p=(a:word  {token_id:id})-[:onto]->(r:edge)-[:onto]->(b:word) RETURN  b.token_id AS receiver,a.token_id AS sender,r.time AS time,r.weight AS weight,r.p1 AS param1, r.p2 AS param2"
-                params = {"ids": ids}
+                match_query = "UNWIND $ids AS id MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word  {token_id:id}) "
+        else:  # Seek ego nodes that predict alters
+            return_query = ''.join([" RETURN b.token_id AS receiver,a.token_id AS sender,count(r.time) AS occurrences,",
+                                    self.aggregate_operator, "(r.weight) AS agg_weight order by agg_weight"])
 
+            if isinstance(times, int):
+                match_query = "UNWIND $ids AS id MATCH p=(a:word  {token_id:id})-[:onto]->(r:edge {time:$times})-[:onto]->(b:word) "
+            else:
+                match_query = "unwind $ids AS id MATCH p=(a:word  {token_id:id})-[:onto]->(r:edge)-[:onto]->(b:word) "
+
+        # Format time to set for network
+        if isinstance(times, int):
+            nw_time={"s":times,"e":times,"m":times}
+        elif isinstance(times, dict):
+            nw_time = {"s": times['start'], "e": times['end'], "m": int((times['end']+times['start'])/2)}
+        else:
+            nw_time = {"s": 0, "e": 0, "m": 0}
+
+        query = "".join([match_query, where_query, return_query])
         res = self.connector.run(query, params)
-        ties = [(x['sender'], x['receiver'], x['time'], {'weight': x['weight'], 'p1': x['param1'], 'p2': x['param2']})
+        ties = [(x['sender'], x['receiver'], nw_time['m'], {'weight': x['agg_weight'], 't1': nw_time['s'], 't2': nw_time['e'], 'occurences': x['occurrences'] })
                 for x in res]
         return ties
 
@@ -348,53 +332,6 @@ class neo4j_network(MutableSequence):
 
         self.add_query(query, params)
 
-    def insert_edges_multiple_jit(self,ties):
-        if self.graph_direction == "REVERSE":
-            egos=np.array([x[1] for x in ties])
-            alters=np.array([x[0] for x in ties])
-        else:
-            egos=np.array([x[0] for x in ties])
-            alters=np.array([x[1] for x in ties])
-        times=np.array([x[2] for x in ties])
-        weights = np.array([x[3] for x in ties])
-        param1 = np.array([x[4] for x in ties])
-        param2= np.array([x[5] for x in ties])
-
-        unique_egos=np.unique(egos)
-        sets=[]
-        for u_ego in unique_egos:
-            mask=egos==u_ego
-            subalters=alters[mask]
-            subtimes=times[mask]
-            subweights=weights[mask]
-            subp1 = param1[mask]
-            subp2 = param2[mask]
-
-            ties_formatted = [{"alter": int(x[0]), "time": int(x[1]), "weight": float(x[2]),
-                               "p1": int(x[3]), "p2": int(x[4])}
-                              for x in zip(subalters.tolist(),subtimes.tolist(),subweights.tolist(),subp1.tolist(),subp2.tolist())]
-            ties_formatted = [{"alter": int(x[0]), "time": int(x[1]), "weight": float(x[2]),
-                               "p1": 0, "p2": 0}
-                              for x in zip(subalters.tolist(),subtimes.tolist(),subweights.tolist())]
-            params={'ego':int(u_ego),'ties':ties_formatted}
-            query = ''.join([" MATCH (a:word {token_id: $ego}) WITH a UNWIND $ties as tie MATCH (b:word {token_id: tie.alter}) ",self.creation_statement," (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, p1:tie.p1,p2:tie.p2})<-[:onto]-(a)"])
-            self.add_query(query, params.copy())
-            #sets.append(set)
-        #params={"sets":sets}
-        #query = ''.join(["UNWIND $sets as set MATCH (a:word {token_id: set.ego}) WITH a,set UNWIND set.ties as tie MATCH (b:word {token_id: tie.alter}) ",self.creation_statement,"  (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, p1:tie.p1,p2:tie.p2})<-[:onto]-(a)"])
-
-        #self.add_query(query, params)
-
-
-    def insert_edges(self, ego, ties):
-        """
-        Add ties from a given ego node u->v
-        :param ties: Set of Tuples (v,Time,{"weight":x})
-        :return: None
-        """
-        ties = [(ego, x[0], x[1], x[2]) for x in ties]
-        self.insert_edges_multiple(ties)
-
     def add_token(self, id, token):
         # Update class
         self.tokens.append(token)
@@ -415,30 +352,64 @@ class neo4j_network(MutableSequence):
         self.add_queries(queries)
 
     # %% Conditoning functions
-    def condition(self, years):
+    def condition(self, years, tokens, weight_cutoff=None, depth=None):
+        if not isinstance(tokens,list): tokens=[tokens]
+        # Work from ID list
+        tokens = self.ensure_ids(tokens)
         if self.conditioned == False:  # This is the first conditioning
             # Preserve node and token lists
             self.neo_ids = copy.deepcopy(self.ids)
             self.neo_tokens = copy.deepcopy(self.tokens)
             self.neo_token_id_dict = copy.deepcopy(self.token_id_dict)
+            # Build graph
+            self.graph=self.create_empty_graph()
+            # Add starting nodes
+            self.graph.add_nodes_from(tokens)
+            # Query Neo4j
+            try:
+                self.graph.add_edges_from(self.query_multiple_nodes(tokens,years,weight_cutoff))
+            except:
+                logging.error("Could not condition graph by query method.")
+
+            # Update IDs and Tokens to reflect conditioning
+            new_ids=list(self.graph.nodes)
+            self.tokens = [self.get_token_from_id(x) for x in new_ids]
+            self.ids = new_ids
+            self.update_dicts()
+
+
+            # Set conditioning true
+            self.conditioned=True
+
         else:  # Conditioning on condition
             pass
 
         # Continue conditioning
 
-    def decondition(self, write=True):
+    def decondition(self, write=False):
         # Reset token lists to original state.
         self.ids = self.neo_ids
         self.tokens = self.neo_tokens
         self.token_id_dict = self.neo_token_id_dict
 
         # Decondition
+        self.delete_graph()
+        self.conditioned=False
 
         if write==True:
             self.write_queue()
         else:
             self.neo_queue=[]
 
+
+    # %% Graph abstractions - for now only networkx
+    def create_empty_graph(self):
+
+        return nx.MultiDiGraph()
+
+    def delete_graph(self):
+
+        self.graph=None
 
 
     # %% Utility functioncs
@@ -477,3 +448,23 @@ class neo4j_network(MutableSequence):
         except:
             raise LookupError("".join(["ID of token ", token, " missing. Token not in network?"]))
         return id
+
+    def ensure_ids(self, tokens):
+        """This is just to confirm mixed lists of tokens and ids get converted to ids"""
+        if isinstance(tokens, list):
+            return [self.get_id_from_token(x) if not isinstance(x, int) else x for x in tokens]
+        else:
+            if not isinstance(tokens, int):
+                return self.get_id_from_token(tokens)
+            else:
+                return tokens
+
+    def ensure_tokens(self, ids):
+        """This is just to confirm mixed lists of tokens and ids get converted to ids"""
+        if isinstance(ids, list):
+            return [self.get_token_from_id(x) if not isinstance(x, int) else x for x in ids]
+        else:
+            if not isinstance(ids, int):
+                return self.get_token_from_id(ids)
+            else:
+                return ids

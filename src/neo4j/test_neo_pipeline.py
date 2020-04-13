@@ -42,7 +42,6 @@ if __name__ == "__main__":
 
     # %% Main Loop:
     years = range(1990, 2020)
-    years = [1990]
     results = []
     for year in years:
         logging.info("---------- Starting year %i ----------" % year)
