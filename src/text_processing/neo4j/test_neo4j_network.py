@@ -1,5 +1,5 @@
 from unittest import TestCase
-from NLP.src.neo4j.neo4j_network import neo4j_network
+from NLP.src.text_processing.neo4j.neo4j_network import neo4j_network
 
 
 class Testneo4j_network(TestCase):

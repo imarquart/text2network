@@ -1,10 +1,4 @@
-
-import itertools
 import numpy as np
-import networkx as nx
-import scipy as sp
-from NLP.utils.delwords import create_stopword_strings
-
 
 
 def calculate_cutoffs(x, method="mean", percent=100, max_degree=100,min_cut=0.001):

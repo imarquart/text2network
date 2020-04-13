@@ -1,15 +1,9 @@
 from collections.abc import MutableSequence
-from torch.utils.data import Dataset
 import logging
-from NLP.utils.twowaydict import TwoWayDict
+from NLP.src.utils.twowaydict import TwoWayDict
 import numpy as np
 import neo4j
 import copy
-import asyncio
-from collections import deque
-import requests
-import time
-import aiohttp
 
 try:
     import networkx as nx

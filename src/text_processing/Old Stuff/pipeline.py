@@ -15,7 +15,7 @@ from NLP.src.process_sentences_network import process_sentences_network
 from NLP.src.reduce_network import reduce_network, moving_avg_networks, min_symmetric_network,save_merged_ego_graph
 from NLP.src.run_bert import bert_args, run_bert
 from NLP.src.text_processing.preprocess_files_HBR import preprocess_files_HBR
-from NLP.utils.hash_file import hash_file, check_step, complete_step
+from NLP.src.utils.hash_file import hash_file, check_step, complete_step
 from NLP.utils.load_bert import get_bert_and_tokenizer
 
 # %% Config

@@ -1,24 +1,9 @@
-
-from sklearn.cluster import SpectralClustering
-import torch
-from NLP.src.datasets.dataloaderX import DataLoaderX
 from sklearn.decomposition import PCA
 import numpy as np
-import tables
-import networkx as nx
-import os
-from tqdm import tqdm
-from sklearn.preprocessing import normalize
-import matplotlib.pyplot as plt
-from numpy import inf
 from sklearn.cluster import KMeans
 import hdbscan
-import itertools
-from NLP.utils.delwords import create_stopword_list
-from torch.utils.data import BatchSampler, SequentialSampler
-import time
-from sklearn.cluster import MeanShift, estimate_bandwidth
-from NLP.src.datasets.tensor_dataset import tensor_dataset, tensor_dataset_collate_batchsample
+from NLP.src.utils.delwords import create_stopword_list
+from NLP.src.datasets.tensor_dataset import tensor_dataset
 
 
 def create_clusters(database, tokenizer, start_token, nr_clusters, cutoff=10, dset_method=0):

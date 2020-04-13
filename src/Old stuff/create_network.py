@@ -15,7 +15,7 @@ from numpy import inf
 from sklearn.cluster import KMeans
 import hdbscan
 import itertools
-from NLP.utils.delwords import create_stopword_list
+from NLP.src.utils.delwords import create_stopword_list
 from torch.utils.data import BatchSampler, SequentialSampler
 import time
 from sklearn.cluster import MeanShift, estimate_bandwidth

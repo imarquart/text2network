@@ -1,18 +1,15 @@
 # TODO: Commment
 # TODO: Add Logger
 
-import torch
 from NLP.src.datasets.dataloaderX import DataLoaderX
 import numpy as np
 import networkx as nx
 from tqdm import tqdm
-import matplotlib.pyplot as plt
-import itertools
-from NLP.utils.delwords import create_stopword_list
+from NLP.src.utils.delwords import create_stopword_list
 from torch.utils.data import BatchSampler, SequentialSampler
 import time
 from NLP.src.datasets.tensor_dataset import tensor_dataset, tensor_dataset_collate_batchsample
-from NLP.utils.rowvec_tools import simple_norm, get_weighted_edgelist, calculate_cutoffs, add_to_networks
+from NLP.utils.rowvec_tools import simple_norm, add_to_networks
 
 
 def create_network_all(database, tokenizer, batch_size=0, dset_method=0, cutoff_percent=80):

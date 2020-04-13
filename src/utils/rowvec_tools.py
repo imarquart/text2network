@@ -1,9 +1,5 @@
-
-import itertools
 import numpy as np
-import networkx as nx
-import scipy as sp
-from NLP.utils.delwords import create_stopword_strings
+from NLP.src.utils.delwords import create_stopword_strings
 
 
 def inverse_edge_weight(u, v, d):

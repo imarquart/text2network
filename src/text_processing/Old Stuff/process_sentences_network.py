@@ -6,17 +6,17 @@ import tables
 import time
 import logging
 import networkx as nx
-from NLP.utils.rowvec_tools import simple_norm, get_weighted_edgelist, calculate_cutoffs, add_to_networks
-from NLP.src.datasets.text_dataset import text_dataset_subset, text_dataset_collate_batchsample
+from NLP.utils.rowvec_tools import simple_norm, add_to_networks
+from NLP.src.datasets.text_dataset import text_dataset, text_dataset_collate_batchsample
 from NLP.src.datasets.dataloaderX import DataLoaderX
-from NLP.src.text_processing.get_bert_embeddings import get_bert_embeddings
+from NLP.src.text_processing.get_bert_tensor import get_bert_tensor
 from torch.utils.data import BatchSampler, SequentialSampler
-from NLP.utils.delwords import create_stopword_list
-from NLP.utils.load_bert import get_bert_and_tokenizer
+from NLP.src.utils.delwords import create_stopword_list
 import tqdm
 
 
-def process_embeddings(bert_folder, text_db, interest_set, MAX_SEQ_LENGTH, batch_size):
+def process_sentences_network(tokenizer, bert, text_db, MAX_SEQ_LENGTH, DICT_SIZE, batch_size, nr_workers=0,
+                              cutoff_percent=80,max_degree=100):
     """
     Extracts pre-processed sentences, gets predictions by BERT and creates a network
 
@@ -36,13 +36,11 @@ def process_embeddings(bert_folder, text_db, interest_set, MAX_SEQ_LENGTH, batch
     """
     tables.set_blosc_max_threads(15)
 
-    tokenizer, bert = get_bert_and_tokenizer(bert_folder, True, True, True)
-
     # %% Initialize text dataset
-    dataset = text_dataset_subset(text_db, interest_set, tokenizer, MAX_SEQ_LENGTH)
+    dataset = text_dataset(text_db, tokenizer, MAX_SEQ_LENGTH)
     logging.info("Number of sentences found: %i"%dataset.nitems)
     batch_sampler = BatchSampler(SequentialSampler(range(0, dataset.nitems)), batch_size=batch_size, drop_last=False)
-    dataloader = DataLoaderX(dataset=dataset, batch_size=None, sampler=batch_sampler, num_workers=0,
+    dataloader = DataLoaderX(dataset=dataset, batch_size=None, sampler=batch_sampler, num_workers=nr_workers,
                              collate_fn=text_dataset_collate_batchsample, pin_memory=False)
 
     # Push BERT to GPU
@@ -52,15 +50,16 @@ def process_embeddings(bert_folder, text_db, interest_set, MAX_SEQ_LENGTH, batch
     bert.to(device)
     bert.eval()
 
-    # Get token id's for interest set
-    interest_tokens= tokenizer.convert_tokens_to_ids(interest_set)
-    DICT_SIZE = tokenizer.vocab_size
-
     # Create Stopwords
     delwords = create_stopword_list(tokenizer)
+    # Create Graphs
+    graph = nx.MultiDiGraph()
+    context_graph = nx.MultiDiGraph()
+    attention_graph = nx.MultiDiGraph()
 
-    # Create dict to hold data
-    pickle_list=[]
+    graph.add_nodes_from(range(0, tokenizer.vocab_size))
+    context_graph.add_nodes_from(range(0, tokenizer.vocab_size))
+    attention_graph.add_nodes_from(range(0, tokenizer.vocab_size))
 
     # Counter for timing
     model_timings = []
@@ -75,7 +74,8 @@ def process_embeddings(bert_folder, text_db, interest_set, MAX_SEQ_LENGTH, batch
         # This seems to allow slightly higher batch sizes on my GPU
         # torch.cuda.empty_cache()
         # Run BERT and get predictions
-        predictions, attn, embeddings = get_bert_embeddings(0, bert, batch, pad_token_id=tokenizer.pad_token_id, mask_token_id=tokenizer.mask_token_id, device=device)
+        predictions, attn = get_bert_tensor(0, bert, batch, tokenizer.pad_token_id, tokenizer.mask_token_id, device,
+                                            return_max=False)
 
         # compute model timings time
         prepare_time = time.time() - start_time - load_time
@@ -96,8 +96,8 @@ def process_embeddings(bert_folder, text_db, interest_set, MAX_SEQ_LENGTH, batch
 
 
             #%% Extract attention for sequence
-            seq_attn = attn[sequence_mask, :].cpu()
-            seq_embeddings = embeddings[sequence_mask,:].cpu()
+            # DISABLED ATTENTION
+            #seq_attn = attn[sequence_mask, :].cpu()
 
             # Curtail to tokens in sequence
             # attention row vectors for each token are of
@@ -119,19 +119,55 @@ def process_embeddings(bert_folder, text_db, interest_set, MAX_SEQ_LENGTH, batch
             for pos, token in enumerate(token_ids[sequence_mask]):
                 # Should all be np
                 token=token.item()
-                if token in interest_tokens:
+                if token not in delwords:
                     replacement = dists[pos, :]
-                    token_attention = seq_attn[pos]
-                    token_embeddings = seq_embeddings[pos,:]
-                    seq_tokens=tokenizer.convert_ids_to_tokens(token_ids[sequence_mask].numpy())
 
-                    pickle_list.append({"Token": token, "Position": pos, "Sequence": sequence_id, "Tokens": seq_tokens,
-                                        "Replacement": replacement, "Attention": token_attention, "Embeddings": token_embeddings})
+                    ## Context distributions
+                    context_index = np.zeros([MAX_SEQ_LENGTH], dtype=np.bool)
+                    context_index[:sequence_size] = True
+                    context_dist = dists[context_index, :]
 
                     ## Attention
                     # DISABLED ATTENTION
                     #context_att = (
                     #    torch.sum((seq_attn[pos] * context_dist.transpose(-1, 0)).transpose(-1, 0), dim=0).unsqueeze(0))
+
+                    ## Context Element
+                    context = (
+                        torch.sum((seq_ce[pos] * context_dist.transpose(-1, 0)).transpose(-1, 0), dim=0).unsqueeze(0))
+                    # Flatten, since it is one row each
+                    replacement = replacement.numpy().flatten()
+
+                    # DISABLED ATTENTION
+                    #context_att = context_att.numpy().flatten()
+
+                    context = context.numpy().flatten()
+
+                    # Sparsify
+                    # TODO: try without setting own-link to zero!
+                    replacement[token]=0
+                    replacement[replacement==np.min(replacement)]=0
+                    context[context==np.min(context)]=0
+
+                    # DISABLED ATTENTION
+                    # context_att[context_att==np.min(context_att)]=0
+
+                    # Get rid of delnorm links
+                    replacement[delwords]=0
+                    context[delwords]=0
+
+                    # DISABLED ATTENTION
+                    # context_att[delwords]=0
+
+                    # We norm the distributions here
+                    replacement = simple_norm(replacement)
+                    context = simple_norm(context)
+
+                    # DISABLED ATTENTION
+                    # context_att = simple_norm(context_att)
+
+                    # Add values to network
+                    graph,context_graph,attention_graph=add_to_networks(graph,context_graph,attention_graph,replacement,context,context,token,cutoff_percent,max_degree,pos,sequence_id)
 
             del dists
 
@@ -149,4 +185,4 @@ def process_embeddings(bert_folder, text_db, interest_set, MAX_SEQ_LENGTH, batch
     logging.info("Average Processing Time: %s seconds" % (np.mean(process_timings)))
     logging.info("Ratio Load/Operations: %s seconds" % (np.mean(load_timings) / np.mean(process_timings + model_timings)))
 
-    return pickle_list
+    return graph, context_graph, attention_graph
