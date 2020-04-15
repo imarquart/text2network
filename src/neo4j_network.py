@@ -230,6 +230,7 @@ class neo4j_network(MutableSequence):
             self.connector.run_multiple(self.neo_queue, self.neo_batch_size)
 
 
+
             self.neo_queue = []
 
     def non_con_write_queue(self):
@@ -371,6 +372,11 @@ class neo4j_network(MutableSequence):
             self.ids = new_ids
             self.update_dicts()
 
+            # Set additional attributes
+            att_list=[{"token": x} for x in self.tokens]
+            att_dict=dict(list(zip(self.ids,att_list)))
+            nx.set_node_attributes(self.graph, att_dict)
+
 
             # Set conditioning true
             self.conditioned=True
@@ -456,9 +462,9 @@ class neo4j_network(MutableSequence):
     def ensure_tokens(self, ids):
         """This is just to confirm mixed lists of tokens and ids get converted to ids"""
         if isinstance(ids, list):
-            return [self.get_token_from_id(x) if not isinstance(x, int) else x for x in ids]
+            return [self.get_token_from_id(x) if not isinstance(x, str) else x for x in ids]
         else:
-            if not isinstance(ids, int):
+            if not isinstance(ids, str):
                 return self.get_token_from_id(ids)
             else:
                 return ids

@@ -100,14 +100,17 @@ def pre_process_sentences_COCA(files,database,MAX_SEQ_LENGTH,char_mult,max_seq=0
             text = re.split("##\d+\s", raw)[1]
 
             # Some pre processing
-            text=text.replace('<p>','')
+            # Some pre processing
+            text = text.replace('<p>', '')
             text = text.replace('@', '')
             text = text.replace(" \'", "'")
             text = text.replace("n\'t", "not")
             text = text.replace(" .", ".")
             text = text.replace(" ,", ",")
             text = text.replace("...", ".")
-            killchars=['#','<p>','$','%','(',')','*','/','<','>','@','\\','{','}','[',']','+','^','~','"']
+            killchars = ['#', '<p>', '$', '%', '(', ')', '*', '/', '<', '>', '@', '\\', '{', '}', '[', ']', '+', '^',
+                         '~',
+                         '"']
             for k in killchars: text=str.replace(text,k,'')
             text = text.strip()
             text = " ".join(re.split("\s+", text, flags=re.UNICODE))
