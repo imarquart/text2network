@@ -308,7 +308,8 @@ def train(args, train_dataset, model, tokenizer):
                             disable=args.local_rank not in [-1, 0])
     set_seed(args)  # Added here for reproducibility (even between python 2 and 3)
     for _ in train_iterator:
-        epoch_iterator = tqdm(train_dataloader, desc="Iteration", leave=False, position=0,disable=args.local_rank not in [-1, 0])
+        descr="Epoch %i, Iteration" % max(1,global_step/len(train_dataloader))
+        epoch_iterator = tqdm(train_dataloader, desc=descr, leave=False, position=0,disable=args.local_rank not in [-1, 0])
         for step, batch in enumerate(epoch_iterator):
 
             # Skip past any already trained steps if resuming training
@@ -353,6 +354,7 @@ def train(args, train_dataset, model, tokenizer):
                             tb_writer.add_scalar('eval_{}'.format(key), value, global_step)
                     tb_writer.add_scalar('lr', scheduler.get_lr()[0], global_step)
                     tb_writer.add_scalar('loss', (tr_loss - logging_loss) / args.logging_steps, global_step)
+
                     logging_loss = tr_loss
 
                 if args.local_rank in [-1, 0] and args.save_steps > 0 and global_step % args.save_steps == 0:
@@ -474,7 +476,6 @@ def run_bert(args):
     logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                         datefmt='%m/%d/%Y %H:%M:%S',
                         level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN)
-    logger.setLevel(logging.WARN)
     #logger.warning("Process rank: %s, device: %s, n_gpu: %s, distributed training: %s, 16-bits training: %s",
      #              args.local_rank, device, args.n_gpu, bool(args.local_rank != -1), args.fp16)
 

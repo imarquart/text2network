@@ -138,7 +138,6 @@ def process_sentences_neo4j(tokenizer, bert, text_db, neograph, year, MAX_SEQ_LE
             del dists
 
         del predictions #, attn, token_ids, seq_ids, batch
-        #neograph.write_queue()
         # compute processing time
         process_timings.append(time.time() - start_time - prepare_time - load_time)
         # New start time

@@ -37,7 +37,7 @@ class configuration:
 
     #%% BERT Training options
     gpu_batch=100
-    epochs=200
+    epochs=400
     loss_limit=0.5
     warmup_steps = 0
     mlm_probability = 0.15

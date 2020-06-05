@@ -8,18 +8,6 @@ import os
 logger = logging.getLogger(__name__)
 
 
-def get_bert_and_tokenizer_local(modelpath):
-    output_vocab_file = os.path.join(modelpath, 'bert-base-uncased-vocab.txt')
-    output_model_file = os.path.join(modelpath, 'bert-base-uncased-pytorch_model.bin')
-    output_config_file = os.path.join(modelpath, 'bert-base-uncased-config.json')
-
-    tokenizer = BertTokenizer.from_pretrained(output_vocab_file)
-    config = BertConfig.from_json_file(output_config_file)
-    config.output_attentions = True
-    bert = BertForMaskedLM.from_pretrained(output_model_file, config=config)
-    return tokenizer, bert
-
-
 def get_bert_and_tokenizer(modelpath,load_local=False,attentions=True,hidden=False):
     logger.setLevel(logging.WARN)
     if load_local==True:
@@ -46,5 +34,8 @@ def get_bert_and_tokenizer(modelpath,load_local=False,attentions=True,hidden=Fal
                 raise ImportError
         except:
             raise ImportError
+    #num_added_toks = tokenizer.add_tokens(['esmt', 'vericourt'])
+    #print('We have added', num_added_toks, 'tokens, total:', len(tokenizer))
+    #bert.resize_token_embeddings(len(tokenizer))
     logger.setLevel(logging.INFO)
     return tokenizer, bert

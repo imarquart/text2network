@@ -26,7 +26,7 @@ t_size = 1
 maxn = 15000
 par = "nonpar"
 db_uri = "http://localhost:7474"
-db_pwd = ('neo4j', 'nlp')
+db_pwd = ('neo4j', 'esmt')
 neo_creds = (db_uri, db_pwd)
 
 if __name__ == "__main__":
@@ -85,9 +85,9 @@ if __name__ == "__main__":
                          cfg.loss_limit, cfg.gpu_batch, cfg.epochs,
                          cfg.warmup_steps)
         torch.cuda.empty_cache()
-        logging.disable(cfg.subprocess_level)
+        #logging.disable(cfg.subprocess_level)
         results = run_bert(args)
-        logging.disable(logging.NOTSET)
+        #logging.disable(logging.NOTSET)
         logging.info("BERT results %s" % results)
         logging.info("BERT training finished in %s seconds" % (time.time() - start_time))
         complete_step(bert_folder, hash)
@@ -105,7 +105,7 @@ if __name__ == "__main__":
         tokenizer, bert = get_bert_and_tokenizer(bert_folder, True)
         logging.disable(logging.NOTSET)
         DICT_SIZE = tokenizer.vocab_size
-        year_var = int(''.join([str(year), "0101"]))
+        year_var = 1
 
         # Re-setup graph
         neograph = neo4j_network(neo_creds, queue_size=q_size, tie_query_limit=t_size)
@@ -148,8 +148,6 @@ if __name__ == "__main__":
         nr_nodes = neograph.connector.run("MATCH (n) RETURN count(n) AS nodes")[0]['nodes']
         nr_ties = neograph.connector.run("MATCH ()-->() RETURN count(*) AS ties")[0]['ties']
         logging.info("After execution: Network has %i nodes and %i ties" % (nr_nodes, nr_ties))
-        results.append(((par, year_var, q_size, maxn, time.time() - start_time, nr_nodes, nr_ties)))
-        # print(*results, sep="\n")
+        results=(((par, year_var, q_size, maxn, time.time() - start_time, nr_nodes, nr_ties)))
+        print(*results, sep="\n")
         del neograph
-
-print(*results, sep="\n")

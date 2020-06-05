@@ -17,6 +17,8 @@ def create_stopword_list(tokenizer):
     pronouns = ['we', 'us', 'my', 'yourself', 'you', 'me', 'he', 'her', 'his', 'him', 'she', 'they', 'their', 'them',
                 'me', 'myself', 'himself', 'herself', 'themselves']
 
+    pronouns = ['herself']
+
     numericals=list(range(0,3000))
     numericals=[str(x) for x in numericals]
     numericals_ids = tokenizer.convert_tokens_to_ids(numericals)
@@ -62,7 +64,7 @@ def create_stopword_strings():
     numbers.extend(list(punctuation))
     pronouns = ['we', 'us', 'my', 'yourself', 'you', 'me', 'he', 'her', 'his', 'him', 'she', 'they', 'their', 'them',
                 'me', 'myself', 'himself', 'herself', 'themselves']
-
+    pronouns = [ 'herself']
     numericals=list(range(0,3000))
     numericals=[str(x) for x in numericals]
 
