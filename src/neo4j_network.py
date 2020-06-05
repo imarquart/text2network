@@ -1,6 +1,6 @@
 from collections.abc import MutableSequence
 import logging
-from NLP.src.utils.twowaydict import TwoWayDict
+from src.utils.twowaydict import TwoWayDict
 import numpy as np
 import neo4j
 import copy

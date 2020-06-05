@@ -20,20 +20,12 @@ class configuration:
 
     #%% Folders:
     model_dir = "D:/NLP/BERT-NLP/NLP/models"
-    data_folder = "E:/NLP"
-    text_folder = "D:/NLP/BERT-NLP/NLP/data"
-    nw_folder="/networksNoCut"
-    merged_folder="/merges"
-    sums_folder=''.join([nw_folder,'/sums'])
-    ma_folder=''.join([nw_folder,'/MAsums'])
-    embed_folder="/embeddings"
-    np_folder = ''.join([nw_folder, '/np_plural_sums'])
-    sumsym_folder=''.join([nw_folder, '/sum_sym'])
-    entropy_folder=''.join([nw_folder,'/entropy'])
-    cluster_xls = ''.join([data_folder,'/cluster_xls'])
+    data_folder = "D:/NLP/ESMTNLP/BERTNLP/data"
+    input_folder = "D:/NLP/ESMTNLP/BERTNLP/text"
+    text_folder = 'D:/NLP/ESMTNLP/BERTNLP/data/text'
+    nw_folder="/networks"
     plot_folder = ''.join([data_folder,'/plots/'])
-    clusterplot_folder = ''.join([data_folder,'/plots/'])
-    egoplot_folder = ''.join([data_folder,'/plots/ego'])
+
     #%% Logging
     subprocess_level=logging.INFO
 

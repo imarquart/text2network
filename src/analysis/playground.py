@@ -1,4 +1,4 @@
-from NLP.src.neo4j_network import neo4j_network
+from src.neo4j_network import neo4j_network
 import logging
 import pandas as pd
 import numpy as np

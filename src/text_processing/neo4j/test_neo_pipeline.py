@@ -6,15 +6,15 @@ import os
 import time
 
 import torch
-from NLP.src.neo4j_network import neo4j_network
+from src.neo4j_network import neo4j_network
 
-from NLP.config.config import configuration
-from NLP.src.text_processing.neo4j.process_sentences_neo4j import process_sentences_neo4j
-from NLP.src.text_processing.run_bert import bert_args, run_bert
-from NLP.src.text_processing.preprocess_files_HBR import preprocess_files_HBR
-from NLP.src.text_processing.preprocess_files import pre_process_sentences_COCA
-from NLP.src.utils.hash_file import hash_file, check_step, complete_step
-from NLP.src.utils.load_bert import get_bert_and_tokenizer
+from config.config import configuration
+from src.text_processing.neo4j.process_sentences_neo4j import process_sentences_neo4j
+from src.text_processing.run_bert import bert_args, run_bert
+from src.text_processing.preprocess_files_HBR import preprocess_files_HBR
+from src.text_processing.preprocess_files import pre_process_sentences_COCA
+from src.utils.hash_file import hash_file, check_step, complete_step
+from src.utils.load_bert import get_bert_and_tokenizer
 
 # %% Config
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',

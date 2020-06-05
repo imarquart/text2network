@@ -20,7 +20,7 @@ using a masked language modeling (MLM) loss.
 """
 
 from __future__ import absolute_import, division, print_function
-from NLP.src.utils.load_bert import get_bert_and_tokenizer
+from src.utils.load_bert import get_bert_and_tokenizer
 import argparse
 import glob
 import logging

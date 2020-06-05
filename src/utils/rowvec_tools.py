@@ -1,5 +1,5 @@
 import numpy as np
-from NLP.src.utils.delwords import create_stopword_strings
+from src.utils.delwords import create_stopword_strings
 
 
 def inverse_edge_weight(u, v, d):

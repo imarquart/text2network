@@ -8,13 +8,13 @@ import logging
 import asyncio
 
 
-from NLP.src.utils.rowvec_tools import simple_norm
-from NLP.src.utils.neo_row_tools import  get_weighted_edgelist, calculate_cutoffs
-from NLP.src.datasets.text_dataset import text_dataset, text_dataset_collate_batchsample
-from NLP.src.datasets.dataloaderX import DataLoaderX
-from NLP.src.text_processing.get_bert_tensor import get_bert_tensor
+from src.utils.rowvec_tools import simple_norm
+from src.utils.neo_row_tools import  get_weighted_edgelist, calculate_cutoffs
+from src.datasets.text_dataset import text_dataset, text_dataset_collate_batchsample
+from src.datasets.dataloaderX import DataLoaderX
+from src.text_processing.get_bert_tensor import get_bert_tensor
 from torch.utils.data import BatchSampler, SequentialSampler
-from NLP.src.utils.delwords import create_stopword_list
+from src.utils.delwords import create_stopword_list
 import tqdm
 
 
