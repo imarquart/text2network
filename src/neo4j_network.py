@@ -1,9 +1,12 @@
-from collections.abc import MutableSequence
-import logging
-from src.utils.twowaydict import TwoWayDict
-import numpy as np
-import neo4j
 import copy
+import logging
+from collections.abc import MutableSequence
+
+import numpy as np
+
+# import neo4j
+import neo4jCon as neo_connector
+from src.utils.twowaydict import TwoWayDict
 
 try:
     import networkx as nx
@@ -51,7 +54,7 @@ class neo4j_network(MutableSequence):
         self.neo_queue = []
         self.neo_batch_size = neo_batch_size
         self.queue_size = queue_size
-        self.connector = neo4j.Connector(self.neo4j_connection, self.neo4j_credentials)
+        self.connector = neo_connector.Connector(self.neo4j_connection, self.neo4j_credentials)
         # Init tokens
         self.init_tokens()
         # Init parent class
@@ -172,7 +175,9 @@ class neo4j_network(MutableSequence):
         if 'timeindex' not in constr:
             query = "CREATE INDEX timeindex FOR (a:edge) ON (a.time)"
             self.add_query(query)
-
+        if 'contimeindex' not in constr:
+            query = "CREATE INDEX contimeindex FOR (a:context) ON (a.time)"
+            self.add_query(query)
         # Need to write first because create and structure changes can not be batched
         self.non_con_write_queue()
         # Create nodes in neo db
@@ -215,10 +220,10 @@ class neo4j_network(MutableSequence):
 
         if params is not None:
             assert isinstance(params, list)
-            statements = [neo4j.Statement(q, p) for (q, p) in zip(query, params)]
+            statements = [neo_connector.Statement(q, p) for (q, p) in zip(query, params)]
             self.neo_queue.extend(statements)
         else:
-            statements = [neo4j.Statement(q) for (q) in query]
+            statements = [neo_connector.Statement(q) for (q) in query]
             self.neo_queue.extend(statements)
 
         # Check for queue size if not conditioned!
@@ -280,36 +285,131 @@ class neo4j_network(MutableSequence):
 
         # Format time to set for network
         if isinstance(times, int):
-            nw_time={"s":times,"e":times,"m":times}
+            nw_time = {"s": times, "e": times, "m": times}
         elif isinstance(times, dict):
-            nw_time = {"s": times['start'], "e": times['end'], "m": int((times['end']+times['start'])/2)}
+            nw_time = {"s": times['start'], "e": times['end'], "m": int((times['end'] + times['start']) / 2)}
         else:
             nw_time = {"s": 0, "e": 0, "m": 0}
 
         query = "".join([match_query, where_query, return_query])
         res = self.connector.run(query, params)
-        ties = [(x['sender'], x['receiver'], nw_time['m'], {'weight': x['agg_weight'], 't1': nw_time['s'], 't2': nw_time['e'], 'occurences': x['occurrences'] })
+        ties = [(x['sender'], x['receiver'], nw_time['m'],
+                 {'weight': x['agg_weight'], 't1': nw_time['s'], 't2': nw_time['e'], 'occurences': x['occurrences']})
                 for x in res]
         return ties
 
-    def insert_edges_multiple(self,ties):
-        if self.graph_direction == "REVERSE":
-            egos=np.array([x[1] for x in ties])
-            alters=np.array([x[0] for x in ties])
+    def query_multiple_nodes_context(self, ids, times=None, weight_cutoff=None, context_direction="FORWARD"):
+        """
+        Query the context of multiple nodes
+        :param ids: list of id's
+        :param times: either a number format YYYYMMDD, or an interval dict {"start":YYYYMMDD,"end":YYYYMMDD}
+        :return: list of tuples (u,v,Time,{weight:x})
+        """
+        # Allow cutoff value of (non-aggregated) weights and set up time-interval query
+        if weight_cutoff is not None:
+            where_query = ''.join([" WHERE c.weight >=", str(weight_cutoff), " "])
+            if isinstance(times, dict):
+                where_query = ''.join([where_query, " AND  $times.start <= c.time<= $times.end "])
         else:
-            egos=np.array([x[0] for x in ties])
-            alters=np.array([x[1] for x in ties])
-        times=np.array([x[2] for x in ties])
-        dicts = np.array([x[3] for x in ties])
+            if isinstance(times, dict):
+                where_query = "WHERE  $times.start <= c.time<= $times.end "
+            else:
+                where_query = ""
+        # Create params with or without time
+        if isinstance(times, dict) or isinstance(times, int):
+            params = {"ids": ids, "times": times}
+        else:
+            params = {"ids": ids}
+        # Create query depending on graph direction and whether time variable is queried via where or node property
+        # REVERSE: (focal)->(context) if (focal)<-(alter) in (context)
+        if context_direction == "REVERSE":
+            return_query = ''.join(
+                [" RETURN b.token_id AS context_token,a.token_id AS focal_token,count(c.time) AS occurrences,",
+                 self.aggregate_operator, "(c.weight) AS agg_weight order by agg_weight"])
+            if isinstance(times, int):
+                match_query = "UNWIND $ids AS id MATCH p=(a: word {token_id:id})<-[: onto]-(r:edge) - [: conto]->(c:context {time:$times}) - [: conto]->(b:word)"
+            else:
+                match_query = "UNWIND $ids AS id MATCH p=(a: word {token_id:id})<-[: onto]-(r:edge) - [: conto]->(c:context) - [: conto]->(b:word)"
+        else:  # FORWARD: (focal)->(context) if (focal)->(alter) in (context)
+            return_query = ''.join(
+                [" RETURN b.token_id AS context_token,a.token_id AS focal_token,count(c.time) AS occurrences,",
+                 self.aggregate_operator, "(c.weight) AS agg_weight order by agg_weight"])
 
-        unique_egos=np.unique(egos)
-        sets=[]
-        if len(unique_egos)==1:
+            if isinstance(times, int):
+                match_query = "UNWIND $ids AS id MATCH p=(a: word {token_id:id})-[: onto]->(r:edge) - [: conto]->(c:context {time:$times}) - [: conto]->(b:word)"
+            else:
+                match_query = "UNWIND $ids AS id MATCH p=(a: word {token_id:id})-[: onto]->(r:edge) - [: conto]->(c:context) - [: conto]->(b:word)"
+
+        # Format time to set for network
+        if isinstance(times, int):
+            nw_time = {"s": times, "e": times, "m": times}
+        elif isinstance(times, dict):
+            nw_time = {"s": times['start'], "e": times['end'], "m": int((times['end'] + times['start']) / 2)}
+        else:
+            nw_time = {"s": 0, "e": 0, "m": 0}
+
+        query = "".join([match_query, where_query, return_query])
+        res = self.connector.run(query, params)
+        ties = [(x['focal_token'], x['context_token'], nw_time['m'],
+                 {'weight': x['agg_weight'], 't1': nw_time['s'], 't2': nw_time['e'], 'occurences': x['occurrences']})
+                for x in res]
+        return ties
+
+    def insert_edges_context(self, ego, ties, contexts):
+        if self.graph_direction == "REVERSE":
+            egos = np.array([x[1] for x in ties])
+            alters = np.array([x[0] for x in ties])
+        else:
+            egos = np.array([x[0] for x in ties])
+            alters = np.array([x[1] for x in ties])
+        con_alters = np.array([x[1] for x in contexts])
+
+        times = np.array([x[2] for x in ties])
+        dicts = np.array([x[3] for x in ties])
+        con_times = np.array([x[2] for x in contexts])
+        con_dicts = np.array([x[3] for x in contexts])
+
+        unique_egos = np.unique(egos)
+        if len(unique_egos) == 1:
             ties_formatted = [{"alter": int(x[0]), "time": int(x[1]), "weight": float(x[2]['weight']),
                                "p1": (int(x[2]['p1']) if len(x[2]) > 1 else 0),
                                "p2": (int(x[2]['p2']) if len(x[2]) > 2 else 0)}
                               for x in zip(alters.tolist(), times.tolist(), dicts.tolist())]
-            params = {"ego": int(egos[0]), "ties":ties_formatted}
+            contexts_formatted = [{"alter": int(x[0]), "time": int(x[1]), "weight": float(x[2]['weight']),
+                                   "p1": (int(x[2]['p1']) if len(x[2]) > 1 else 0),
+                                   "p2": (int(x[2]['p2']) if len(x[2]) > 2 else 0)}
+                                  for x in zip(con_alters.tolist(), con_times.tolist(), con_dicts.tolist())]
+            params = {"ego": int(egos[0]), "ties": ties_formatted, "contexts": contexts_formatted}
+            query = ''.join(
+                [" MATCH (a:word {token_id: $ego}) WITH a UNWIND $ties as tie MATCH (b:word {token_id: tie.alter}) ",
+                 self.creation_statement,
+                 " (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, p1:tie.p1,p2:tie.p2})<-[:onto]-(a) WITH r UNWIND $contexts as con MATCH (q:word {token_id: con.alter}) WITH r,q,con ",
+                 self.creation_statement,
+                 " (r)-[:conto]->(c:context {weight:con.weight, time:con.time})-[:conto]->(q)"])
+        else:
+            logging.error("Batched edge creation with context for multiple egos not supported.")
+            raise NotImplementedError
+
+        self.add_query(query, params)
+
+    def insert_edges_multiple(self, ties):
+        if self.graph_direction == "REVERSE":
+            egos = np.array([x[1] for x in ties])
+            alters = np.array([x[0] for x in ties])
+        else:
+            egos = np.array([x[0] for x in ties])
+            alters = np.array([x[1] for x in ties])
+        times = np.array([x[2] for x in ties])
+        dicts = np.array([x[3] for x in ties])
+
+        unique_egos = np.unique(egos)
+        sets = []
+        if len(unique_egos) == 1:
+            ties_formatted = [{"alter": int(x[0]), "time": int(x[1]), "weight": float(x[2]['weight']),
+                               "p1": (int(x[2]['p1']) if len(x[2]) > 1 else 0),
+                               "p2": (int(x[2]['p2']) if len(x[2]) > 2 else 0)}
+                              for x in zip(alters.tolist(), times.tolist(), dicts.tolist())]
+            params = {"ego": int(egos[0]), "ties": ties_formatted}
             query = ''.join([" MATCH (a:word {token_id: $ego}) WITH a UNWIND $ties as tie MATCH (b:word {token_id: tie.alter}) ",self.creation_statement," (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, p1:tie.p1,p2:tie.p2})<-[:onto]-(a)"])
         else:
             for u_ego in unique_egos:
@@ -347,8 +447,8 @@ class neo4j_network(MutableSequence):
         self.add_queries(queries)
 
     # %% Conditoning functions
-    def condition(self, years, tokens, weight_cutoff=None, depth=None):
-        if not isinstance(tokens,list): tokens=[tokens]
+    def condition(self, years, tokens, weight_cutoff=None, depth=None, context=None):
+        if not isinstance(tokens, list): tokens = [tokens]
         # Work from ID list
         tokens = self.ensure_ids(tokens)
         if self.conditioned == False:  # This is the first conditioning
@@ -357,34 +457,106 @@ class neo4j_network(MutableSequence):
             self.neo_tokens = copy.deepcopy(self.tokens)
             self.neo_token_id_dict = copy.deepcopy(self.token_id_dict)
             # Build graph
-            self.graph=self.create_empty_graph()
+            self.graph = self.create_empty_graph()
             # Add starting nodes
             self.graph.add_nodes_from(tokens)
             # Query Neo4j
             try:
-                self.graph.add_edges_from(self.query_multiple_nodes(tokens,years,weight_cutoff))
+                self.graph.add_edges_from(self.query_multiple_nodes(tokens, years, weight_cutoff))
             except:
                 logging.error("Could not condition graph by query method.")
 
             # Update IDs and Tokens to reflect conditioning
-            new_ids=list(self.graph.nodes)
+            new_ids = list(self.graph.nodes)
             self.tokens = [self.get_token_from_id(x) for x in new_ids]
             self.ids = new_ids
             self.update_dicts()
 
             # Set additional attributes
-            att_list=[{"token": x} for x in self.tokens]
-            att_dict=dict(list(zip(self.ids,att_list)))
+            att_list = [{"token": x} for x in self.tokens]
+            att_dict = dict(list(zip(self.ids, att_list)))
             nx.set_node_attributes(self.graph, att_dict)
 
+            if depth == 1:
+                try:
+                    self.graph.add_edges_from(self.query_multiple_nodes(new_ids, years, weight_cutoff))
+                except:
+                    logging.error("Could not condition graph by query method.")
+                # Update IDs and Tokens to reflect conditioning
+                new_ids = list(self.graph.nodes)
+                self.tokens = [self.get_token_from_id(x) for x in new_ids]
+                self.ids = new_ids
+                self.update_dicts()
+
+                # Set additional attributes
+                att_list = [{"token": x} for x in self.tokens]
+                att_dict = dict(list(zip(self.ids, att_list)))
+                nx.set_node_attributes(self.graph, att_dict)
 
             # Set conditioning true
-            self.conditioned=True
+            self.conditioned = True
 
         else:  # Conditioning on condition
             pass
 
         # Continue conditioning
+
+    def condition_context(self, years, tokens, weight_cutoff=None, depth=None, context_direction="FORWARD"):
+        if not isinstance(tokens, list): tokens = [tokens]
+        # Work from ID list
+        tokens = self.ensure_ids(tokens)
+        if self.conditioned == False:  # This is the first conditioning
+            # Preserve node and token lists
+            self.neo_ids = copy.deepcopy(self.ids)
+            self.neo_tokens = copy.deepcopy(self.tokens)
+            self.neo_token_id_dict = copy.deepcopy(self.token_id_dict)
+            # Build graph
+            self.graph = self.create_empty_graph()
+            # Add starting nodes
+            self.graph.add_nodes_from(tokens)
+            # Query Neo4j
+            try:
+                self.graph.add_edges_from(
+                    self.query_multiple_nodes_context(tokens, years, weight_cutoff, context_direction))
+            except:
+                logging.error("Could not condition graph by query method.")
+
+            # Update IDs and Tokens to reflect conditioning
+            new_ids = list(self.graph.nodes)
+            self.tokens = [self.get_token_from_id(x) for x in new_ids]
+            self.ids = new_ids
+            self.update_dicts()
+
+            # Set additional attributes
+            att_list = [{"token": x} for x in self.tokens]
+            att_dict = dict(list(zip(self.ids, att_list)))
+            nx.set_node_attributes(self.graph, att_dict)
+
+            if depth == 1:
+                try:
+                    self.graph.add_edges_from(
+                        self.query_multiple_nodes_context(new_ids, years, weight_cutoff, context_direction))
+                except:
+                    logging.error("Could not condition graph by query method.")
+                # Update IDs and Tokens to reflect conditioning
+                new_ids = list(self.graph.nodes)
+                self.tokens = [self.get_token_from_id(x) for x in new_ids]
+                self.ids = new_ids
+                self.update_dicts()
+
+                # Set additional attributes
+                att_list = [{"token": x} for x in self.tokens]
+                att_dict = dict(list(zip(self.ids, att_list)))
+                nx.set_node_attributes(self.graph, att_dict)
+
+            # Set conditioning true
+            self.conditioned = True
+
+        else:  # Conditioning on condition
+            pass
+
+        # Continue conditioning
+
 
     def decondition(self, write=False):
         # Reset token lists to original state.
@@ -468,3 +640,16 @@ class neo4j_network(MutableSequence):
                 return self.get_token_from_id(ids)
             else:
                 return ids
+
+    def export_gefx(self, path):
+        if self.conditioned == True:
+            try:
+                # Relabel nodes
+                labeldict = dict(zip(self.ids, [self.get_token_from_id(x) for x in self.ids]))
+                reverse_dict = dict(zip([self.get_token_from_id(x) for x in self.ids], self.ids))
+                self.graph = nx.relabel_nodes(self.graph, labeldict)
+                nx.write_gexf(self.graph, path)
+                self.graph = nx.relabel_nodes(self.graph, reverse_dict)
+
+            except:
+                raise SystemError("Could not save to %s " % path)

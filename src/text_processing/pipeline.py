@@ -6,12 +6,12 @@ import os
 import time
 
 import torch
-from src.neo4j_network import neo4j_network
 
 from config.config import configuration
+from src.neo4j_network import neo4j_network
 from src.text_processing.neo4j.process_sentences_neo4j import process_sentences_neo4j
-from src.text_processing.run_bert import bert_args, run_bert
 from src.text_processing.preprocess_files_lines import preprocess_files_lines
+from src.text_processing.run_bert import bert_args, run_bert
 from src.utils.hash_file import hash_file, check_step, complete_step
 from src.utils.load_bert import get_bert_and_tokenizer
 
@@ -38,17 +38,15 @@ if __name__ == "__main__":
     input_folder = cfg.input_folder
     plot_folder = cfg.plot_folder
     bert_folder = ''.join([data_folder, '/bert'])
+    text_file = ''.join([text_folder, '/hbr2019.txt'])
+    text_db = ''.join([text_folder, '/hbr2019.h5'])
 
-    text_file = ''.join([text_folder, '/esmt.txt'])
-    text_db = ''.join([text_folder, '/esmt.h5'])
-
-
-    if not os.path.exists(text_folder): os.mkdir(text_folder)
     if not os.path.exists(data_folder): os.mkdir(data_folder)
+    if not os.path.exists(text_folder): os.mkdir(text_folder)
     if not os.path.exists(bert_folder): os.mkdir(bert_folder)
     if not os.path.exists(plot_folder): os.mkdir(plot_folder)
 
-    #%% Get file hash
+    # %% Get file hash
     logging.info("Copying separate text files into text folder.")
     read_files = glob.glob(''.join([input_folder, '/*.txt']))
 
@@ -105,7 +103,7 @@ if __name__ == "__main__":
         tokenizer, bert = get_bert_and_tokenizer(bert_folder, True)
         logging.disable(logging.NOTSET)
         DICT_SIZE = tokenizer.vocab_size
-        year_var = 1
+        year_var = 2019
 
         # Re-setup graph
         neograph = neo4j_network(neo_creds, queue_size=q_size, tie_query_limit=t_size)
@@ -115,10 +113,19 @@ if __name__ == "__main__":
         nr_ties = neograph.connector.run("MATCH ()-->() RETURN count(*) AS ties")[0]['ties']
         logging.info("Before cleaning: Network has %i nodes and %i ties" % (nr_nodes, nr_ties))
 
-        # Delete previous year entries
+        # Delete previous edges
         query = ''.join(
-            ["MATCH (p:edge {time:", str(year_var), "}) WHERE p.time=", str(year_var), " DETACH DELETE p"])
+            ["MATCH (p:edge {time:", str(year_var), "}) DETACH DELETE p"])
         neograph.connector.run(query)
+
+        # Delete previous context edges
+        query = ''.join(
+            ["MATCH (p:context {time:", str(year_var), "}) DETACH DELETE p"])
+        neograph.connector.run(query)
+
+        # !!! DELETE ALL NODES
+        query = "MATCH (p) DETACH DELETE p"
+        # neograph.connector.run(query)
 
         # DEBUG
         nr_nodes = neograph.connector.run("MATCH (n) RETURN count(n) AS nodes")[0]['nodes']
@@ -136,8 +143,8 @@ if __name__ == "__main__":
                                 DICT_SIZE,
                                 cfg.batch_size, maxn=maxn,
                                 nr_workers=0,
-                                cutoff_percent=80,
-                                max_degree=50)
+                                cutoff_percent=cfg.cutoff_percent,
+                                max_degree=cfg.max_degree)
         logging.info("Par %s Network creation finished in %s seconds for q_size %i and t_size %i" % (par,
                                                                                                      time.time() - start_time,
                                                                                                      q_size,

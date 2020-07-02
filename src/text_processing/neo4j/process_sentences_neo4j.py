@@ -1,34 +1,25 @@
 # TODO: Redo Comments
 
-import torch
+import logging
+import time
+
 import numpy as np
 import tables
-import time
-import logging
-import asyncio
-
-
-from src.utils.rowvec_tools import simple_norm
-from src.utils.neo_row_tools import  get_weighted_edgelist, calculate_cutoffs
-from src.datasets.text_dataset import text_dataset, text_dataset_collate_batchsample
-from src.datasets.dataloaderX import DataLoaderX
-from src.text_processing.get_bert_tensor import get_bert_tensor
-from torch.utils.data import BatchSampler, SequentialSampler
-from src.utils.delwords import create_stopword_list
+import torch
 import tqdm
+from torch.utils.data import BatchSampler, SequentialSampler
+
+from src.datasets.dataloaderX import DataLoaderX
+from src.datasets.text_dataset import text_dataset, text_dataset_collate_batchsample
+from src.text_processing.get_bert_tensor import get_bert_tensor
+from src.utils.delwords import create_stopword_list
+from src.utils.neo_row_tools import get_weighted_edgelist, calculate_cutoffs
+from src.utils.rowvec_tools import simple_norm
 
 
-async def wait_for_event_loop():
-    tasks = []
-    logging.info('Total tasks: %i' % len(asyncio.Task.all_tasks()))
-    nr_task =len([task for task in asyncio.Task.all_tasks() if not task.done()])
-    while nr_task > 1:
-        logging.info('Active tasks: %i' % nr_task)
-        nr_task = len([task for task in asyncio.Task.all_tasks() if not task.done()])
-        await asyncio.sleep(0.2)
-
-def process_sentences_neo4j(tokenizer, bert, text_db, neograph, year, MAX_SEQ_LENGTH, DICT_SIZE, batch_size, maxn=None, nr_workers=0,
-                              cutoff_percent=99,max_degree=50):
+def process_sentences_neo4j(tokenizer, bert, text_db, neograph, year, MAX_SEQ_LENGTH, DICT_SIZE, batch_size, maxn=None,
+                            nr_workers=0,
+                            cutoff_percent=99, max_degree=50):
     """
     Extracts pre-processed sentences, gets predictions by BERT and creates a network
 
@@ -97,42 +88,73 @@ def process_sentences_neo4j(tokenizer, bert, text_db, neograph, year, MAX_SEQ_LE
 
             # Pad and add sequence of IDs
             # TODO: Sanity check I don't need this anymore
-            #idx = torch.zeros([1, MAX_SEQ_LENGTH], requires_grad=False, dtype=torch.int32)
-            #idx[0, :sequence_size] = token_ids[sequence_mask]
+            # idx = torch.zeros([1, MAX_SEQ_LENGTH], requires_grad=False, dtype=torch.int32)
+            # idx[0, :sequence_size] = token_ids[sequence_mask]
             # Pad and add distributions per token, we need to save to maximum sequence size
             dists = torch.zeros([MAX_SEQ_LENGTH, DICT_SIZE], requires_grad=False)
             dists[:sequence_size, :] = predictions[sequence_mask, :]
-            sentence_ties=[]
+
+            # Context element selection matrix
+            seq_ce = torch.ones([sequence_size, sequence_size])
+            # Delete position of focal token
+            seq_ce[torch.eye(sequence_size).bool()] = 0
+            # Context distributions
+            context_index = np.zeros([MAX_SEQ_LENGTH], dtype=np.bool)
+            # Index words that are in the sentence
+            context_index[:sequence_size] = True
+            # Populate distribution with distributions
+            # context_dist = dists[context_index, :]
 
             # TODO: This should probably not be a loop
             # but done smartly with matrices and so forth
             for pos, token in enumerate(token_ids[sequence_mask]):
                 # Should all be np
-                token=token.item()
+                token = token.item()
                 if token not in delwords:
-                    replacement = dists[pos, :]
 
+                    # %% Replacement distribution
+                    replacement = dists[pos, :]
                     # Flatten, since it is one row each
                     replacement = replacement.numpy().flatten()
-
                     # Sparsify
                     # TODO: try without setting own-link to zero!
-                    replacement[token]=0
-                    replacement[replacement==np.min(replacement)]=0
-
+                    replacement[token] = 0
+                    replacement[replacement == np.min(replacement)] = 0
                     # Get rid of delnorm links
-                    replacement[delwords]=0
-
+                    replacement[delwords] = 0
                     # We norm the distributions here
                     replacement = simple_norm(replacement)
 
+                    # %% Context Element
+                    context = (
+                        torch.sum((seq_ce[pos] * dists[context_index, :].transpose(-1, 0)).transpose(-1, 0),
+                                  dim=0).unsqueeze(0))
+                    # Flatten, since it is one row each
+                    context = context.numpy().flatten()
+                    # Sparsify
+                    # TODO: try without setting own-link to zero!
+                    context[token] = 0
+                    context[context == np.min(context)] = 0
+                    # Get rid of delnorm links
+                    context[delwords] = 0
+                    # We norm the distributions here
+                    context = simple_norm(context)
+
                     # Add values to network
-                    # TODO implement sequence id and pos properties on network
+                    # Replacement ties
                     cutoff_number, cutoff_probability = calculate_cutoffs(replacement, method="percent",
                                                                           percent=cutoff_percent, max_degree=max_degree)
-                    ties=get_weighted_edgelist(token, replacement, year, cutoff_number, cutoff_probability,sequence_id,pos,max_degree=max_degree)
-                    if ties is not None:
-                        neograph.insert_edges_multiple(ties)
+                    ties = get_weighted_edgelist(token, replacement, year, cutoff_number, cutoff_probability,
+                                                 sequence_id, pos, max_degree=max_degree)
+
+                    # Context ties
+                    cutoff_number, cutoff_probability = calculate_cutoffs(context, method="percent",
+                                                                          percent=cutoff_percent, max_degree=max_degree)
+                    context_ties = get_weighted_edgelist(token, context, year, cutoff_number, cutoff_probability,
+                                                         sequence_id, pos, max_degree=max_degree)
+
+                    if (ties is not None) and (context_ties is not None):
+                        neograph.insert_edges_context(token, ties, context_ties)
 
 
             del dists

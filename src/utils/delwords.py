@@ -1,5 +1,7 @@
-import numpy as np
 from string import punctuation
+
+import numpy as np
+
 
 def create_stopword_list(tokenizer):
     """
@@ -11,20 +13,22 @@ def create_stopword_list(tokenizer):
     alphabet = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u',
                 'v', 'w', 'x', 'y', 'z']
     alphabet_ids = tokenizer.convert_tokens_to_ids(alphabet)
-    numbers = ['0','1', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'one', 'two', 'three', 'four']
+    numbers = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'one', 'two', 'three', 'four']
     numbers.extend(list(punctuation))
     numbers_ids = tokenizer.convert_tokens_to_ids(numbers)
     pronouns = ['we', 'us', 'my', 'yourself', 'you', 'me', 'he', 'her', 'his', 'him', 'she', 'they', 'their', 'them',
-                'me', 'myself', 'himself', 'herself', 'themselves']
+                'me', 'myself', 'himself', 'herself', 'themselves', 'your', 'mine']
+    pronouns_ids = tokenizer.convert_tokens_to_ids(pronouns)
 
-    pronouns = ['herself']
+    # pronouns = ['herself']
 
-    numericals=list(range(0,3000))
-    numericals=[str(x) for x in numericals]
+    numericals = list(range(0, 3000))
+    numericals = [str(x) for x in numericals]
     numericals_ids = tokenizer.convert_tokens_to_ids(numericals)
 
-    pronouns_ids = tokenizer.convert_tokens_to_ids(pronouns)
-    stopwords = ['¨','@','110','100','1000','000','!','ve','&', ',', '.', 'and', '-', 'the', '##d', '...', 'that', 'to', 'as', 'for', '"', 'in', "'", 'a', 'of',
+    stopwords = ['”', 'could', 'should', '¨', '@', '110', '100', '1000', '000', '!', 've', '&', ',', '.', 'and', '-',
+                 'the',
+                 '##d', '...', 'that', 'to', 'as', 'for', '"', 'in', "'", 'a', 'of',
                  'only', ':', 'so', 'all', 'one', 'it', 'then', 'also', 'with', 'but', 'by', 'on', 'just', 'like',
                  'again', ';', 'more', 'this', 'not', 'is', 'there', 'was', 'even', 'still', 'after', 'here', 'later',
                  '!', 'over', 'from', 'i', 'or', '?', 'at', 'first', '##s', 'while', ')', 'before', 'when', 'once',
@@ -37,12 +41,13 @@ def create_stopword_list(tokenizer):
                  'otherwise', 'did', 'quite', 'these', 'can', '2', 'its', 'merely', 'actually', 'certainly', '3',
                  'else', 'upon', 'except', 'those', 'especially', 'therefore', 'beside', 'apparently', 'besides',
                  'third', 'whilst', '*', 'although', 'were', 'likewise', 'mainly', 'four', 'seven', 'into', 'm', ']',
-                 'than', 't', 'surely', '|', '#', 'till', '##ly', '_', 'al','«','»','{','[',']','}','%','+','-','>','<',':','.','=']
+                 'than', 't', 'surely', '|', '#', 'till', '##ly', '_', 'al', '«', '»', '{', '[', ']', '}', '%', '+',
+                 '-', '>', '<', ':', '.', '=']
+
     stopwords_ids = tokenizer.convert_tokens_to_ids(stopwords)
 
     # Now all special tokens
-    hash_ids=[v for k, v in tokenizer.vocab.items() if '##' in k]
-
+    hash_ids = [v for k, v in tokenizer.vocab.items() if '##' in k]
 
     delwords = np.union1d(stopwords_ids, pronouns_ids)
     delwords = np.union1d(delwords, hash_ids)
@@ -60,15 +65,16 @@ def create_stopword_strings():
     """
     alphabet = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u',
                 'v', 'w', 'x', 'y', 'z']
-    numbers = ['0','1', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'one', 'two', 'three', 'four']
+    numbers = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'one', 'two', 'three', 'four']
     numbers.extend(list(punctuation))
     pronouns = ['we', 'us', 'my', 'yourself', 'you', 'me', 'he', 'her', 'his', 'him', 'she', 'they', 'their', 'them',
-                'me', 'myself', 'himself', 'herself', 'themselves']
-    pronouns = [ 'herself']
-    numericals=list(range(0,3000))
-    numericals=[str(x) for x in numericals]
+                'me', 'myself', 'himself', 'herself', 'themselves', 'your', 'mine']
+    # pronouns = [ 'herself']
+    numericals = list(range(0, 3000))
+    numericals = [str(x) for x in numericals]
 
-    stopwords = ['¨','@','110','100','1000','000','!','ve','&', ',', '.', 'and', '-', 'the', '##d', '...', 'that', 'to', 'as', 'for', '"', 'in', "'", 'a', 'of',
+    stopwords = ['”', 'could', 'should', '¨', '@', '110', '100', '1000', '000', '!', 've', '&', ',', '.', 'and', '-',
+                 'the', '##d', '...', 'that', 'to', 'as', 'for', '"', 'in', "'", 'a', 'of',
                  'only', ':', 'so', 'all', 'one', 'it', 'then', 'also', 'with', 'but', 'by', 'on', 'just', 'like',
                  'again', ';', 'more', 'this', 'not', 'is', 'there', 'was', 'even', 'still', 'after', 'here', 'later',
                  '!', 'over', 'from', 'i', 'or', '?', 'at', 'first', '##s', 'while', ')', 'before', 'when', 'once',

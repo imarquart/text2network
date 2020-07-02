@@ -20,8 +20,7 @@ using a masked language modeling (MLM) loss.
 """
 
 from __future__ import absolute_import, division, print_function
-from src.utils.load_bert import get_bert_and_tokenizer
-import argparse
+
 import glob
 import logging
 import os
@@ -35,16 +34,16 @@ import torch
 from torch.utils.data import DataLoader, Dataset, SequentialSampler, RandomSampler
 from torch.utils.data.distributed import DistributedSampler
 from torch.utils.tensorboard import SummaryWriter
+from tqdm import tqdm, trange
+from transformers import (WEIGHTS_NAME, AdamW, WarmupLinearSchedule,
+                          BertConfig, BertForMaskedLM, BertTokenizer)
+
+from src.utils.load_bert import get_bert_and_tokenizer
 
 # try:
 #
 # except:
 # from tensorboardX import SummaryWriter
-
-from tqdm import tqdm, trange
-
-from transformers import (WEIGHTS_NAME, AdamW, WarmupLinearSchedule,
-                          BertConfig, BertForMaskedLM, BertTokenizer)
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +53,7 @@ MODEL_CLASSES = {
 
 
 class bert_args():
-    def __init__(self, train_data_file, output_dir, do_train, model_dir, mlm_probability=0.15, block_size=30,
+    def __init__(self, train_data_file, output_dir, do_train, model_dir, mlm_probability=0.15, block_size=60,
                  loss_limit=0.5, gpu_batch=4, epochs=1, warmup_steps=0):
         self.train_data_file = train_data_file
         self.eval_data_file = train_data_file
@@ -63,7 +62,7 @@ class bert_args():
         self.mlm = True
         self.mlm_probability = mlm_probability
 
-        self.loss_limit=loss_limit
+        self.loss_limit = loss_limit
 
         if do_train == True:
             self.do_train = True
@@ -97,7 +96,7 @@ class bert_args():
         self.adam_epsilon = 1e-8
         self.max_grad_norm = 1.0
         self.max_steps = -1
-        self.logging_steps = 3000
+        self.logging_steps = 500
         self.save_steps = 2000
         self.save_total_limit = None
         self.eval_all_checkpoints = False
@@ -336,6 +335,7 @@ def train(args, train_dataset, model, tokenizer):
                 loss.backward()
 
             tr_loss += loss.item()
+            eval_loss = tr_loss / max(global_step, 1)
             if (step + 1) % args.gradient_accumulation_steps == 0:
                 if args.fp16:
                     torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), args.max_grad_norm)
@@ -345,7 +345,6 @@ def train(args, train_dataset, model, tokenizer):
                 scheduler.step()  # Update learning rate schedule
                 model.zero_grad()
                 global_step += 1
-
                 if args.local_rank in [-1, 0] and args.logging_steps > 0 and global_step % args.logging_steps == 0:
                     # Log metrics
                     if args.local_rank == -1 and args.evaluate_during_training:  # Only evaluate when single GPU otherwise metrics may not average well
@@ -354,7 +353,7 @@ def train(args, train_dataset, model, tokenizer):
                             tb_writer.add_scalar('eval_{}'.format(key), value, global_step)
                     tb_writer.add_scalar('lr', scheduler.get_lr()[0], global_step)
                     tb_writer.add_scalar('loss', (tr_loss - logging_loss) / args.logging_steps, global_step)
-
+                    eval_loss = results["eval_loss"]
                     logging_loss = tr_loss
 
                 if args.local_rank in [-1, 0] and args.save_steps > 0 and global_step % args.save_steps == 0:
@@ -386,8 +385,19 @@ def train(args, train_dataset, model, tokenizer):
             train_iterator.close()
             break
 
+        if eval_loss <= args.loss_limit:
+            logger.info("Eval Loss at global step %i has reached desired value with %f <= %f", global_step,
+                        eval_loss, args.loss_limit)
+            logger.info("TR Loss scaled at global step %i is %f", global_step,
+                        tr_loss / global_step)
+            logger.info("TR Loss at global step %i is %f", global_step,
+                        tr_loss)
+
+            train_iterator.close()
+            break
+
         if tr_loss / global_step <= args.loss_limit:
-            logger.info("Loss at global step %i has reached desired value with %i", global_step, tr_loss / global_step)
+            logger.info("Loss at global step %i has reached desired value with %f", global_step, tr_loss / global_step)
             train_iterator.close()
             break
 

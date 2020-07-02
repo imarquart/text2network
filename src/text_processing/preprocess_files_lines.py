@@ -1,21 +1,15 @@
 # TODO: Check Comments
 
 
-import re
 # import spacy
-import nltk
-import tables
-from collections.abc import Iterable
 # TODO: Check Comments
 import logging
-import unicodedata
-from os import listdir
-from os.path import isfile, join, abspath
 import re
-import glob
+
 # import spacy
 import nltk
 import tables
+import unicodedata
 
 
 def preprocess_files_lines(text_file, database, MAX_SEQ_LENGTH, char_mult, max_seq=0):
@@ -91,6 +85,9 @@ def preprocess_files_lines(text_file, database, MAX_SEQ_LENGTH, char_mult, max_s
     text = text.replace(" .", ".")
     text = text.replace(" ,", ",")
     text = text.replace("...", ".")
+    text = text.replace('"', '')
+    text = text.replace("'", "")
+
     killchars = ['#', '<p>', '$', '%', '(', ')', '*', '/', '<', '>', '@', '\\', '{', '}', '[', ']', '+', '^', '~',
                  '"']
     for k in killchars: text = str.replace(text, k, '')
