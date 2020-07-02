@@ -65,8 +65,10 @@ def preprocess_files_lines(text_file, database, MAX_SEQ_LENGTH, char_mult, max_s
     file_name = re.split("/", text_file)[-1]
     file_name = re.split(".txt", file_name)[0]
     file_source = file_name
-    text_id = 1
-    year = 1
+    year = re.split("-", file_name)[1]
+    text_id = year
+
+
 
     try:
         with open(text_file, encoding="utf-8") as f:
@@ -88,11 +90,14 @@ def preprocess_files_lines(text_file, database, MAX_SEQ_LENGTH, char_mult, max_s
     text = text.replace('"', '')
     text = text.replace("'", "")
 
-    killchars = ['#', '<p>', '$', '%', '(', ')', '*', '/', '<', '>', '@', '\\', '{', '}', '[', ']', '+', '^', '~',
+    killchars = ['#', '<p>','</p>','<a>','</a>', '$', '%', '(', ')', '*', '/', '<', '>', '@', '\\', '{', '}', '[', ']', '+', '^', '~',
                  '"']
     for k in killchars: text = str.replace(text, k, '')
     text = text.strip()
     text = " ".join(re.split("\s+", text, flags=re.UNICODE))
+
+    # Remove numbers
+    text=text.translate({ord(ch): None for ch in '0123456789'})
 
     # We do not load empty lines
     if len(text) == 0:

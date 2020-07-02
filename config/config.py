@@ -20,10 +20,8 @@ class configuration:
 
     # %% Folders:
     model_dir = "D:/NLP/BERT-NLP/NLP/models"
-    data_folder = "D:/NLP/ESMTNLP/BERTNLP/data-hbr"
-    # input_folder = "D:/NLP/ESMTNLP/BERTNLP/text"
-    input_folder = "D:/NLP/BERT-NLP/NLP/data/2019"
-    text_folder = ''.join([data_folder, "/text"])
+    data_folder = "D:/NLP/COCA/BERTNLP/data"
+    input_folder = "D:/NLP/COCA/news"
     nw_folder = ''.join([data_folder, "/networks"])
     plot_folder = ''.join([data_folder, '/plots/'])
 
@@ -40,7 +38,7 @@ class configuration:
     epochs = 500
     # Loss is tested both on training and eval. Usually, eval is smaller (why?)
     # Loss is defined as mean_sample(mean_batch(lm_loss))
-    loss_limit = 0.05
+    loss_limit = 0.1
     warmup_steps = 0
     mlm_probability = 0.15
     do_train = True
@@ -49,5 +47,5 @@ class configuration:
     batch_size = 15
 
     # %% Network creation options
-    cutoff_percent = 95
+    cutoff_percent = 90
     max_degree = 50
