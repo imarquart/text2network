@@ -29,22 +29,22 @@ class configuration:
     subprocess_level = logging.INFO
 
     # %% Text Preprocessing options
-    max_seq_length = 40
+    max_seq_length = 30
     char_mult = 10
     max_seq = 0
 
     # %% BERT Training options
-    gpu_batch = 50
+    gpu_batch = 100
     epochs = 500
     # Loss is tested both on training and eval. Usually, eval is smaller (why?)
     # Loss is defined as mean_sample(mean_batch(lm_loss))
-    loss_limit = 0.1
+    loss_limit = 0.25
     warmup_steps = 0
     mlm_probability = 0.15
     do_train = True
 
     # %% BERT Inference Options
-    batch_size = 15
+    batch_size = 20
 
     # %% Network creation options
     cutoff_percent = 90
