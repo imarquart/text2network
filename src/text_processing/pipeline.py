@@ -136,6 +136,8 @@ if __name__ == "__main__":
             neograph.setup_neo_db(tokens, list(tokenizer.vocab.values()))
             start_time = time.time()
 
+
+
             # Process sentences in BERT and create the networks
             process_sentences_neo4j(tokenizer, bert, text_db, neograph, year_var, cfg.max_seq_length,
                                     DICT_SIZE,

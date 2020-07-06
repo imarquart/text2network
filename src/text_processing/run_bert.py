@@ -96,7 +96,7 @@ class bert_args():
         self.adam_epsilon = 1e-8
         self.max_grad_norm = 1.0
         self.max_steps = -1
-        self.logging_steps = 500
+        self.logging_steps = 1500
         self.save_steps = save_steps
         self.save_total_limit = None
         self.eval_all_checkpoints = False

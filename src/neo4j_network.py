@@ -23,7 +23,7 @@ class neo4j_network(MutableSequence):
 
     # %% Initialization functions
     def __init__(self, neo4j_creds, graph_type="networkx", graph_direction="FORWARD", agg_operator="SUM", write_before_query=True,
-                 neo_batch_size=None, queue_size=10000, tie_query_limit=100000, tie_creation="UNSAFE"):
+                 neo_batch_size=10000, queue_size=100000, tie_query_limit=100000, tie_creation="UNSAFE"):
         self.neo4j_connection, self.neo4j_credentials = neo4j_creds
         self.write_before_query = write_before_query
         # Conditioned graph information
@@ -371,11 +371,11 @@ class neo4j_network(MutableSequence):
         if reverse_insertion==True:
             egos = np.array([x[1] for x in ties])
             alters = np.array([x[0] for x in ties])
-            insert_direction = "replacing"
+            insert_direction = "-1"
         else:
             egos = np.array([x[0] for x in ties])
             alters = np.array([x[1] for x in ties])
-            insert_direction = "replacedBy"
+            insert_direction = "1"
         con_alters = np.array([x[1] for x in contexts])
 
         times = np.array([x[2] for x in ties])
@@ -397,7 +397,7 @@ class neo4j_network(MutableSequence):
             query = ''.join(
                 [" MATCH (a:word {token_id: $ego}) WITH a UNWIND $ties as tie MATCH (b:word {token_id: tie.alter}) ",
                  self.creation_statement,
-                 " (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, p1:tie.p1,p2:tie.p2, direction:",insert_direction,"})<-[:onto]-(a) WITH r UNWIND $contexts as con MATCH (q:word {token_id: con.alter}) WITH r,q,con ",
+                 " (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, p1:tie.p1,p2:tie.p2})<-[:onto]-(a) WITH r UNWIND $contexts as con MATCH (q:word {token_id: con.alter}) WITH r,q,con ",
                  self.creation_statement,
                  " (r)-[:conto]->(c:context {weight:con.weight, time:con.time})-[:conto]->(q)"])
         else:
@@ -414,11 +414,11 @@ class neo4j_network(MutableSequence):
         if reverse_insertion == True:
             egos = np.array([x[1] for x in ties])
             alters = np.array([x[0] for x in ties])
-            insert_direction = "replacing"
+            insert_direction = "-1"
         else:
             egos = np.array([x[0] for x in ties])
             alters = np.array([x[1] for x in ties])
-            insert_direction = "replacedBy"
+            insert_direction = "1"
         times = np.array([x[2] for x in ties])
         dicts = np.array([x[3] for x in ties])
 

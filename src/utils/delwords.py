@@ -50,6 +50,7 @@ def list_stopwords():
     delwords = np.union1d(delwords, numbers)
     delwords = np.union1d(delwords, alphabet)
     delwords = np.union1d(delwords, numericals)
+    return delwords
 
 
 def create_stopword_list(tokenizer):
