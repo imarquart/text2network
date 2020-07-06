@@ -268,20 +268,27 @@ class neo4j_network(MutableSequence):
         else:
             params = {"ids": ids}
         # Create query depending on graph direction and whether time variable is queried via where or node property
-        if self.graph_direction == "REVERSE":  # Seek alters that predict ID nodes hence reverse sender/receiver
-            return_query=''.join([" RETURN b.token_id AS sender,a.token_id AS receiver,count(r.time) AS occurrences,", self.aggregate_operator, "(r.weight) AS agg_weight order by agg_weight"])
+        # By default, a->b when b predicts a
+        # FORWARD
+        # Given an id, we query b:id(sender)<-a(receiver)
+        # This gives all ties where b predicts a
+        # BACKWARD
+        # If graph direction is reverse, it should be a:id(sender)->b
+        # This gives all ties where a is predicted by b
+        if self.graph_direction == "REVERSE":
+            return_query=''.join([" RETURN a.token_id AS sender,b.token_id AS receiver,count(r.time) AS occurrences,", self.aggregate_operator, "(r.weight) AS agg_weight order by agg_weight"])
             if isinstance(times, int):
-                match_query = "UNWIND $ids AS id MATCH p=(a:word)-[:onto]->(r:edge {time:$times})-[:onto]->(b:word  {token_id:id}) "
+                match_query = "UNWIND $ids AS id MATCH p=(a:word {token_id:id})-[:onto]->(r:edge {time:$times})-[:onto]->(b:word) "
             else:
-                match_query = "UNWIND $ids AS id MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word  {token_id:id}) "
+                match_query = "UNWIND $ids AS id MATCH p=(a:word {token_id:id})-[:onto]->(r:edge)-[:onto]->(b:word) "
         else:  # Seek ego nodes that predict alters
-            return_query = ''.join([" RETURN b.token_id AS receiver,a.token_id AS sender,count(r.time) AS occurrences,",
+            return_query = ''.join([" RETURN b.token_id AS sender,a.token_id AS receiver,count(r.time) AS occurrences,",
                                     self.aggregate_operator, "(r.weight) AS agg_weight order by agg_weight"])
 
             if isinstance(times, int):
-                match_query = "UNWIND $ids AS id MATCH p=(a:word  {token_id:id})-[:onto]->(r:edge {time:$times})-[:onto]->(b:word) "
+                match_query = "UNWIND $ids AS id MATCH p=(a:word)-[:onto]->(r:edge {time:$times})-[:onto]->(b:word {token_id:id}) "
             else:
-                match_query = "unwind $ids AS id MATCH p=(a:word  {token_id:id})-[:onto]->(r:edge)-[:onto]->(b:word) "
+                match_query = "unwind $ids AS id MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word {token_id:id}) "
 
         # Format time to set for network
         if isinstance(times, int):
@@ -355,13 +362,20 @@ class neo4j_network(MutableSequence):
                 for x in res]
         return ties
 
-    def insert_edges_context(self, ego, ties, contexts):
-        if self.graph_direction == "REVERSE":
+    def insert_edges_context(self, ego, ties, contexts, reverse_insertion=False):
+
+        # Tie direction matters
+        # Ego by default is the focal token to be replaced. Normal insertion points the link accordingly.
+        # Hence, a->b is an instance of b replacing a!
+        # Contextual ties always point toward the context word!
+        if reverse_insertion==True:
             egos = np.array([x[1] for x in ties])
             alters = np.array([x[0] for x in ties])
+            insert_direction = "replacing"
         else:
             egos = np.array([x[0] for x in ties])
             alters = np.array([x[1] for x in ties])
+            insert_direction = "replacedBy"
         con_alters = np.array([x[1] for x in contexts])
 
         times = np.array([x[2] for x in ties])
@@ -383,7 +397,7 @@ class neo4j_network(MutableSequence):
             query = ''.join(
                 [" MATCH (a:word {token_id: $ego}) WITH a UNWIND $ties as tie MATCH (b:word {token_id: tie.alter}) ",
                  self.creation_statement,
-                 " (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, p1:tie.p1,p2:tie.p2})<-[:onto]-(a) WITH r UNWIND $contexts as con MATCH (q:word {token_id: con.alter}) WITH r,q,con ",
+                 " (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, p1:tie.p1,p2:tie.p2, direction:",insert_direction,"})<-[:onto]-(a) WITH r UNWIND $contexts as con MATCH (q:word {token_id: con.alter}) WITH r,q,con ",
                  self.creation_statement,
                  " (r)-[:conto]->(c:context {weight:con.weight, time:con.time})-[:conto]->(q)"])
         else:
@@ -392,13 +406,19 @@ class neo4j_network(MutableSequence):
 
         self.add_query(query, params)
 
-    def insert_edges_multiple(self, ties):
-        if self.graph_direction == "REVERSE":
+    def insert_edges_multiple(self, ties,reverse_insertion=False):
+
+        # Tie direction matters
+        # Default is forward, in which case ego points to alters. Ego by default is the focal token to be replaced.
+        # Hence, a->b is an instance of b replacing a!
+        if reverse_insertion == True:
             egos = np.array([x[1] for x in ties])
             alters = np.array([x[0] for x in ties])
+            insert_direction = "replacing"
         else:
             egos = np.array([x[0] for x in ties])
             alters = np.array([x[1] for x in ties])
+            insert_direction = "replacedBy"
         times = np.array([x[2] for x in ties])
         dicts = np.array([x[3] for x in ties])
 
@@ -410,7 +430,7 @@ class neo4j_network(MutableSequence):
                                "p2": (int(x[2]['p2']) if len(x[2]) > 2 else 0)}
                               for x in zip(alters.tolist(), times.tolist(), dicts.tolist())]
             params = {"ego": int(egos[0]), "ties": ties_formatted}
-            query = ''.join([" MATCH (a:word {token_id: $ego}) WITH a UNWIND $ties as tie MATCH (b:word {token_id: tie.alter}) ",self.creation_statement," (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, p1:tie.p1,p2:tie.p2})<-[:onto]-(a)"])
+            query = ''.join([" MATCH (a:word {token_id: $ego}) WITH a UNWIND $ties as tie MATCH (b:word {token_id: tie.alter}) ",self.creation_statement," (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, p1:tie.p1,p2:tie.p2, direction:",insert_direction,"})<-[:onto]-(a)"])
         else:
             for u_ego in unique_egos:
                 mask=egos==u_ego
@@ -423,7 +443,7 @@ class neo4j_network(MutableSequence):
                 set={'ego':int(u_ego),'ties':ties_formatted}
                 sets.append(set)
             params={"sets":sets}
-            query = ''.join(["UNWIND $sets as set MATCH (a:word {token_id: set.ego}) WITH a,set UNWIND set.ties as tie MATCH (b:word {token_id: tie.alter}) ",self.creation_statement,"  (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, p1:tie.p1,p2:tie.p2})<-[:onto]-(a)"])
+            query = ''.join(["UNWIND $sets as set MATCH (a:word {token_id: set.ego}) WITH a,set UNWIND set.ties as tie MATCH (b:word {token_id: tie.alter}) ",self.creation_statement,"  (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, p1:tie.p1,p2:tie.p2, direction:",insert_direction,"})<-[:onto]-(a)"])
 
         self.add_query(query, params)
 

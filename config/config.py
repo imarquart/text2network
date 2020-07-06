@@ -38,7 +38,7 @@ class configuration:
     epochs = 500
     # Loss is tested both on training and eval. Usually, eval is smaller (why?)
     # Loss is defined as mean_sample(mean_batch(lm_loss))
-    loss_limit = 0.25
+    loss_limit = 1.5
     warmup_steps = 0
     mlm_probability = 0.15
     do_train = True

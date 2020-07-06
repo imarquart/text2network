@@ -54,7 +54,7 @@ MODEL_CLASSES = {
 
 class bert_args():
     def __init__(self, train_data_file, output_dir, do_train, model_dir, mlm_probability=0.15, block_size=60,
-                 loss_limit=0.5, gpu_batch=4, epochs=1, warmup_steps=0):
+                 loss_limit=0.5, gpu_batch=4, epochs=1, warmup_steps=0, save_steps=100000):
         self.train_data_file = train_data_file
         self.eval_data_file = train_data_file
         self.output_dir = output_dir
@@ -97,7 +97,7 @@ class bert_args():
         self.max_grad_norm = 1.0
         self.max_steps = -1
         self.logging_steps = 500
-        self.save_steps = 2000
+        self.save_steps = save_steps
         self.save_total_limit = None
         self.eval_all_checkpoints = False
         self.no_cuda = False
@@ -355,6 +355,9 @@ def train(args, train_dataset, model, tokenizer):
                     tb_writer.add_scalar('loss', (tr_loss - logging_loss) / args.logging_steps, global_step)
                     eval_loss = results["eval_loss"]
                     logging_loss = tr_loss
+                    logger.info("Eval Step: Eval Loss at global step %i is %f compare to loss limit %f",
+                                global_step,
+                                eval_loss, args.loss_limit)
 
                 if args.local_rank in [-1, 0] and args.save_steps > 0 and global_step % args.save_steps == 0:
                     checkpoint_prefix = 'checkpoint'
@@ -377,9 +380,22 @@ def train(args, train_dataset, model, tokenizer):
                     logger.info("Saving optimizer and scheduler states to %s", output_dir)
 
             if args.max_steps > 0 and global_step > args.max_steps:
-                logger.info("Global step %i larger than max steps %i", global_step, args.max_steps)
+                logger.info("Epoch: Global step %i larger than max steps %i", global_step, args.max_steps)
                 epoch_iterator.close()
                 break
+
+            if eval_loss <= args.loss_limit:
+                logger.info("Epoch: Eval Loss at global step %i has reached desired value with %f <= %f", global_step,
+                            eval_loss, args.loss_limit)
+                epoch_iterator.close()
+                break
+
+            if tr_loss / global_step <= args.loss_limit:
+                logger.info("Eproch: Loss at global step %i has reached desired value with %f", global_step,
+                            tr_loss / global_step)
+                epoch_iterator.close()
+                break
+
         if args.max_steps > 0 and global_step > args.max_steps:
             logger.info("Global step %i larger than max steps %i", global_step, args.max_steps)
             train_iterator.close()
