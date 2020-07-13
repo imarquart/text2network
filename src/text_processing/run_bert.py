@@ -54,7 +54,7 @@ MODEL_CLASSES = {
 
 class bert_args():
     def __init__(self, train_data_file, output_dir, do_train, model_dir, mlm_probability=0.15, block_size=60,
-                 loss_limit=0.5, gpu_batch=4, epochs=1, warmup_steps=0, save_steps=100000):
+                 loss_limit=0.5, gpu_batch=4, epochs=1, warmup_steps=0, save_steps=50000):
         self.train_data_file = train_data_file
         self.eval_data_file = train_data_file
         self.output_dir = output_dir

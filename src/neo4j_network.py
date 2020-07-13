@@ -22,8 +22,9 @@ except:
 class neo4j_network(MutableSequence):
 
     # %% Initialization functions
-    def __init__(self, neo4j_creds, graph_type="networkx", graph_direction="FORWARD", agg_operator="SUM", write_before_query=True,
-                 neo_batch_size=10000, queue_size=100000, tie_query_limit=100000, tie_creation="UNSAFE"):
+    def __init__(self, neo4j_creds, graph_type="networkx", graph_direction="FORWARD", agg_operator="SUM",
+                 write_before_query=True,
+                 neo_batch_size=1000, queue_size=100000, tie_query_limit=100000, tie_creation="UNSAFE"):
         self.neo4j_connection, self.neo4j_credentials = neo4j_creds
         self.write_before_query = write_before_query
         # Conditioned graph information
@@ -32,7 +33,7 @@ class neo4j_network(MutableSequence):
         self.conditioned = False
         self.years = []
         self.graph_direction = graph_direction
-        self.aggregate_operator=agg_operator
+        self.aggregate_operator = agg_operator
         # Dictionaries and token/id saved in memory
         self.token_id_dict = TwoWayDict()
         # Since both are numerical, we need to use a single way dict here
@@ -44,13 +45,12 @@ class neo4j_network(MutableSequence):
         self.neo_ids = []
         self.neo_tokens = []
 
-
         # Neo4J Internals
         # Pick Merge or Create. Create will double ties but Merge becomes very slow for large networks
-        if tie_creation=="SAFE":
-            self.creation_statement="MERGE"
+        if tie_creation == "SAFE":
+            self.creation_statement = "MERGE"
         else:
-            self.creation_statement="CREATE"
+            self.creation_statement = "CREATE"
         self.neo_queue = []
         self.neo_batch_size = neo_batch_size
         self.queue_size = queue_size
@@ -89,11 +89,11 @@ class neo4j_network(MutableSequence):
         if isinstance(key, str) and isinstance(value, int):  # Wants to add a node
             self.add_token(value, key)
         else:
-            key=self.ensure_ids(key)
+            key = self.ensure_ids(key)
             assert key in self.ids, "ID of ego token to connect not found. Not in network?"
             try:
 
-                neighbors = [ x[0] for x in value]
+                neighbors = [x[0] for x in value]
                 neighbors = self.ensure_ids(neighbors)
                 weights = [{'weight': x[2]} if isinstance(x[2], (int, float)) else x[2] for x in value]
                 years = [x[1] for x in value]
@@ -130,13 +130,13 @@ class neo4j_network(MutableSequence):
             i = i[0]
         else:
             year = None
-        if isinstance(i, (list, tuple, range,str,int)):
+        if isinstance(i, (list, tuple, range, str, int)):
             i = self.ensure_ids(i)
         else:
             raise AssertionError("Please format a call as <token> or <token_id>")
 
         # TODO Dispatch in case of graph
-        if self.conditioned==False:
+        if self.conditioned == False:
             return self.query_multiple_nodes(i, year)
         else:
             pass
@@ -234,16 +234,14 @@ class neo4j_network(MutableSequence):
         if len(self.neo_queue) > 0:
             self.connector.run_multiple(self.neo_queue, self.neo_batch_size)
 
-
-
             self.neo_queue = []
 
     def non_con_write_queue(self):
         self.write_queue()
 
-    def query_node(self, id, times=None,  weight_cutoff=None):
+    def query_node(self, id, times=None, weight_cutoff=None):
         """ See query_multiple_nodes"""
-        return self.query_multiple_nodes([id], times,  weight_cutoff)
+        return self.query_multiple_nodes([id], times, weight_cutoff)
 
     def query_multiple_nodes(self, ids, times=None, weight_cutoff=None):
         """
@@ -256,12 +254,12 @@ class neo4j_network(MutableSequence):
         if weight_cutoff is not None:
             where_query = ''.join([" WHERE r.weight >=", str(weight_cutoff), " "])
             if isinstance(times, dict):
-                where_query =''.join([where_query, " AND  $times.start <= r.time<= $times.end "])
+                where_query = ''.join([where_query, " AND  $times.start <= r.time<= $times.end "])
         else:
             if isinstance(times, dict):
-                where_query="WHERE  $times.start <= r.time<= $times.end "
+                where_query = "WHERE  $times.start <= r.time<= $times.end "
             else:
-                where_query=""
+                where_query = ""
         # Create params with or without time
         if isinstance(times, dict) or isinstance(times, int):
             params = {"ids": ids, "times": times}
@@ -276,14 +274,15 @@ class neo4j_network(MutableSequence):
         # If graph direction is reverse, it should be a:id(sender)->b
         # This gives all ties where a is predicted by b
         if self.graph_direction == "REVERSE":
-            return_query=''.join([" RETURN a.token_id AS sender,b.token_id AS receiver,count(r.time) AS occurrences,", self.aggregate_operator, "(r.weight) AS agg_weight order by agg_weight"])
-            if isinstance(times, int):
-                match_query = "UNWIND $ids AS id MATCH p=(a:word {token_id:id})-[:onto]->(r:edge {time:$times})-[:onto]->(b:word) "
-            else:
-                match_query = "UNWIND $ids AS id MATCH p=(a:word {token_id:id})-[:onto]->(r:edge)-[:onto]->(b:word) "
+            raise NotImplementedError("Reverse query temporarily disabled!")
+            # return_query=''.join([" RETURN a.token_id AS sender,b.token_id AS receiver,count(r.time) AS occurrences,", self.aggregate_operator, "(r.weight) AS agg_weight order by agg_weight"])
+            # if isinstance(times, int):
+            #    match_query = "UNWIND $ids AS id MATCH p=(a:word {token_id:id})-[:onto]->(r:edge {time:$times})-[:onto]->(b:word) "
+            # else:
+            #    match_query = "UNWIND $ids AS id MATCH p=(a:word {token_id:id})-[:onto]->(r:edge)-[:onto]->(b:word) "
         else:  # Seek ego nodes that predict alters
             return_query = ''.join([" RETURN b.token_id AS sender,a.token_id AS receiver,count(r.time) AS occurrences,",
-                                    self.aggregate_operator, "(r.weight) AS agg_weight order by agg_weight"])
+                                    self.aggregate_operator, "(r.weight) AS agg_weight order by receiver"])
 
             if isinstance(times, int):
                 match_query = "UNWIND $ids AS id MATCH p=(a:word)-[:onto]->(r:edge {time:$times})-[:onto]->(b:word {token_id:id}) "
@@ -300,9 +299,69 @@ class neo4j_network(MutableSequence):
 
         query = "".join([match_query, where_query, return_query])
         res = self.connector.run(query, params)
-        ties = [(x['sender'], x['receiver'], nw_time['m'],
-                 {'weight': x['agg_weight'], 't1': nw_time['s'], 't2': nw_time['e'], 'occurences': x['occurrences']})
-                for x in res]
+
+        # Normalization
+
+        alters = [x['receiver'] for x in res]
+        norms = self.query_occurrences(alters, times, weight_cutoff)
+        norm_weights = np.array([x[1] for x in norms])
+        norm_receivers = [x[0] for x in norms]
+        tie_weights = np.array([x['agg_weight'] for x in res])
+        tie_weights = tie_weights / norm_weights
+
+        senders = [x['sender'] for x in res]
+        receivers = [x['receiver'] for x in res]
+
+        assert norm_receivers==receivers, "Query error, could not match occurrences of alters!"
+
+        occurrences = [x['occurrences'] for x in res]
+
+        ties = [
+            (x[0], x[1], nw_time['m'], {'weight': x[2], 't1': nw_time['s'], 't2': nw_time['e'], 'occurrences': x[3]})
+            for x in zip(senders, receivers, tie_weights, occurrences)]
+
+        # Old, to check
+        # ties = [(x['sender'], x['receiver'], nw_time['m'],
+        #         {'weight': x['agg_weight'], 't1': nw_time['s'], 't2': nw_time['e'], 'occurrences': x['occurrences']})
+        #        for x in res]
+        return ties
+
+    def query_occurrences(self, ids, times=None, weight_cutoff=None):
+        """
+             Query multiple nodes by ID and over a set of time intervals, return distinct occurrences
+             :param ids: list of id's
+             :param times: either a number format YYYYMMDD, or an interval dict {"start":YYYYMMDD,"end":YYYYMMDD}
+             :return: list of tuples (u,v,Time,{weight:x})
+             """
+        # Allow cutoff value of (non-aggregated) weights and set up time-interval query
+        # If times is a dict, we want an interval and hence where query
+        if weight_cutoff is not None:
+            where_query = ''.join([" WHERE r.weight >=", str(weight_cutoff), " "])
+            if isinstance(times, dict):
+                where_query = ''.join([where_query, " AND  $times.start <= r.time<= $times.end "])
+        else:
+            if isinstance(times, dict):
+                where_query = "WHERE  $times.start <= r.time<= $times.end "
+            else:
+                where_query = ""
+        # Create params with or without time
+        if isinstance(times, dict) or isinstance(times, int):
+            params = {"ids": ids, "times": times}
+        else:
+            params = {"ids": ids}
+
+        return_query = ''.join([" RETURN a.token_id AS idx,count(distinct(r.p1)) AS occurrences order by idx"])
+
+        if isinstance(times, int):
+            match_query = "UNWIND $ids AS id MATCH p=(a:word  {token_id:id})-[:onto]->(r:edge {time:$times})-[:onto]->(b:word) "
+        else:
+            match_query = "unwind $ids AS id MATCH p=(a:word  {token_id:id})-[:onto]->(r:edge)-[:onto]->(b:word) "
+
+        query = "".join([match_query, where_query, return_query])
+        res = self.connector.run(query, params)
+
+        ties = [(x['idx'], x['occurrences']) for x in res]
+
         return ties
 
     def query_multiple_nodes_context(self, ids, times=None, weight_cutoff=None, context_direction="FORWARD"):
@@ -368,7 +427,7 @@ class neo4j_network(MutableSequence):
         # Ego by default is the focal token to be replaced. Normal insertion points the link accordingly.
         # Hence, a->b is an instance of b replacing a!
         # Contextual ties always point toward the context word!
-        if reverse_insertion==True:
+        if reverse_insertion == True:
             egos = np.array([x[1] for x in ties])
             alters = np.array([x[0] for x in ties])
             insert_direction = "-1"
@@ -406,7 +465,7 @@ class neo4j_network(MutableSequence):
 
         self.add_query(query, params)
 
-    def insert_edges_multiple(self, ties,reverse_insertion=False):
+    def insert_edges_multiple(self, ties, reverse_insertion=False):
 
         # Tie direction matters
         # Default is forward, in which case ego points to alters. Ego by default is the focal token to be replaced.
@@ -430,20 +489,29 @@ class neo4j_network(MutableSequence):
                                "p2": (int(x[2]['p2']) if len(x[2]) > 2 else 0)}
                               for x in zip(alters.tolist(), times.tolist(), dicts.tolist())]
             params = {"ego": int(egos[0]), "ties": ties_formatted}
-            query = ''.join([" MATCH (a:word {token_id: $ego}) WITH a UNWIND $ties as tie MATCH (b:word {token_id: tie.alter}) ",self.creation_statement," (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, p1:tie.p1,p2:tie.p2, direction:",insert_direction,"})<-[:onto]-(a)"])
+            query = ''.join(
+                [" MATCH (a:word {token_id: $ego}) WITH a UNWIND $ties as tie MATCH (b:word {token_id: tie.alter}) ",
+                 self.creation_statement,
+                 " (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, p1:tie.p1,p2:tie.p2, direction:",
+                 insert_direction, "})<-[:onto]-(a)"])
         else:
             for u_ego in unique_egos:
-                mask=egos==u_ego
-                subalters=alters[mask]
-                subtimes=times[mask]
-                subdicts=dicts[mask]
+                mask = egos == u_ego
+                subalters = alters[mask]
+                subtimes = times[mask]
+                subdicts = dicts[mask]
                 ties_formatted = [{"alter": int(x[0]), "time": int(x[1]), "weight": float(x[2]['weight']),
-                                   "p1": (int(x[2]['p1']) if len(x[2]) > 1 else 0), "p2": (int(x[2]['p2']) if len(x[2]) > 2 else 0)}
-                                  for x in zip(subalters.tolist(),subtimes.tolist(),subdicts.tolist())]
-                set={'ego':int(u_ego),'ties':ties_formatted}
+                                   "p1": (int(x[2]['p1']) if len(x[2]) > 1 else 0),
+                                   "p2": (int(x[2]['p2']) if len(x[2]) > 2 else 0)}
+                                  for x in zip(subalters.tolist(), subtimes.tolist(), subdicts.tolist())]
+                set = {'ego': int(u_ego), 'ties': ties_formatted}
                 sets.append(set)
-            params={"sets":sets}
-            query = ''.join(["UNWIND $sets as set MATCH (a:word {token_id: set.ego}) WITH a,set UNWIND set.ties as tie MATCH (b:word {token_id: tie.alter}) ",self.creation_statement,"  (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, p1:tie.p1,p2:tie.p2, direction:",insert_direction,"})<-[:onto]-(a)"])
+            params = {"sets": sets}
+            query = ''.join([
+                                "UNWIND $sets as set MATCH (a:word {token_id: set.ego}) WITH a,set UNWIND set.ties as tie MATCH (b:word {token_id: tie.alter}) ",
+                                self.creation_statement,
+                                "  (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, p1:tie.p1,p2:tie.p2, direction:",
+                                insert_direction, "})<-[:onto]-(a)"])
 
         self.add_query(query, params)
 
@@ -577,7 +645,6 @@ class neo4j_network(MutableSequence):
 
         # Continue conditioning
 
-
     def decondition(self, write=False):
         # Reset token lists to original state.
         self.ids = self.neo_ids
@@ -586,13 +653,12 @@ class neo4j_network(MutableSequence):
 
         # Decondition
         self.delete_graph()
-        self.conditioned=False
+        self.conditioned = False
 
-        if write==True:
+        if write == True:
             self.write_queue()
         else:
-            self.neo_queue=[]
-
+            self.neo_queue = []
 
     # %% Graph abstractions - for now only networkx
     def create_empty_graph(self):
@@ -601,8 +667,7 @@ class neo4j_network(MutableSequence):
 
     def delete_graph(self):
 
-        self.graph=None
-
+        self.graph = None
 
     # %% Utility functioncs
 

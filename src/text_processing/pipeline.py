@@ -39,6 +39,7 @@ if __name__ == "__main__":
         plot_folder = cfg.plot_folder
         text_folder = ''.join([data_year_folder, '/text'])
         bert_folder = ''.join([data_year_folder, '/bert'])
+        nw_folder = ''.join([data_year_folder, '/nw'])
         text_file = ''.join([text_folder, '/news-',str(year),'.txt'])
         text_db = ''.join([text_folder, '/news-',str(year),'.h5'])
 
@@ -46,6 +47,7 @@ if __name__ == "__main__":
         if not os.path.exists(data_year_folder): os.mkdir(data_year_folder)
         if not os.path.exists(text_folder): os.mkdir(text_folder)
         if not os.path.exists(bert_folder): os.mkdir(bert_folder)
+        if not os.path.exists(nw_folder): os.mkdir(nw_folder)
         if not os.path.exists(plot_folder): os.mkdir(plot_folder)
 
         # %% Get file hash
@@ -85,9 +87,9 @@ if __name__ == "__main__":
                              cfg.loss_limit, cfg.gpu_batch, cfg.epochs,
                              cfg.warmup_steps)
             torch.cuda.empty_cache()
-            #logging.disable(cfg.subprocess_level)
+            logging.disable(cfg.subprocess_level)
             results = run_bert(args)
-            #logging.disable(logging.NOTSET)
+            logging.disable(logging.NOTSET)
             logging.info("BERT results %s" % results)
             logging.info("BERT training finished in %s seconds" % (time.time() - start_time))
             complete_step(bert_folder, hash)
@@ -95,10 +97,10 @@ if __name__ == "__main__":
         # %% Process files, create networks
 
         logging.info("Processing text to create networks.")
-        if (False):
+        if (check_step(nw_folder, hash)):
             logging.info("Processed results found. Skipping.")
         else:
-            q_size = 150
+            q_size = 1500
             start_time = time.time()
             torch.cuda.empty_cache()
             logging.disable(cfg.subprocess_level)
@@ -158,3 +160,5 @@ if __name__ == "__main__":
             results=(((par, year_var, q_size, maxn, time.time() - start_time, nr_nodes, nr_ties)))
             print(*results, sep="\n")
             del neograph
+            complete_step(nw_folder, hash)
+
