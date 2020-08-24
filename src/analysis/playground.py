@@ -5,25 +5,21 @@ import numpy as np
 import pandas as pd
 
 from config.config import configuration
-from src.neo4j_network import neo4j_network
+from src.neo4jnw import neo4j_network
 
 cfg = configuration()
 
 db_uri = "http://localhost:7474"
-db_pwd = ('neo4j', 'esmt')
+db_pwd = ('neo4j', 'nlp')
 neo_creds = (db_uri, db_pwd)
-neograph = neo4j_network(neo_creds, graph_direction="REVERSE")
-neograph2 = neo4j_network(neo_creds, graph_direction="FORWARD")
+neograph = neo4j_network(neo_creds)
 
 focal_tokens = ["leader"]
 
 for focal_token in focal_tokens:
     # %% One step ego network
-    neograph.condition(2019, [focal_token], weight_cutoff=None, depth=0)
-    neograph2.condition(2019, [focal_token], weight_cutoff=None, depth=0)
+    neograph.condition(2010, [focal_token], weight_cutoff=None, depth=0)
     nodes_fw = list(neograph.graph.nodes).copy()
-    nodes_bw = list(neograph2.graph.nodes).copy()
-    nodes = np.union1d(nodes_fw, nodes_bw)
     newgraph = nx.Graph()
     newgraph.add_nodes_from(nodes)
     neograph.decondition()

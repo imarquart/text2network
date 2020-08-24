@@ -23,7 +23,7 @@ cfg = configuration()
 # Init Network
 q_size = 150
 t_size = 1
-maxn = 15000
+maxn = 5000
 par = "nonpar"
 db_uri = "http://localhost:7474"
 db_pwd = ('neo4j', 'nlp')

@@ -1,5 +1,5 @@
 import numpy as np
-
+from src.utils.rowvec_tools import  simple_norm
 
 def calculate_cutoffs(x, method="mean", percent=100, max_degree=100,min_cut=0.001):
     """
@@ -44,10 +44,11 @@ def get_weighted_edgelist(token, x, time, cutoff_number=100, cutoff_probability=
         neighbors = np.argsort(-x)[:max_degree]
 
     # Cutoff probability (zeros)
+    # 20.08.2020 Added simple norm
     if len(neighbors > 0):
         if cutoff_probability>0:
             neighbors = neighbors[x[neighbors] > cutoff_probability]
-        weights = x[neighbors]
+        weights = simple_norm(x[neighbors])
         return [(int(token), int(x[0]), int(time), {'weight': float(x[1]), 'p1': int(seq_id), 'p2': int(pos)}) for x in list(zip(neighbors, weights))]
     else:
         return None
