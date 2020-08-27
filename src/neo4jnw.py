@@ -255,7 +255,7 @@ class neo4j_network(MutableSequence):
         """ See query_multiple_nodes"""
         return self.query_multiple_nodes([id], times, weight_cutoff)
 
-    def query_multiple_nodes(self, ids, times=None, weight_cutoff=None):
+    def query_multiple_nodes(self, ids, times=None, weight_cutoff=None, norm_ties=True):
         """
         Query multiple nodes by ID and over a set of time intervals
         :param ids: list of id's
@@ -301,24 +301,22 @@ class neo4j_network(MutableSequence):
         query = "".join([match_query, where_query, return_query])
         res = self.connector.run(query, params)
 
-        # Normalization
-        # Ties should be normalized by the number of occurrences of the receiver
-        alters = [x['receiver'] for x in res]
-        norms = self.query_occurrences(alters, times, weight_cutoff)
-        norm_weights = np.array([x[1] for x in norms])
-        norm_receivers = [x[0] for x in norms]
 
         tie_weights = np.array([x['agg_weight'] for x in res])
-        print(np.max(tie_weights))
-        tie_weights = tie_weights / norm_weights
-        print(np.max(tie_weights))
         senders = [x['sender'] for x in res]
         receivers = [x['receiver'] for x in res]
 
-        assert norm_receivers==receivers, "Query error, could not match occurrences of alters!"
+        # Normalization
+        # Ties should be normalized by the number of occurrences of the receiver
+        if norm_ties==True:
+            alters = [x['receiver'] for x in res]
+            norms = self.query_occurrences(alters, times, weight_cutoff)
+            norm_weights = np.array([x[1] for x in norms])
+            norm_receivers = [x[0] for x in norms]
+            tie_weights = tie_weights / norm_weights
+            assert norm_receivers==receivers, "Query error, could not match occurrences of alters!"
 
         occurrences = [x['occurrences'] for x in res]
-        print(np.sum(occurrences))
 
         ties = [
             (x[0], x[1], nw_time['m'], {'weight': x[2], 't1': nw_time['s'], 't2': nw_time['e'], 'occurrences': x[3]})
@@ -530,10 +528,9 @@ class neo4j_network(MutableSequence):
         self.add_queries(queries)
 
     # %% Conditoning functions
-    def condition(self, years, tokens, weight_cutoff=None, depth=None, context=None):
-        if not isinstance(tokens, list): tokens = [tokens]
-        # Work from ID list
-        tokens = self.ensure_ids(tokens)
+    def condition(self, years, token_ids, weight_cutoff=None, depth=None, context=None):
+
+
         if self.conditioned == False:  # This is the first conditioning
             # Preserve node and token lists
             self.neo_ids = copy.deepcopy(self.ids)
@@ -541,40 +538,50 @@ class neo4j_network(MutableSequence):
             self.neo_token_id_dict = copy.deepcopy(self.token_id_dict)
             # Build graph
             self.graph = self.create_empty_graph()
-            # Add starting nodes
-            self.graph.add_nodes_from(tokens)
-            # Query Neo4j
-            try:
-                self.graph.add_edges_from(self.query_multiple_nodes(tokens, years, weight_cutoff))
-            except:
-                logging.error("Could not condition graph by query method.")
-
-            # Update IDs and Tokens to reflect conditioning
-            new_ids = list(self.graph.nodes)
-            self.tokens = [self.get_token_from_id(x) for x in new_ids]
-            self.ids = new_ids
+            # Clear graph dicts
+            self.tokens = []
+            self.ids = []
             self.update_dicts()
 
-            # Set additional attributes
-            att_list = [{"token": x} for x in self.tokens]
-            att_dict = dict(list(zip(self.ids, att_list)))
-            nx.set_node_attributes(self.graph, att_dict)
-
-            if depth == 1:
+            # Depth 0 and Depth 1 really mean the same thing here
+            if depth==0:
+                depth=1
+            # Create a dict to hold previously queried ids
+            prev_queried_ids=list()
+            while depth>0:
+                if not isinstance(token_ids, list): token_ids = [token_ids]
+                # Work from ID list, give error if tokens are not in database
+                token_ids = self.ensure_ids(token_ids)
+                # Do not consider already added tokens
+                token_ids = np.setdiff1d(token_ids, prev_queried_ids)
+                # Add token_ids to list since they will be queried this iteration
+                prev_queried_ids.extend(token_ids)
+                # Add starting nodes
+                self.graph.add_nodes_from(token_ids)
+                # Query Neo4j
                 try:
-                    self.graph.add_edges_from(self.query_multiple_nodes(new_ids, years, weight_cutoff))
+                    self.graph.add_edges_from(self.query_multiple_nodes(token_ids, years, weight_cutoff))
                 except:
                     logging.error("Could not condition graph by query method.")
+
                 # Update IDs and Tokens to reflect conditioning
-                new_ids = list(self.graph.nodes)
-                self.tokens = [self.get_token_from_id(x) for x in new_ids]
-                self.ids = new_ids
+                all_ids = list(self.graph.nodes)
+                self.tokens = [self.get_token_from_id(x) for x in all_ids]
+                self.ids = all_ids
                 self.update_dicts()
+
+                # Set the next set of tokens as those that have not been previously queried
+                token_ids = np.setdiff1d(all_ids, prev_queried_ids)
 
                 # Set additional attributes
                 att_list = [{"token": x} for x in self.tokens]
                 att_dict = dict(list(zip(self.ids, att_list)))
                 nx.set_node_attributes(self.graph, att_dict)
+
+                # decrease depth
+                depth = depth -1
+                if token_ids==[]:
+                    depth = 0
 
             # Set conditioning true
             self.conditioned = True
@@ -582,7 +589,7 @@ class neo4j_network(MutableSequence):
         else:  # Remove conditioning and recondition
             # TODO: "Allow for conditioning on conditioning"
             self.decondition()
-            self.condition( years, tokens, weight_cutoff, depth, context)
+            self.condition( years, token_ids, weight_cutoff, depth, context)
 
         # Continue conditioning
 
@@ -684,23 +691,33 @@ class neo4j_network(MutableSequence):
         return index.item()
 
     def get_token_from_id(self, id):
-        """Index (order) of token in data structures used"""
-        # Token has to be string
+        """Token of id in data structures used"""
+        # id should be int
         assert isinstance(id, int)
         try:
             token = self.token_id_dict[id]
         except:
-            raise LookupError("".join(["Token with ID ", str(id), " missing. Token not in network?"]))
+            # Graph is possibly conditioned or in the process of being conditioned
+            # Check Backup dict from neo database.
+            try:
+                token = self.neo_token_id_dict[id]
+            except:
+                raise LookupError("".join(["Token with ID ", str(id), " missing. Token not in network or database?"]))
         return token
 
     def get_id_from_token(self, token):
-        """Index (order) of token in data structures used"""
+        """Id of token in data structures used"""
         # Token has to be string
         assert isinstance(token, str)
         try:
             id = self.token_id_dict[token]
         except:
-            raise LookupError("".join(["ID of token ", token, " missing. Token not in network?"]))
+            # Graph is possibly conditioned or in the process of being conditioned
+            # Check Backup dict from neo database.
+            try:
+                id = self.neo_token_id_dict[token]
+            except:
+                raise LookupError("".join(["ID of token ", token, " missing. Token not in network or database?"]))
         return id
 
     def ensure_ids(self, tokens):
