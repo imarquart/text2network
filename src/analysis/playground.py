@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 
 from config.config import configuration
-from src.neo4jnw import neo4j_network
+from src.classes.neo4jnw import neo4j_network
 
 cfg = configuration()
 

@@ -319,7 +319,7 @@ class neo4j_network(MutableSequence):
         occurrences = [x['occurrences'] for x in res]
 
         ties = [
-            (x[0], x[1], nw_time['m'], {'weight': x[2], 't1': nw_time['s'], 't2': nw_time['e'], 'occurrences': x[3]})
+            (x[0], x[1], {'weight': x[2], 'time': nw_time['m'],'start': nw_time['s'], 'end': nw_time['e'], 'occurrences': x[3]})
             for x in zip(senders, receivers, tie_weights, occurrences)]
 
         return ties
@@ -535,7 +535,16 @@ class neo4j_network(MutableSequence):
 
     # %% Conditoning functions
     def condition(self, years=None, token_ids=None, weight_cutoff=None, depth=None,  context=None, norm=False):
-        """ Dispatch function for conditioning """
+        """
+
+        :param years: None, integer YYYY, or interval dict of the form {"start":YYYY,"end":YYYY}
+        :param token_ids: None or list of strings or integers (ids)
+        :param weight_cutoff: Ties with weight smaller will be ignored
+        :param depth: If ego network is requested, maximal path length from ego
+        :param context: list of tokens or token ids that are in the context of replacement
+        :param norm: True/False - Generate normed replacement or aggregate replacement
+        :return:
+        """
         # Without times, we query all
         if years==None:
             years=self.get_times_list()
@@ -568,7 +577,8 @@ class neo4j_network(MutableSequence):
 
             # Loop batched over all tokens to condition
             batchsize=100
-            for token_ids in range(0, len(worklist), batchsize):
+            for i in range(0, len(worklist), batchsize):
+                token_ids = worklist[i:i + batchsize]
 
                 # Query Neo4j
                 try:
@@ -733,7 +743,7 @@ class neo4j_network(MutableSequence):
     # %% Graph abstractions - for now only networkx
     def create_empty_graph(self):
 
-        return nx.MultiDiGraph()
+        return nx.DiGraph()
 
     def delete_graph(self):
 
