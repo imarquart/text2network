@@ -527,8 +527,74 @@ class neo4j_network(MutableSequence):
         queries = [''.join(["MATCH (n:word {token_id: ", str(key), "}) DETACH DELETE n"])]
         self.add_queries(queries)
 
+    def get_times_list(self):
+        query="MATCH (n) WHERE EXISTS(n.time) RETURN DISTINCT  n.time AS time"
+        res = self.connector.run(query)
+        times=[x['times'] for x in res]
+        return times
+
     # %% Conditoning functions
-    def condition(self, years, token_ids, weight_cutoff=None, depth=None, context=None):
+    def condition(self, years=None, token_ids=None, weight_cutoff=None, depth=None,  context=None, norm=False):
+        """ Dispatch function for conditioning """
+        # Without times, we query all
+        if years==None:
+            years=self.get_times_list()
+
+        if token_ids==None:
+            self.year_condition(years, weight_cutoff,context, norm)
+        else:
+            self.ego_condition(years,token_ids,weight_cutoff,depth,context, norm)
+
+
+
+    def year_condition(self,years, weight_cutoff=None, context=None, norm=False):
+        """ Condition the entire network over all years """
+        if self.conditioned == False:  # This is the first conditioning
+            # Preserve node and token lists
+            self.neo_ids = copy.deepcopy(self.ids)
+            self.neo_tokens = copy.deepcopy(self.tokens)
+            self.neo_token_id_dict = copy.deepcopy(self.token_id_dict)
+            # Build graph
+            self.graph = self.create_empty_graph()
+            # Clear graph dicts
+            self.tokens = []
+            self.ids = []
+            self.update_dicts()
+
+            # All tokens
+            worklist=self.neo_ids
+            # Add all tokens to graph
+            self.graph.add_nodes_from(worklist)
+
+            # Loop batched over all tokens to condition
+            batchsize=100
+            for token_ids in range(0, len(worklist), batchsize):
+
+                # Query Neo4j
+                try:
+                    self.graph.add_edges_from(
+                        self.query_multiple_nodes(token_ids, years, weight_cutoff, norm_ties=norm))
+                except:
+                    logging.error("Could not condition graph by query method.")
+
+            # Update IDs and Tokens to reflect conditioning
+            all_ids = list(self.graph.nodes)
+            self.tokens = [self.get_token_from_id(x) for x in all_ids]
+            self.ids = all_ids
+            self.update_dicts()
+            # Add final properties
+            att_list = [{"token": x} for x in self.tokens]
+            att_dict = dict(list(zip(self.ids, att_list)))
+            nx.set_node_attributes(self.graph, att_dict)
+
+
+
+        else:  # Remove conditioning and recondition
+            # TODO: "Allow for conditioning on conditioning"
+            self.decondition()
+            self.year_condition(years, weight_cutoff, context, norm)
+
+    def ego_condition(self, years, token_ids, weight_cutoff=None, depth=None, context=None, norm=False):
 
 
         if self.conditioned == False:  # This is the first conditioning
@@ -560,7 +626,7 @@ class neo4j_network(MutableSequence):
                 self.graph.add_nodes_from(token_ids)
                 # Query Neo4j
                 try:
-                    self.graph.add_edges_from(self.query_multiple_nodes(token_ids, years, weight_cutoff))
+                    self.graph.add_edges_from(self.query_multiple_nodes(token_ids, years, weight_cutoff, norm_ties=norm))
                 except:
                     logging.error("Could not condition graph by query method.")
 
@@ -589,7 +655,7 @@ class neo4j_network(MutableSequence):
         else:  # Remove conditioning and recondition
             # TODO: "Allow for conditioning on conditioning"
             self.decondition()
-            self.condition( years, token_ids, weight_cutoff, depth, context)
+            self.condition( years, token_ids, weight_cutoff, depth, context, norm)
 
         # Continue conditioning
 
