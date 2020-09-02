@@ -148,3 +148,5 @@ data-hbr/networks/
 src/text_processing/runs/
 
 data_full/
+
+*.gexf

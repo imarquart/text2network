@@ -24,7 +24,7 @@ class neo4j_network(MutableSequence):
     # %% Initialization functions
     def __init__(self, neo4j_creds, graph_type="networkx", agg_operator="SUM",
                  write_before_query=True,
-                 neo_batch_size=1000, queue_size=100000, tie_query_limit=100000, tie_creation="UNSAFE"):
+                 neo_batch_size=10000, queue_size=100000, tie_query_limit=100000, tie_creation="UNSAFE"):
         self.neo4j_connection, self.neo4j_credentials = neo4j_creds
         self.write_before_query = write_before_query
         # Conditioned graph information
@@ -272,12 +272,6 @@ class neo4j_network(MutableSequence):
                 where_query = "WHERE  $times.start <= r.time<= $times.end "
             else:
                 where_query = ""
-        # Create params with or without time
-        if isinstance(times, dict) or isinstance(times, int):
-            params = {"ids": ids, "times": times}
-        else:
-            params = {"ids": ids}
-
         # Create query depending on graph direction and whether time variable is queried via where or node property
         # By default, a->b when a->predicted_by->b
         # Given an id, we query b:id(sender)<-a(receiver)
@@ -298,6 +292,13 @@ class neo4j_network(MutableSequence):
         else:
             nw_time = {"s": 0, "e": 0, "m": 0}
 
+        # Create params with or without time
+        ids=self.ensure_ids(ids)
+        if isinstance(times, dict) or isinstance(times, int):
+            params = {"ids": ids, "times": times}
+        else:
+            params = {"ids": ids}
+
         query = "".join([match_query, where_query, return_query])
         res = self.connector.run(query, params)
 
@@ -305,18 +306,13 @@ class neo4j_network(MutableSequence):
         tie_weights = np.array([x['agg_weight'] for x in res])
         senders = [x['sender'] for x in res]
         receivers = [x['receiver'] for x in res]
-
+        occurrences = [x['occurrences'] for x in res]
         # Normalization
         # Ties should be normalized by the number of occurrences of the receiver
         if norm_ties==True:
-            alters = [x['receiver'] for x in res]
-            norms = self.query_occurrences(alters, times, weight_cutoff)
-            norm_weights = np.array([x[1] for x in norms])
-            norm_receivers = [x[0] for x in norms]
-            tie_weights = tie_weights / norm_weights
-            assert norm_receivers==receivers, "Query error, could not match occurrences of alters!"
-
-        occurrences = [x['occurrences'] for x in res]
+            norms = dict(self.query_occurrences(receivers, times, weight_cutoff))
+            for i,token in enumerate(receivers):
+                tie_weights[i] = tie_weights[i]/norms[token]
 
         ties = [
             (x[0], x[1], {'weight': x[2], 'time': nw_time['m'],'start': nw_time['s'], 'end': nw_time['e'], 'occurrences': x[3]})
@@ -534,7 +530,7 @@ class neo4j_network(MutableSequence):
         return times
 
     # %% Conditoning functions
-    def condition(self, years=None, token_ids=None, weight_cutoff=None, depth=None,  context=None, norm=False):
+    def condition(self, years=None, token_ids=None, weight_cutoff=None, depth=None,  context=None, norm=False,batchsize=10000):
         """
 
         :param years: None, integer YYYY, or interval dict of the form {"start":YYYY,"end":YYYY}
@@ -550,13 +546,13 @@ class neo4j_network(MutableSequence):
             years=self.get_times_list()
 
         if token_ids==None:
-            self.year_condition(years, weight_cutoff,context, norm)
+            self.year_condition(years, weight_cutoff,context, norm, batchsize)
         else:
             self.ego_condition(years,token_ids,weight_cutoff,depth,context, norm)
 
 
 
-    def year_condition(self,years, weight_cutoff=None, context=None, norm=False):
+    def year_condition(self,years, weight_cutoff=None, context=None, norm=False,batchsize=10000):
         """ Condition the entire network over all years """
         if self.conditioned == False:  # This is the first conditioning
             # Preserve node and token lists
@@ -576,8 +572,8 @@ class neo4j_network(MutableSequence):
             self.graph.add_nodes_from(worklist)
 
             # Loop batched over all tokens to condition
-            batchsize=100
             for i in range(0, len(worklist), batchsize):
+
                 token_ids = worklist[i:i + batchsize]
 
                 # Query Neo4j
@@ -620,14 +616,16 @@ class neo4j_network(MutableSequence):
             self.update_dicts()
 
             # Depth 0 and Depth 1 really mean the same thing here
-            if depth==0:
+            if depth==0 or depth==None:
                 depth=1
             # Create a dict to hold previously queried ids
             prev_queried_ids=list()
             while depth>0:
-                if not isinstance(token_ids, list): token_ids = [token_ids]
+                if not isinstance(token_ids, (list, np.ndarray)): token_ids = [token_ids]
                 # Work from ID list, give error if tokens are not in database
+                #print("{} tokens pre ensure: {}".format(len(token_ids),token_ids))
                 token_ids = self.ensure_ids(token_ids)
+                #print("{} tokens post ensure: {}".format(len(token_ids),token_ids))
                 # Do not consider already added tokens
                 token_ids = np.setdiff1d(token_ids, prev_queried_ids)
                 # Add token_ids to list since they will be queried this iteration
@@ -638,17 +636,19 @@ class neo4j_network(MutableSequence):
                 try:
                     self.graph.add_edges_from(self.query_multiple_nodes(token_ids, years, weight_cutoff, norm_ties=norm))
                 except:
-                    logging.error("Could not condition graph by query method.")
+                    #logging.error("Could not condition graph by query method.")
+                    raise Exception("Could not condition graph by query method.")
 
                 # Update IDs and Tokens to reflect conditioning
                 all_ids = list(self.graph.nodes)
+                #("{} All ids: {}".format(len(all_ids),all_ids))
                 self.tokens = [self.get_token_from_id(x) for x in all_ids]
                 self.ids = all_ids
                 self.update_dicts()
 
                 # Set the next set of tokens as those that have not been previously queried
                 token_ids = np.setdiff1d(all_ids, prev_queried_ids)
-
+                #print("{} tokens post setdiff: {}".format(len(token_ids),token_ids))
                 # Set additional attributes
                 att_list = [{"token": x} for x in self.tokens]
                 att_dict = dict(list(zip(self.ids, att_list)))
@@ -769,7 +769,7 @@ class neo4j_network(MutableSequence):
     def get_token_from_id(self, id):
         """Token of id in data structures used"""
         # id should be int
-        assert isinstance(id, int)
+        assert np.issubdtype(type(id), np.integer)
         try:
             token = self.token_id_dict[id]
         except:
@@ -786,25 +786,28 @@ class neo4j_network(MutableSequence):
         # Token has to be string
         assert isinstance(token, str)
         try:
-            id = self.token_id_dict[token]
+            id = int(self.token_id_dict[token])
         except:
             # Graph is possibly conditioned or in the process of being conditioned
             # Check Backup dict from neo database.
             try:
-                id = self.neo_token_id_dict[token]
+                id = int(self.neo_token_id_dict[token])
             except:
                 raise LookupError("".join(["ID of token ", token, " missing. Token not in network or database?"]))
         return id
 
     def ensure_ids(self, tokens):
         """This is just to confirm mixed lists of tokens and ids get converted to ids"""
-        if isinstance(tokens, list):
-            return [self.get_id_from_token(x) if not isinstance(x, int) else x for x in tokens]
+        if isinstance(tokens, (list,np.ndarray)) :
+            # Transform strings to corresponding IDs
+            tokens= [self.get_id_from_token(x) if not np.issubdtype(type(x), np.integer) else x for x in tokens]
+            # Make sure np arrays get transformed to int lists
+            return [int(x) if not isinstance(x,int) else x for x in tokens]
         else:
-            if not isinstance(tokens, int):
+            if not np.issubdtype(type(tokens), np.integer):
                 return self.get_id_from_token(tokens)
             else:
-                return tokens
+                return int(tokens)
 
     def ensure_tokens(self, ids):
         """This is just to confirm mixed lists of tokens and ids get converted to ids"""
