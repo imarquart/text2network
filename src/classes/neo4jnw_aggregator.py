@@ -56,23 +56,23 @@ class neo4jnw_aggregator():
         # Condition either overall, or via ego network
         if ego_nw_tokens==None:
             logging.debug("Conditioning year(s) {} with focus on tokens {}".format(years, tokens))
-            print("Conditioning year(s) {} with focus on tokens {}".format(years, tokens))
+            logging.debug("Conditioning year(s) {} with focus on tokens {}".format(years, tokens))
             self.neo4nw.condition(years, token_ids=None, weight_cutoff=self.weight_cutoff, depth=None, context=None, norm=self.norm_ties)
-            print("Finished conditioning, {} nodes and {} edges in graph".format(len(self.neo4nw.graph.nodes), len(self.neo4nw.graph.edges)))
+            logging.debug("Finished conditioning, {} nodes and {} edges in graph".format(len(self.neo4nw.graph.nodes), len(self.neo4nw.graph.edges)))
 
         else:
             logging.debug("Conditioning ego-network for {} tokens with depth {}, for year(s) {} with focus on tokens {}".format(len(ego_nw_tokens), depth, years, tokens))
-            print("Conditioning ego-network for {} tokens with depth {}, for year(s) {} with focus on tokens {}".format(len(ego_nw_tokens), depth, years, tokens))
+            logging.debug("Conditioning ego-network for {} tokens with depth {}, for year(s) {} with focus on tokens {}".format(len(ego_nw_tokens), depth, years, tokens))
             self.neo4nw.condition(years, token_ids=ego_nw_tokens, weight_cutoff=self.weight_cutoff, depth=depth, context=None, norm=self.norm_ties)
-            print("Finished ego conditioning, {} nodes and {} edges in graph".format(len(self.neo4nw.graph.nodes), len(self.neo4nw.graph.edges)))
+            logging.debug("Finished ego conditioning, {} nodes and {} edges in graph".format(len(self.neo4nw.graph.nodes), len(self.neo4nw.graph.edges)))
 
         # Get list of token ids
-        print("Tokens {}".format(tokens))
+        logging.debug("Tokens {}".format(tokens))
         if tokens==None:
             token_ids=self.neo4nw.ids
         else:
             token_ids=self.neo4nw.ensure_ids(tokens)
-        print("token_ids {}".format(token_ids))
+        logging.debug("token_ids {}".format(token_ids))
         if isinstance(token_ids,int):
             token_ids=[token_ids]
         measures={}
@@ -89,7 +89,6 @@ class neo4jnw_aggregator():
 
         # Decondition
         self.neo4nw.decondition()
-        #print("Measures{}".format(measures))
         return measures
 
     def symmetrize_graph(self, method="avg"):
