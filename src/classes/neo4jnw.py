@@ -1,12 +1,12 @@
 import copy
 import logging
 from collections.abc import MutableSequence
-
+from src.utils.twowaydict import TwoWayDict
 import numpy as np
 
 # import neo4j
 import neo4jCon as neo_connector
-from src.utils.twowaydict import TwoWayDict
+from src.classes.neo4db import neo4j_database
 
 try:
     import networkx as nx
@@ -25,6 +25,10 @@ class neo4j_network(MutableSequence):
     def __init__(self, neo4j_creds, graph_type="networkx", agg_operator="SUM",
                  write_before_query=True,
                  neo_batch_size=10000, queue_size=100000, tie_query_limit=100000, tie_creation="UNSAFE"):
+
+        db=neo4j_database(neo4j_creds,agg_operator,write_before_query,neo_batch_size,queue_size,tie_query_limit,tie_creation)
+
+        
         self.neo4j_connection, self.neo4j_credentials = neo4j_creds
         self.write_before_query = write_before_query
         # Conditioned graph information
