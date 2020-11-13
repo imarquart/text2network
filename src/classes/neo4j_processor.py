@@ -14,7 +14,7 @@ from src.utils.delwords import create_stopword_list
 from src.utils.rowvec_tools import simple_norm
 
 class neo4j_processor():
-    def __init__(self, tokenizer, bert, text_db, neograph, MAX_SEQ_LENGTH, DICT_SIZE, batch_size, maxn=None,nr_workers=0,cutoff_percent=99, max_degree=50,logging_level=logging.NOTSET):
+    def __init__(self, tokenizer, bert, neograph, MAX_SEQ_LENGTH, DICT_SIZE, batch_size,text_db=None,  maxn=None,nr_workers=0,cutoff_percent=99, max_degree=50,logging_level=logging.NOTSET):
         """
         Extracts pre-processed sentences, gets predictions by BERT and creates a network
 
@@ -47,7 +47,7 @@ class neo4j_processor():
         # Set logging level
         logging.disable(logging_level)
 
-    def process_sentences_neo4j(self,year):
+    def process_sentences_neo4j(self,year,text_db=None):
         """
         Extracts pre-processed sentences, gets predictions by BERT and creates network ties
         Ties are then added to the neo4j database.
@@ -58,6 +58,14 @@ class neo4j_processor():
         :param year: year corresponding to variable in preprocessing database
         """
         tables.set_blosc_max_threads(15)
+
+
+        # Check if text database has changed
+        if text_db is not None:
+            self.text_db=text_db
+        elif self.text_db==None:
+            logging.error("No text database provided!")
+            raise ConnectionError("No text database provided!")
 
         # %% Initialize text dataset
         dataset = text_dataset(self.text_db, self.tokenizer, self.MAX_SEQ_LENGTH,maxn=self.maxn)
