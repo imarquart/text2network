@@ -2,10 +2,14 @@ from src.classes.neo4jnw import neo4j_network
 import pandas as pd
 import networkx as nx
 import itertools
+import logging
+import numpy as np
 
 class neo4jnw_aggregator():
 
-    def __init__(self, neo4j_creds, weight_cutoff=None,norm_ties=False):
+    def __init__(self, neo4j_creds, weight_cutoff=None,norm_ties=False, logging_level=logging.NOTSET):
+        # Set logging level
+        logging.disable(logging_level)
         # Create network
         self.neo4nw=neo4j_network(neo4j_creds)
         self.norm_ties=norm_ties
@@ -30,7 +34,7 @@ class neo4jnw_aggregator():
 
         return cent_year
 
-    def centrality(self,tokens=None,years=None, ego_nw_tokens=None, depth=1, types=["PageRank"]):
+    def centrality(self,tokens=None,years=None, ego_nw_tokens=None, depth=1, types=["PageRank","normedPageRank"]):
         """
         Calculate centralities for given tokens over an aggregate of given years
         :param tokens: List of tokens of interest
@@ -44,18 +48,33 @@ class neo4jnw_aggregator():
             assert isinstance(years, dict) or isinstance(years, int), "Parameter years must be int or interval dict {'start':int,'end':int}"
         if tokens is not None:
             assert isinstance(tokens, list) or isinstance(tokens, int) or isinstance(tokens, str), "Token parameter should be string, int or list."
-
+        if isinstance(types, str):
+            types=[types]
+        elif not isinstance(types, list):
+            logging.error("Centrality types must be list")
+            raise ValueError("Centrality types must be list")
         # Condition either overall, or via ego network
         if ego_nw_tokens==None:
+            logging.debug("Conditioning year(s) {} with focus on tokens {}".format(years, tokens))
+            print("Conditioning year(s) {} with focus on tokens {}".format(years, tokens))
             self.neo4nw.condition(years, token_ids=None, weight_cutoff=self.weight_cutoff, depth=None, context=None, norm=self.norm_ties)
+            print("Finished conditioning, {} nodes and {} edges in graph".format(len(self.neo4nw.graph.nodes), len(self.neo4nw.graph.edges)))
+
         else:
+            logging.debug("Conditioning ego-network for {} tokens with depth {}, for year(s) {} with focus on tokens {}".format(len(ego_nw_tokens), depth, years, tokens))
+            print("Conditioning ego-network for {} tokens with depth {}, for year(s) {} with focus on tokens {}".format(len(ego_nw_tokens), depth, years, tokens))
             self.neo4nw.condition(years, token_ids=ego_nw_tokens, weight_cutoff=self.weight_cutoff, depth=depth, context=None, norm=self.norm_ties)
+            print("Finished ego conditioning, {} nodes and {} edges in graph".format(len(self.neo4nw.graph.nodes), len(self.neo4nw.graph.edges)))
 
         # Get list of token ids
+        print("Tokens {}".format(tokens))
         if tokens==None:
             token_ids=self.neo4nw.ids
         else:
             token_ids=self.neo4nw.ensure_ids(tokens)
+        print("token_ids {}".format(token_ids))
+        if isinstance(token_ids,int):
+            token_ids=[token_ids]
         measures={}
         for measure in types:
         # PageRank centrality
@@ -70,7 +89,7 @@ class neo4jnw_aggregator():
 
         # Decondition
         self.neo4nw.decondition()
-
+        #print("Measures{}".format(measures))
         return measures
 
     def symmetrize_graph(self, method="avg"):
@@ -99,9 +118,30 @@ class neo4jnw_aggregator():
             # PageRank centrality
             try:
                 centralities = nx.pagerank_scipy(self.neo4nw.graph, weight='weight')
+                logging.debug(
+                    "Calculated {} PageRank centralities".format(
+                        len(centralities)))
+
+            except:
+                raise Exception("Could not calculate Page Rank centralities")
+        elif measure=="normedPageRank":
+            # PageRank centrality
+            try:
+                centralities = nx.pagerank_scipy(self.neo4nw.graph, weight='weight')
+                logging.debug(
+                    "Calculated {} normalized PageRank centralities".format(
+                        len(centralities)))
+                centvec=np.array(list(centralities.values()))
+                normconst=np.sum(centvec)
+                nr_n=len(centvec)
+                logging.debug("Norm Const is {}".format(normconst))
+                centvec=(centvec/normconst)*nr_n
+                logging.debug("For N={}, sum of changed vector is {}".format(nr_n,np.sum(centvec)))
+                centralities=dict(zip(centralities.keys(),centvec))
+
             except:
                 raise Exception("Could not calculate Page Rank centralities")
         else:
-            raise AttributeError("Centrality measure not found in list")
+            raise AttributeError("Centrality measure {} not found in list".format(measure))
 
         return centralities

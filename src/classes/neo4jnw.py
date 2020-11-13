@@ -24,9 +24,11 @@ class neo4j_network(MutableSequence):
     # %% Initialization functions
     def __init__(self, neo4j_creds, graph_type="networkx", agg_operator="SUM",
                  write_before_query=True,
-                 neo_batch_size=10000, queue_size=100000, tie_query_limit=100000, tie_creation="UNSAFE"):
+                 neo_batch_size=10000, queue_size=100000, tie_query_limit=100000, tie_creation="UNSAFE", logging_level=logging.NOTSET):
+        # Set logging level
+        logging.disable(logging_level)
 
-        db=neo4j_database(neo4j_creds,agg_operator,write_before_query,neo_batch_size,queue_size,tie_query_limit,tie_creation)
+        db=neo4j_database(neo4j_creds,agg_operator,write_before_query,neo_batch_size,queue_size,tie_query_limit,tie_creation,logging_level)
 
         # Conditioned graph information
         self.graph_type = graph_type
@@ -184,8 +186,10 @@ class neo4j_network(MutableSequence):
             years=self.get_times_list()
 
         if token_ids==None:
+            logging.debug("Conditioning dispatch: Yearly")
             self.year_condition(years, weight_cutoff,context, norm, batchsize)
         else:
+            logging.debug("Conditioning dispatch: Ego")
             self.ego_condition(years,token_ids,weight_cutoff,depth,context, norm)
 
     def year_condition(self,years, weight_cutoff=None, context=None, norm=False,batchsize=10000):
@@ -211,7 +215,7 @@ class neo4j_network(MutableSequence):
             for i in range(0, len(worklist), batchsize):
 
                 token_ids = worklist[i:i + batchsize]
-
+                logging.debug("Conditioning by query batch {} of {} tokens.".format(i,len(token_ids)))
                 # Query Neo4j
                 try:
                     self.graph.add_edges_from(
@@ -259,6 +263,7 @@ class neo4j_network(MutableSequence):
                 #print("{} tokens post ensure: {}".format(len(token_ids),token_ids))
                 # Do not consider already added tokens
                 token_ids = np.setdiff1d(token_ids, prev_queried_ids)
+                logging.debug("Depth {} conditioning: {} new found tokens, where {} already added.".format(depth,len(token_ids), len(prev_queried_ids)))
                 # Add token_ids to list since they will be queried this iteration
                 prev_queried_ids.extend(token_ids)
                 # Add starting nodes
@@ -267,7 +272,7 @@ class neo4j_network(MutableSequence):
                 try:
                     self.graph.add_edges_from(self.query_multiple_nodes(token_ids, years, weight_cutoff, norm_ties=norm))
                 except:
-                    #logging.error("Could not condition graph by query method.")
+                    logging.error("Could not condition graph by query method.")
                     raise Exception("Could not condition graph by query method.")
 
                 # Update IDs and Tokens to reflect conditioning
@@ -363,6 +368,7 @@ class neo4j_network(MutableSequence):
         self.token_id_dict = self.neo_token_id_dict
 
         # Decondition
+        logging.debug("Deconditioning graph.")
         self.delete_graph()
         self.conditioned = False
 

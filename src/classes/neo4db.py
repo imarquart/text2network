@@ -10,7 +10,10 @@ import neo4jCon as neo_connector
 class neo4j_database(MutableSequence):
     def __init__(self, neo4j_creds, agg_operator="SUM",
                  write_before_query=True,
-                 neo_batch_size=10000, queue_size=100000, tie_query_limit=100000, tie_creation="UNSAFE"):
+                 neo_batch_size=10000, queue_size=100000, tie_query_limit=100000, tie_creation="UNSAFE", logging_level=logging.NOTSET):
+        # Set logging level
+        logging.disable(logging_level)
+
         self.neo4j_connection, self.neo4j_credentials = neo4j_creds
         self.write_before_query = write_before_query
  
@@ -38,9 +41,10 @@ class neo4j_database(MutableSequence):
         :param token_ids: list of corresponding token IDs
         :return: None
         """
-        logging.info("Creating indecies and nodes in Neo4j database.")
+        logging.debug("Creating indecies and nodes in Neo4j database.")
         constr = [x['name'] for x in self.connector.run("CALL db.constraints")]
         # Create uniqueness constraints
+        logging.debug("Creating constraints in Neo4j database.")
         if 'id_con' not in constr:
             query = "CREATE CONSTRAINT id_con ON(n:word) ASSERT n.token_id IS UNIQUE"
             self.add_query(query)
@@ -70,6 +74,7 @@ class neo4j_database(MutableSequence):
         and sets up two-way dicts
         :return: ids,tokens
         """
+        logging.debug("Querying tokens and filling data structure.")
         # Run neo query to get all nodes
         res = self.connector.run("MATCH (n:word) RETURN n.token_id, n.token")
         # Update results
@@ -90,6 +95,7 @@ class neo4j_database(MutableSequence):
         :param times: either a number format YYYYMMDD, or an interval dict {"start":YYYYMMDD,"end":YYYYMMDD}
         :return: list of tuples (u,v,Time,{weight:x})
         """
+        logging.debug("Querying {} nodes in Neo4j database.".format(len(ids)))
         # Allow cutoff value of (non-aggregated) weights and set up time-interval query
         if weight_cutoff is not None:
             where_query = ''.join([" WHERE r.weight >=", str(weight_cutoff), " "])
@@ -155,6 +161,7 @@ class neo4j_database(MutableSequence):
         :param times: either a number format YYYYMMDD, or an interval dict {"start":YYYYMMDD,"end":YYYYMMDD}
         :return: list of tuples (u,v,Time,{weight:x})
         """
+        logging.debug("Querying {} node occurrences for normalization".format(len(ids)))
         # Allow cutoff value of (non-aggregated) weights and set up time-interval query
         # If times is a dict, we want an interval and hence where query
         if weight_cutoff is not None:
@@ -243,10 +250,9 @@ class neo4j_database(MutableSequence):
                 for x in res]
         return ties
 
-
     # %% Insert functions
     def insert_edges_context(self, ego, ties, contexts):
-
+        logging.debug("Insert {} ego nodes with {} ties".format(len(ego),len(ties)))
         # Tie direction matters
         # Ego by default is the focal token to be replaced. Normal insertion points the link accordingly.
         # Hence, a->b is an instance of b replacing a!
