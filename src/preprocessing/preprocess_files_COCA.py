@@ -10,7 +10,7 @@ import nltk
 import tables
 
 
-def preprocess_files_HBR(folder, database, MAX_SEQ_LENGTH, char_mult, max_seq=0):
+def preprocess_files_HBR(folder, database, MAX_SEQ_LENGTH, char_mult, max_seq=0, split_symbol="-", number_params=4):
     """
     Pre-processes files (using spacy) from raw data into a HD5 Table
 
@@ -35,9 +35,12 @@ def preprocess_files_HBR(folder, database, MAX_SEQ_LENGTH, char_mult, max_seq=0)
     class sequence(tables.IsDescription):
         run_index = tables.UInt32Col()
         seq_id = tables.UInt32Col()
-        text_id = tables.UInt32Col()
         text = tables.StringCol(MAX_SEQ_LENGTH * char_mult)
         year = tables.UInt32Col()
+        p1 = tables.StringCol(40)
+        p2 = tables.StringCol(40)
+        p3 = tables.StringCol(40)
+        p4 = tables.StringCol(40)
         source = tables.StringCol(40)
         max_length = tables.UInt32Col()
 
@@ -71,8 +74,13 @@ def preprocess_files_HBR(folder, database, MAX_SEQ_LENGTH, char_mult, max_seq=0)
 
         file_name = re.split(".txt", file_name)[0]
         file_source = file_name
-        text_id = re.split("_", file_name)[-1]
-        year = re.split("_", file_name)[-2]
+
+        # Set up params list
+        params=[]
+        for i in range(1,number_params):
+            params.append(re.split("_", file_name)[-i])
+
+        year = re.split("_", file_name)[-(number_params+1)]
         year = int(year[-4:])
 
         try:
@@ -116,24 +124,21 @@ def preprocess_files_HBR(folder, database, MAX_SEQ_LENGTH, char_mult, max_seq=0)
             # Increment run index if we actually seek to add row
             run_index = run_index + 1
             particle['run_index'] = run_index
-            particle['text_id'] = text_id
             particle['seq_id'] = idx
             particle['source'] = file_source
             particle['year'] = year
             particle['max_length'] = MAX_SEQ_LENGTH
+            # Add parameters
+            for i,p in enumerate(params):
+                idx=''.join(['p',i+1])
+                particle[idx]=params[i]
 
             # If the sentence has too many tokens, we cut using nltk tokenizer
-            # sent=nltk.word_tokenize(sent)
-
-            # Actually, let's use python split for now
             sent = sent.split()
             # Cut max word amounts
             sent = sent[:MAX_SEQ_LENGTH]
             # Re-join
             sent = ' '.join(sent)
-
-            # Detokenize again, since we will be using BERT to tokenize
-            # sent=TreebankWordDetokenizer().detokenize(sent)
 
             # Our array has a maximum size limit
             # if the string is to long, we want to cut only complete words

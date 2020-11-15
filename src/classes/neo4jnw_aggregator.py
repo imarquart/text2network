@@ -1,5 +1,4 @@
 from src.classes.neo4jnw import neo4j_network
-import pandas as pd
 import networkx as nx
 import itertools
 import logging
@@ -7,11 +6,11 @@ import numpy as np
 
 class neo4jnw_aggregator():
 
-    def __init__(self, neo4j_creds, weight_cutoff=None,norm_ties=False, logging_level=logging.NOTSET):
+    def __init__(self, neo4nw, weight_cutoff=None,norm_ties=False, logging_level=logging.NOTSET):
         # Set logging level
         logging.disable(logging_level)
         # Create network
-        self.neo4nw=neo4j_network(neo4j_creds)
+        self.neo4nw=neo4nw
         self.norm_ties=norm_ties
         self.weight_cutoff=weight_cutoff
 
@@ -37,7 +36,7 @@ class neo4jnw_aggregator():
     def centrality(self,tokens=None,years=None, ego_nw_tokens=None, depth=1, types=["PageRank","normedPageRank"]):
         """
         Calculate centralities for given tokens over an aggregate of given years
-        :param tokens: List of tokens of interest
+        :param tokens: List of tokens of interest. If not provided, centralities for all tokens will be returned.
         :param years: Given year, or an interval dict {"start":YYYYMMDD,"end":YYYYMMDD}
         :param ego_nw_tokens: List of tokens for an ego-network if desired
         :param depth: Maximal path length for ego network
@@ -122,6 +121,7 @@ class neo4jnw_aggregator():
                         len(centralities)))
 
             except:
+                logging.error("Could not calculate Page Rank centralities")
                 raise Exception("Could not calculate Page Rank centralities")
         elif measure=="normedPageRank":
             # PageRank centrality
@@ -133,13 +133,14 @@ class neo4jnw_aggregator():
                 centvec=np.array(list(centralities.values()))
                 normconst=np.sum(centvec)
                 nr_n=len(centvec)
-                logging.debug("Norm Const is {}".format(normconst))
+                
                 centvec=(centvec/normconst)*nr_n
                 logging.debug("For N={}, sum of changed vector is {}".format(nr_n,np.sum(centvec)))
                 centralities=dict(zip(centralities.keys(),centvec))
 
             except:
-                raise Exception("Could not calculate Page Rank centralities")
+                logging.error("Could not calculate normed Page Rank centralities")
+                raise Exception("Could not calculate normed Page Rank centralities")
         else:
             raise AttributeError("Centrality measure {} not found in list".format(measure))
 

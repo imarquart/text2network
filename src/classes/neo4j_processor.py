@@ -1,8 +1,9 @@
+
 # TODO: Redo Comments
+# TODO: Add parameter handling!
 
 import logging
 import time
-
 import numpy as np
 import tables
 import torch
