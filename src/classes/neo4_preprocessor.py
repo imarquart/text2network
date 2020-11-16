@@ -32,7 +32,7 @@ class neo4j_preprocessor():
         self.number_params=number_params
         
 
-    def preprocess_files(folder, max_seq=0):
+    def preprocess_files(self,folder, max_seq=0):
         """
         Pre-processes files from raw data into a HD5 Table
         :param folder: folder with text files
@@ -40,19 +40,11 @@ class neo4j_preprocessor():
         :return: none
         """
 
-        # TODO: Load Docs as Matrix or parallelize; speed optimization
-        # TODO: Check with other datasets
-        # TODO: Write more general function for other data (low priority)
-
-        # Use spacy to split sentences (model based)
-
-        # nlp = spacy.load("en_core_web_sm")
-
         # Define particle for pytable
         class sequence(tables.IsDescription):
             run_index = tables.UInt32Col()
             seq_id = tables.UInt32Col()
-            text = tables.StringCol(MAX_SEQ_LENGTH * char_mult)
+            text = tables.StringCol(self.MAX_SEQ_LENGTH * self.char_mult)
             year = tables.UInt32Col()
             p1 = tables.StringCol(40)
             p2 = tables.StringCol(40)
@@ -94,7 +86,7 @@ class neo4j_preprocessor():
 
             # Set up params list
             params=[]
-            for i in range(1,number_params):
+            for i in range(1,self.number_params):
                 params.append(re.split("_", file_name)[-i])
 
             year = re.split("_", file_name)[-(number_params+1)]
@@ -144,7 +136,7 @@ class neo4j_preprocessor():
                 particle['seq_id'] = idx
                 particle['source'] = file_source
                 particle['year'] = year
-                particle['max_length'] = MAX_SEQ_LENGTH
+                particle['max_length'] = self.MAX_SEQ_LENGTH
                 # Add parameters
                 for i,p in enumerate(params):
                     idx=''.join(['p',i+1])
@@ -153,13 +145,13 @@ class neo4j_preprocessor():
                 # If the sentence has too many tokens, we cut using nltk tokenizer
                 sent = sent.split()
                 # Cut max word amounts
-                sent = sent[:MAX_SEQ_LENGTH]
+                sent = sent[:self.MAX_SEQ_LENGTH]
                 # Re-join
                 sent = ' '.join(sent)
 
                 # Our array has a maximum size limit
                 # if the string is to long, we want to cut only complete words
-                while len(sent) > (MAX_SEQ_LENGTH * char_mult - 1):
+                while len(sent) > (self.MAX_SEQ_LENGTH * self.char_mult - 1):
                     # Take out one word
                     split = sent.split()[:-1]
                     sent = ' '.join(split)

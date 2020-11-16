@@ -174,6 +174,17 @@ class text_dataset(Dataset):
         # Because of pyTables, we have to encode.
         item = [x.decode("utf-8") for x in item]
 
+        # Get year
+        year_vec = torch.tensor(self.data.read_coordinates(index, field='year'), requires_grad=False)
+        p1= self.data.read_coordinates(index, field='p1')
+        p2= self.data.read_coordinates(index, field='p2')
+        p3= self.data.read_coordinates(index, field='p3')
+        p4= self.data.read_coordinates(index, field='p4')
+        p1 = torch.tensor([x.decode("utf-8") for x in p1], requires_grad=False)
+        p2 = torch.tensor([x.decode("utf-8") for x in p2], requires_grad=False)
+        p3 = torch.tensor([x.decode("utf-8") for x in p3], requires_grad=False)
+        p4 = torch.tensor([x.decode("utf-8") for x in p4], requires_grad=False)
+
         # If a Tokenizer is set, we will tokenize and return pytorch tensor (padded)
         if self.tokenizer is not None:
             list_tokens = []
@@ -208,7 +219,7 @@ class text_dataset(Dataset):
             token_id = torch.cat([x for x in token_id])
 
             # Here will need custom collate fn
-            return item, indexvec, token_id
+            return item, indexvec, token_id, year_vec, p1,p2,p3,p4
         else:
             return index, item
 
