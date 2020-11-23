@@ -9,7 +9,8 @@ from torch.utils.data import Dataset
 from torch.nn.utils.rnn import pad_sequence
 import numbers
 import logging
-
+import os
+import pickle
 
 class text_dataset_subset(Dataset):
     def __init__(self, data_path, subset_tokens, tokenizer=None, fixed_seq_length=None):
@@ -110,6 +111,44 @@ class text_dataset_subset(Dataset):
     def __len__(self):
         return self.nitems
 
+
+
+class bert_dataset(Dataset):
+    # TODO: Padd sentences instead of joining and splitting!
+    def __init__(self, tokenizer, database,where_string, block_size=30):
+        self.database = database
+
+        logging.info("Creating features from database file at %s", self.database)
+
+        self.tables = tables.open_file(self.database, mode="r")
+        self.data = self.tables.root.textdata.table
+
+        # Get text
+        items = self.data.read_where(where_string)['text']
+
+        # Because of pyTables, we have to encode.
+        items = [x.decode("utf-8") for x in items]
+
+        text= ' '.join(items)
+
+        self.examples = []
+
+
+        tokenized_text = tokenizer.convert_tokens_to_ids(tokenizer.tokenize(text))
+
+        for i in range(0, len(tokenized_text) - block_size + 1, block_size):  # Truncate in block of block_size
+            self.examples.append(tokenizer.build_inputs_with_special_tokens(tokenized_text[i:i + block_size]))
+        # Note that we are loosing the last truncated example here for the sake of simplicity (no padding)
+        # If your dataset is small, first you should loook for a bigger one :-) and second you
+        # can change this behavior by adding (model specific) padding.
+
+        self.tables.close()
+
+    def __len__(self):
+        return len(self.examples)
+
+    def __getitem__(self, item):
+        return torch.tensor(self.examples[item])
 
 class text_dataset(Dataset):
     def __init__(self, data_path, tokenizer=None, fixed_seq_length=None, maxn=None):

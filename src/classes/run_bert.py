@@ -39,6 +39,8 @@ from transformers import (WEIGHTS_NAME, AdamW, WarmupLinearSchedule,
                           BertConfig, BertForMaskedLM, BertTokenizer)
 
 from src.utils.load_bert import get_bert_and_tokenizer
+from src.utils.bert_args import bert_args
+from src.datasets.text_dataset import bert_dataset
 
 # try:
 #
@@ -51,109 +53,8 @@ MODEL_CLASSES = {
     'bert': (BertConfig, BertForMaskedLM, BertTokenizer),
 }
 
-
-class bert_args():
-    def __init__(self, train_data_file, output_dir, do_train, model_dir, mlm_probability=0.15, block_size=60,
-                 loss_limit=0.5, gpu_batch=4, epochs=1, warmup_steps=0, save_steps=50000):
-        self.train_data_file = train_data_file
-        self.eval_data_file = train_data_file
-        self.output_dir = output_dir
-
-        self.mlm = True
-        self.mlm_probability = mlm_probability
-
-        self.loss_limit = loss_limit
-
-        if do_train == True:
-            self.do_train = True
-            self.do_eval = True
-        else:
-            self.do_train = False
-            self.do_eval = True
-
-        self.do_lower_case = True
-
-        self.model_name_or_path = model_dir
-        self.model_dir = model_dir
-
-        self.warmup_steps = warmup_steps
-        self.num_train_epochs = epochs
-
-        self.block_size = block_size
-
-        self.evaluate_during_training = True
-
-        self.per_gpu_train_batch_size = gpu_batch
-        self.per_gpu_eval_batch_size = gpu_batch
-
-        self.model_type = "bert"
-        self.config_name = ""
-        self.tokenizer_name = ""
-        self.cache_dir = ""
-        self.gradient_accumulation_steps = 1
-        self.learning_rate = 5e-5
-        self.weight_decay = 0
-        self.adam_epsilon = 1e-8
-        self.max_grad_norm = 1.0
-        self.max_steps = -1
-        self.logging_steps = 1500
-        self.save_steps = save_steps
-        self.save_total_limit = None
-        self.eval_all_checkpoints = False
-        self.no_cuda = False
-        self.overwrite_output_dir = True
-        self.overwrite_cache = True
-        self.seed = 42
-        self.fp16 = False
-        self.fp16_opt_level = "01"
-        self.local_rank = -1
-        self.n_gpu = 1
-        self.server_ip = ''
-        self.server_port = ''
-
-        self.device = None
-
-
-class TextDataset(Dataset):
-    def __init__(self, tokenizer, args, file_path='train', block_size=30):
-        assert os.path.isfile(file_path)
-        directory, filename = os.path.split(file_path)
-        cached_features_file = os.path.join(directory,
-                                            args.model_name_or_path + '_cached_lm_' + str(block_size) + '_' + filename)
-
-        if os.path.exists(cached_features_file) and not args.overwrite_cache:
-            logger.info("Loading features from cached file %s", cached_features_file)
-            with open(cached_features_file, 'rb') as handle:
-                self.examples = pickle.load(handle)
-        else:
-            logger.info("Creating features from dataset file at %s", directory)
-
-            self.examples = []
-            with open(file_path, encoding="utf-8") as f:
-                text = f.read()
-
-            tokenized_text = tokenizer.convert_tokens_to_ids(tokenizer.tokenize(text))
-
-            for i in range(0, len(tokenized_text) - block_size + 1, block_size):  # Truncate in block of block_size
-                self.examples.append(tokenizer.build_inputs_with_special_tokens(tokenized_text[i:i + block_size]))
-            # Note that we are loosing the last truncated example here for the sake of simplicity (no padding)
-            # If your dataset is small, first you should loook for a bigger one :-) and second you
-            # can change this behavior by adding (model specific) padding.
-
-            logger.info("Saving features into cached file %s", cached_features_file)
-            with open(cached_features_file, 'wb') as handle:
-                pickle.dump(self.examples, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-    def __len__(self):
-        return len(self.examples)
-
-    def __getitem__(self, item):
-        return torch.tensor(self.examples[item])
-
-
 def load_and_cache_examples(args, tokenizer, evaluate=False):
-    dataset = TextDataset(tokenizer, args, file_path=args.eval_data_file if evaluate else args.train_data_file,
-                          block_size=args.block_size)
+    dataset = bert_dataset(tokenizer, args.database, args.where_string, block_size=args.block_size)
     return dataset
 
 

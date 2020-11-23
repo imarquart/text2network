@@ -150,3 +150,5 @@ src/text_processing/runs/
 data_full/
 
 *.gexf
+
+runs/
