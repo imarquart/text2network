@@ -35,12 +35,12 @@ class configuration:
 
     # %% BERT Training options
     gpu_batch = 100
-    epochs = 100
+    epochs = 10000
     # Loss is tested both on training and eval. Usually, eval is smaller
     # This is because training loss is the average across all runs
     # Eval Loss is defined as mean_eval_sample(mean_batch(lm_loss))
     # Train Loss is defined as mean_epochs(mean_sample(mean_batch(lm_loss)))
-    loss_limit = 1.5
+    loss_limit = 0.5
     warmup_steps = 0
     mlm_probability = 0.2
     do_train = True

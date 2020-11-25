@@ -1,6 +1,6 @@
 
 # TODO: Redo Comments
-# TODO: Add parameter handling!
+# TODO: Initialize BERT and Tokenizer based on hierarchy
 
 import logging
 import time
@@ -10,12 +10,13 @@ import torch
 import tqdm
 from torch.utils.data import BatchSampler, SequentialSampler
 from src.datasets.dataloaderX import DataLoaderX
-from src.datasets.text_dataset import text_dataset, text_dataset_collate_batchsample
+from src.datasets.text_dataset import query_dataset, text_dataset_collate_batchsample
 from src.utils.delwords import create_stopword_list
 from src.utils.rowvec_tools import simple_norm
+from src.utils.get_uniques import get_uniques
 
 class neo4j_processor():
-    def __init__(self, tokenizer, bert, neograph, MAX_SEQ_LENGTH, DICT_SIZE, batch_size,text_db=None,  maxn=None,nr_workers=0,cutoff_percent=99, max_degree=50,logging_level=logging.NOTSET):
+    def __init__(self, tokenizer, bert, neograph, MAX_SEQ_LENGTH, DICT_SIZE, batch_size,text_db=None,  maxn=None,nr_workers=0,cutoff_percent=99, max_degree=50,context_cutoff_percent=80,context_max_degree=25,split_hierarchy=None,logging_level=logging.NOTSET):
         """
         Extracts pre-processed sentences, gets predictions by BERT and creates a network
 
@@ -44,11 +45,15 @@ class neo4j_processor():
         self.nr_workers=nr_workers
         self.cutoff_percent=cutoff_percent
         self.max_degree=max_degree
+        self.context_cutoff_percent=context_cutoff_percent
+        self.context_max_degree=context_max_degree
+        self.split_hierarchy=split_hierarchy
         self.logging_level=logging_level
+
         # Set logging level
         logging.disable(logging_level)
 
-    def process_sentences_neo4j(self,year,text_db=None):
+    def process_query(self,query,text_db=None):
         """
         Extracts pre-processed sentences, gets predictions by BERT and creates network ties
         Ties are then added to the neo4j database.
@@ -56,7 +61,7 @@ class neo4j_processor():
         Network is created for both context distribution and for replacement distribution
         Each sentence is added via parallel ties in a multigraph
 
-        :param year: year corresponding to variable in preprocessing database
+        :param query: Based on parameters in the database, process this particular query
         """
         tables.set_blosc_max_threads(15)
 
@@ -69,7 +74,7 @@ class neo4j_processor():
             raise ConnectionError("No text database provided!")
 
         # %% Initialize text dataset
-        dataset = text_dataset(self.text_db, self.tokenizer, self.MAX_SEQ_LENGTH,maxn=self.maxn)
+        dataset = query_dataset(self.text_db, self.tokenizer, self.MAX_SEQ_LENGTH,maxn=self.maxn, query=query,logging_level=self.logging_level)
         logging.info("Number of sentences found: %i"%dataset.nitems)
         batch_sampler = BatchSampler(SequentialSampler(range(0, dataset.nitems)), batch_size=self.batch_size, drop_last=False)
         dataloader = DataLoaderX(dataset=dataset, batch_size=None, sampler=batch_sampler, num_workers=self.nr_workers,
@@ -83,15 +88,15 @@ class neo4j_processor():
         self.bert.eval()
 
         # Create Stopwords
-        delwords = create_stopword_list(tokenizer)
+        delwords = create_stopword_list(self.tokenizer)
 
         # Counter for timing
         model_timings = []
         process_timings = []
         load_timings = []
         start_time = time.time()
-        for batch, seq_ids, token_ids in tqdm.tqdm(dataloader, desc="Iteration"):
-
+        for batch, token_ids, index_vec, seq_ids, year_vec,p1_vec, p2_vec, p3_vec, p4_vec in tqdm.tqdm(dataloader, desc="Iteration"):
+            #batch, seq_ids, token_ids
             # Data spent on loading batch
             load_time = time.time() - start_time
             load_timings.append(load_time)
@@ -112,12 +117,19 @@ class neo4j_processor():
                 sequence_mask = seq_ids == sequence_id
                 sequence_size = sum(sequence_mask)
 
+                # Get parameters
+                seq_year=year_vec[sequence_mask]
+                seq_p1=p1_vec[sequence_mask]
+                seq_p2 = p2_vec[sequence_mask]
+                seq_p3 = p3_vec[sequence_mask]
+                seq_p4 = p4_vec[sequence_mask]
+
                 # Pad and add sequence of IDs
                 # TODO: Sanity check I don't need this anymore
                 # idx = torch.zeros([1, MAX_SEQ_LENGTH], requires_grad=False, dtype=torch.int32)
                 # idx[0, :sequence_size] = token_ids[sequence_mask]
                 # Pad and add distributions per token, we need to save to maximum sequence size
-                dists = torch.zeros([MAX_SEQ_LENGTH, DICT_SIZE], requires_grad=False)
+                dists = torch.zeros([self.MAX_SEQ_LENGTH, self.DICT_SIZE], requires_grad=False)
                 dists[:sequence_size, :] = predictions[sequence_mask, :]
 
                 # Context element selection matrix
@@ -125,7 +137,7 @@ class neo4j_processor():
                 # Delete position of focal token
                 seq_ce[torch.eye(sequence_size).bool()] = 0
                 # Context distributions
-                context_index = np.zeros([MAX_SEQ_LENGTH], dtype=np.bool)
+                context_index = np.zeros([self.MAX_SEQ_LENGTH], dtype=np.bool)
                 # Index words that are in the sentence
                 context_index[:sequence_size] = True
                 # Populate distribution with distributions
@@ -136,6 +148,14 @@ class neo4j_processor():
                 for pos, token in enumerate(token_ids[sequence_mask]):
                     # Should all be np
                     token = token.item()
+                    # Extract parameters for token
+                    year=seq_year[pos]
+                    p1=seq_p1[pos]
+                    p2 = seq_p2[pos]
+                    p3 = seq_p3[pos]
+                    p4 = seq_p4[pos]
+
+                    # Ignore stopwords for network creation
                     if token not in delwords:
 
                         # %% Replacement distribution
@@ -169,18 +189,18 @@ class neo4j_processor():
                         # Add values to network
                         # Replacement ties
                         cutoff_number, cutoff_probability = self.calculate_cutoffs(replacement, method="percent",
-                                                                            percent=cutoff_percent, max_degree=max_degree)
+                                                                            percent=self.cutoff_percent, max_degree=self.max_degree)
                         ties = self.get_weighted_edgelist(token, replacement, year, cutoff_number, cutoff_probability,
-                                                    sequence_id, pos, max_degree=max_degree)
+                                                    sequence_id, pos, p1=p1,p2=p2,p3=p3,p4=p4, max_degree=self.max_degree)
 
                         # Context ties
                         cutoff_number, cutoff_probability = self.calculate_cutoffs(context, method="percent",
-                                                                            percent=cutoff_percent, max_degree=max_degree)
+                                                                            percent=self.context_cutoff_percent, max_degree=self.context_max_degree)
                         context_ties = self.get_weighted_edgelist(token, context, year, cutoff_number, cutoff_probability,
-                                                            sequence_id, pos, max_degree=max_degree)
+                                                            sequence_id, pos, p1=p1,p2=p2,p3=p3,p4=p4, max_degree=self.context_max_degree)
 
                         if (ties is not None) and (context_ties is not None):
-                            neograph.insert_edges_context(token, ties, context_ties)
+                            self.neograph.insert_edges_context(token, ties, context_ties)
 
 
                 del dists
@@ -193,7 +213,7 @@ class neo4j_processor():
 
 
         # Write remaining
-        neograph.db.write_queue()
+        self.neograph.db.write_queue()
         torch.cuda.empty_cache()
 
         dataset.close()
@@ -335,7 +355,7 @@ class neo4j_processor():
         return min(cutoff_number,max_degree), cutoff_probability
 
     
-    def get_weighted_edgelist(self,token, x, time, cutoff_number=100, cutoff_probability=0, seq_id=0, pos=0,max_degree=100):
+    def get_weighted_edgelist(self,token, x, time, cutoff_number=100, cutoff_probability=0, seq_id=0, pos=0,p1="0",p2="0",p3="0",p4="0",max_degree=100):
         """
         Sort probability distribution to get the most likely neighbor nodes.
         Return a networksx weighted edge list for a given focal token as node.
@@ -358,6 +378,6 @@ class neo4j_processor():
             if cutoff_probability>0:
                 neighbors = neighbors[x[neighbors] > cutoff_probability]
             weights = simple_norm(x[neighbors])
-            return [(int(token), int(x[0]), int(time), {'weight': float(x[1]), 'p1': int(seq_id), 'p2': int(pos)}) for x in list(zip(neighbors, weights))]
+            return [(int(token), int(x[0]), int(time), {'weight': float(x[1]), 'seq_id': int(seq_id), 'pos': int(pos), 'p1': str(p1), 'p2': str(p2), 'p3': str(p3), 'p4': str(p4)}) for x in list(zip(neighbors, weights))]
         else:
             return None

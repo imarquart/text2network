@@ -9,7 +9,8 @@ logger = logging.getLogger(__name__)
 
 
 def get_bert_and_tokenizer(modelpath,load_local=False,attentions=True,hidden=False):
-    logger.setLevel(logging.WARN)
+    priorlevel=logging.root.level
+    logging.disable(logging.ERROR)
     if load_local==True:
         try:
             tokenizer = BertTokenizer.from_pretrained(modelpath, do_lower_case=True)
@@ -37,5 +38,5 @@ def get_bert_and_tokenizer(modelpath,load_local=False,attentions=True,hidden=Fal
     #num_added_toks = tokenizer.add_tokens(['esmt', 'vericourt'])
     #print('We have added', num_added_toks, 'tokens, total:', len(tokenizer))
     #bert.resize_token_embeddings(len(tokenizer))
-    logger.setLevel(logging.INFO)
+    logging.disable(priorlevel)
     return tokenizer, bert

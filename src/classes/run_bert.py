@@ -54,7 +54,7 @@ MODEL_CLASSES = {
 }
 
 def load_and_cache_examples(args, tokenizer, evaluate=False):
-    dataset = bert_dataset(tokenizer, args.database, args.where_string, block_size=args.block_size)
+    dataset = bert_dataset(tokenizer, args.database, args.where_string, block_size=args.block_size, logging_level=args.logging_level)
     return dataset
 
 
@@ -123,6 +123,8 @@ def train(args, train_dataset, model, tokenizer):
     """ Train the model """
     if args.local_rank in [-1, 0]:
         tb_writer = SummaryWriter()
+
+    logging.disable(args.logging_level)
 
     args.train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
     train_sampler = RandomSampler(train_dataset) if args.local_rank == -1 else DistributedSampler(train_dataset)
@@ -256,9 +258,9 @@ def train(args, train_dataset, model, tokenizer):
                     tb_writer.add_scalar('loss', (tr_loss - logging_loss) / args.logging_steps, global_step)
                     eval_loss = results["eval_loss"]
                     logging_loss = tr_loss
-                    logger.info("Eval Step: Eval Loss at global step %i is %f compare to loss limit %f",
+                    logger.info("Eval Step: Eval Loss at global step %i is %f compared to (eval) loss limit %f",
                                 global_step,
-                                eval_loss, args.loss_limit)
+                                eval_loss, args.eval_loss_limit)
 
                 if args.local_rank in [-1, 0] and args.save_steps > 0 and global_step % args.save_steps == 0:
                     checkpoint_prefix = 'checkpoint'
@@ -285,15 +287,15 @@ def train(args, train_dataset, model, tokenizer):
                 epoch_iterator.close()
                 break
 
-            if eval_loss <= args.loss_limit:
+            if eval_loss <= args.eval_loss_limit:
                 logger.info("Epoch: Eval Loss at global step %i has reached desired value with %f <= %f", global_step,
-                            eval_loss, args.loss_limit)
+                            eval_loss, args.eval_loss_limit)
                 epoch_iterator.close()
                 break
 
             if tr_loss / global_step <= args.loss_limit:
-                logger.info("Eproch: Loss at global step %i has reached desired value with %f", global_step,
-                            tr_loss / global_step)
+                logger.info("Epoch: Loss at global step %i has reached desired value with %f <= %f", global_step,
+                            tr_loss / global_step, args.loss_limit)
                 epoch_iterator.close()
                 break
 
@@ -302,19 +304,19 @@ def train(args, train_dataset, model, tokenizer):
             train_iterator.close()
             break
 
-        if eval_loss <= args.loss_limit:
+        if eval_loss <= args.eval_loss_limit:
             logger.info("Eval Loss at global step %i has reached desired value with %f <= %f", global_step,
-                        eval_loss, args.loss_limit)
-            logger.info("TR Loss scaled at global step %i is %f", global_step,
+                        eval_loss, args.eval_loss_limit)
+            logger.info("Average TR Loss at global step %i is %f", global_step,
                         tr_loss / global_step)
-            logger.info("TR Loss at global step %i is %f", global_step,
+            logger.info("Total TR Loss at global step %i is %f", global_step,
                         tr_loss)
 
             train_iterator.close()
             break
 
         if tr_loss / global_step <= args.loss_limit:
-            logger.info("Loss at global step %i has reached desired value with %f", global_step, tr_loss / global_step)
+            logger.info("Average Loss at global step %i has reached desired value with  %f <= %f", global_step, tr_loss / global_step, args.loss_limit)
             train_iterator.close()
             break
 
@@ -325,6 +327,9 @@ def train(args, train_dataset, model, tokenizer):
 
 
 def evaluate(args, model, tokenizer, prefix=""):
+
+    logging.disable(args.logging_level)
+
     # Loop to handle MNLI double evaluation (matched, mis-matched)
     eval_output_dir = args.output_dir
 
@@ -402,10 +407,11 @@ def run_bert(args):
     # Setup logging
     logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                         datefmt='%m/%d/%Y %H:%M:%S',
-                        level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN)
+                        level=args.logging_level if args.local_rank in [-1, 0] else logging.WARN)
     #logger.warning("Process rank: %s, device: %s, n_gpu: %s, distributed training: %s, 16-bits training: %s",
      #              args.local_rank, device, args.n_gpu, bool(args.local_rank != -1), args.fp16)
-
+    logging.disable(args.logging_level)
+    logging.getLogger("transformers.modeling_utils").setLevel(args.logging_level)
     # Set seed
     set_seed(args)
 
@@ -429,7 +435,6 @@ def run_bert(args):
     if args.local_rank == 0:
         torch.distributed.barrier()  # End of barrier to make sure only the first process in distributed training download model & vocab
 
-    logger.info("Training/evaluation parameters %s", args)
 
     # Training
     if args.do_train:

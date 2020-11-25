@@ -5,6 +5,7 @@
 
 import torch
 import tables
+import pandas as pd
 from torch.utils.data import Dataset
 from torch.nn.utils.rnn import pad_sequence
 import numbers
@@ -12,45 +13,60 @@ import logging
 import os
 import pickle
 
-class text_dataset_subset(Dataset):
-    def __init__(self, data_path, subset_tokens, tokenizer=None, fixed_seq_length=None):
+class query_dataset(Dataset):
+    def __init__(self, data_path, tokenizer=None, fixed_seq_length=None, maxn=None, query=None, logging_level=logging.DEBUG):
+        # TODO: Redo out of memory if necessary
+        # TODO: Add maxn option
         self.data_path = data_path
         self.tokenizer = tokenizer
         self.fixed_seq_length = fixed_seq_length
+        self.query=query
+        self.logging_level=logging_level
+        logging.disable(logging_level)
+        logging.info("Creating features from database file at %s", self.database)
 
-        logging.info("Attempting to open %s" % self.data_path)
-        # Open table and read data completely
-        try:
-            self.tables = tables.open_file(self.data_path, mode="r")
-        except:
-            ConnectionError("Could not open %s" % self.data_path)
+        self.tables = tables.open_file(self.database, mode="r")
+        self.data = self.tables.root.textdata.table
 
-        data_table = self.tables.root.textdata.table
-        data_iterator = data_table.iterrows()
-        # Retain any sequence including focal terms from the subset
-        items = [(x['run_index'], x['text'].decode("utf-8")) for x in data_iterator if
-                 any(ext in x['text'].decode("utf-8") for ext in subset_tokens)]
+        items=self.data.read_where(self.query)
+        self.nitems=len(items)
+        # Get data
+        items_text = items['text']
+        items_year = items['year']
+        items_seqid = items['seqid'] #?
+        items_p1 = items['p1']
+        items_p2 = items['p2']
+        items_p3 = items['p3']
+        items_p4 = items['p4']
 
-        # Init data as empty
-        self.data = items
-        self.nitems = len(items)
-
-        self.tables.close()
-
-    def __del__(self):
-        self.close()
-
-    def close(self):
+        # Because of pyTables, we have to encode.
+        items_text = [x.decode("utf-8") for x in items_text]
+        items_p1 = [x.decode("utf-8") for x in items_p1]
+        items_p2 = [x.decode("utf-8") for x in items_p2]
+        items_p3 = [x.decode("utf-8") for x in items_p3]
+        items_p4 = [x.decode("utf-8") for x in items_p4]
+        self.data =pd.DataFrame(
+            {"year": items_year, "seq_id": items_seqid, "text": items_text, "p1": items_p1, "p2": items_p2,
+             "p3": items_p3, "p4": items_p4})
         self.tables.close()
 
     def __getitem__(self, index):
         """
-        This function can be queried both with a single index i, and a range or list i:j, or i,j,k...
-
-        It returns a tuple with three elements
-        1. nxlength tensor of padded tokenized sequences of fixed length including special tokens
-        2. list of length of sequences NOT including special tokens
-        3. list of tokens, not including special tokens
+        Pulls items from data and returns a batch
+        Given a fixed_seq_length of n
+        and an index query of k elements
+        the main tensor is of shape k,n+2 with 2 added delimiting tokens
+        :param index: Can be integer, list of integer or a range
+        :return: One batch for data ingest
+                    token_input_vec: k,n+2 tensor with fixed length sequences
+                    token_id_vec: 1,k*n tensor giving a sequence of all token_ids in batch
+                    seq_vec: 1,k*n tensor giving the sequence id (in db) for each token in batch
+                    index_vec: 1,k*n tensor giving the index (in dataset) for each token in batch
+                    year_vec: 1,k*n tensor, giving the year for each token in batch
+                    p1_vec: 1,k*n array, giving p1 parameter for each token in batch
+                    p2_vec: as above
+                    p3_vec: as above
+                    p4_vec: as above
         """
 
         if torch.is_tensor(index):
@@ -65,59 +81,61 @@ class text_dataset_subset(Dataset):
         if type(index) is not list:
             index = [index]
 
-        # Get text
-        items=[self.data[i] for i in index]
-        # If a Tokenizer is set, we will tokenize and return pytorch tensor (padded)
-        list_tokens = []
-        token_id = []
-        sequence_ids = []
-        for item in items:
-            text = item[1]
-            seq_id = item[0]
+
+        item=self.data.iloc[index, :]
+        # Get numpy or torch vectors (numpy for the strings)
+        texts = item['text'].to_numpy()
+        year_vec = torch.tensor(item['year'].to_numpy(dtype="int32"), requires_grad=False)
+        p1_vec = item['p1'].to_numpy()
+        p2_vec = item['p2'].to_numpy()
+        p3_vec = item['p3'].to_numpy()
+        p4_vec = item['p4'].to_numpy()
+        seq_vec = item['seq_id'].to_numpy(dtype="int32")
+
+        token_input_vec = []  # tensor of padded inputs with special tokens
+        token_id_vec = []  # List of token ids for each sequence, later transformed to 1-dim tensor over batch
+        for text in texts:
             indexed_tokens = self.tokenizer.encode(text, add_special_tokens=False)
-            # If we wanted fixed size, not just padded to max, we need to cut
-            if self.fixed_seq_length is not None:
-                indexed_tokens = indexed_tokens[:self.fixed_seq_length]
+            # Need fixed size, so we need to cut and pad
+            indexed_tokens = indexed_tokens[:self.fixed_seq_length]
             indexed_tokens = self.tokenizer.build_inputs_with_special_tokens(indexed_tokens)
             inputs = torch.tensor([indexed_tokens], requires_grad=False)
             inputs = inputs.squeeze(dim=0).squeeze()
-            list_tokens.append(inputs)
+            token_input_vec.append(inputs)
             # Also save list of tokens
-            token_id.append(inputs[1:-1])
-            sequence_ids.append(seq_id)
+            token_id_vec.append(inputs[1:-1])
 
-        # If fixed size, add a sequence of desired length to fix padding
-        # In case all other sequences are of smaller length
-        # We then use the automatic padding and afterwards delete the padding sequence
-        if self.fixed_seq_length is not None:
-            # Add padding sequence
-            list_tokens.append(torch.zeros([self.fixed_seq_length + 2], dtype=torch.int))
-            token_tensor = pad_sequence(list_tokens, batch_first=True, padding_value=self.tokenizer.pad_token_id)
-            # Detele padding sequence
-            token_tensor = token_tensor[:-1, :]
-        else:
-            token_tensor = pad_sequence(list_tokens, batch_first=True, padding_value=self.tokenizer.pad_token_id)
+        # Add padding sequence
+        token_input_vec.append(torch.zeros([self.fixed_seq_length + 2], dtype=torch.int))
+        token_input_vec = pad_sequence(token_input_vec, batch_first=True, padding_value=self.tokenizer.pad_token_id)
+        # Detele padding sequence
+        token_input_vec = token_input_vec[:-1, :]
 
-        # Expand index vector to a 1-dim vector indexing each token by sequence-id
-        lengths = ([x.shape[0] for x in token_id])
-        indexvec = torch.repeat_interleave(torch.as_tensor(sequence_ids), torch.as_tensor(lengths))
+        # Prepare index vector and sequence vector by using sequence IDs found in database
+        lengths = ([x.shape[0] for x in token_id_vec])
+        index_vec = torch.repeat_interleave(torch.as_tensor(index), torch.as_tensor(lengths))
+        seq_vec = torch.repeat_interleave(torch.as_tensor(seq_vec), torch.as_tensor(lengths))
+        year_vec = torch.repeat_interleave(torch.as_tensor(year_vec), torch.as_tensor(lengths))
+        p1_vec=p1_vec.repeat(lengths)
+        p2_vec=p2_vec.repeat(lengths)
+        p3_vec=p3_vec.repeat(lengths)
+        p4_vec=p4_vec.repeat(lengths)
 
-        # Stack token-ids into vector of same length
-        token_id = torch.cat([x for x in token_id])
 
-        # Here will need custom collate fn
-        return token_tensor, indexvec, token_id
+        # Cat token_id_vec list into a single tensor for the whole batch
+        token_id_vec = torch.cat([x for x in token_id_vec])
+
+        return token_input_vec, token_id_vec, index_vec, seq_vec, year_vec,p1_vec, p2_vec, p3_vec, p4_vec
 
     def __len__(self):
-        return self.nitems
-
+        return len(self.data)
 
 
 class bert_dataset(Dataset):
     # TODO: Padd sentences instead of joining and splitting!
-    def __init__(self, tokenizer, database,where_string, block_size=30):
+    def __init__(self, tokenizer, database,where_string, block_size=30, logging_level=logging.DEBUG):
         self.database = database
-
+        logging.disable(logging_level)
         logging.info("Creating features from database file at %s", self.database)
 
         self.tables = tables.open_file(self.database, mode="r")
@@ -149,142 +167,6 @@ class bert_dataset(Dataset):
 
     def __getitem__(self, item):
         return torch.tensor(self.examples[item])
-
-class text_dataset(Dataset):
-    def __init__(self, data_path, tokenizer=None, fixed_seq_length=None, maxn=None):
-        self.data_path = data_path
-        self.tokenizer = tokenizer
-        self.fixed_seq_length = fixed_seq_length
-
-        # We open table once to get #items, but close it again
-        # Bc multithreading requires opening within getitem
-        self.tables = tables.open_file(self.data_path, mode="r")
-        if maxn is not None:
-            self.nitems=min(self.tables.root.textdata.table.nrows,maxn)
-        else:
-            self.nitems = self.tables.root.textdata.table.nrows
-        self.tables.close()
-
-        # Init data as empty
-        self.data = None
-
-    def __del__(self):
-        self.close()
-
-    def close(self):
-        self.tables.close()
-
-    def __getitem__(self, index):
-        """
-        This function can be queried both with a single index i, and a range or list i:j, or i,j,k...
-
-        It returns a tuple with three elements
-        1. nxlength tensor of padded tokenized sequences of fixed length including special tokens
-        2. list of length of sequences NOT including special tokens
-        3. list of tokens, not including special tokens
-        """
-
-        if torch.is_tensor(index):
-            index = index.to_list(index)
-
-        if isinstance(index, slice):
-            index = list(range(index.start or 0, index.stop or self.nitems, index.step or 1))
-
-        if isinstance(index, numbers.Integral):
-            index = [int(index)]
-
-        if type(index) is not list:
-            index = [index]
-
-        # Open table if necessary
-        if self.tables.isopen == 0:
-            self.tables = tables.open_file(self.data_path, mode="r")
-
-        # Check if data is not initialized
-        if (self.data is None):
-            self.data = self.tables.root.textdata.table
-
-        # Check if data has been closed
-        if (self.data._v_isopen == False):
-            self.data = self.tables.root.textdata.table
-
-        # Get text
-        item = self.data.read_coordinates(index, field='text')
-        # Because of pyTables, we have to encode.
-        item = [x.decode("utf-8") for x in item]
-
-        # Get year
-        year_vec = torch.tensor(self.data.read_coordinates(index, field='year'), requires_grad=False)
-        p1= self.data.read_coordinates(index, field='p1')
-        p2= self.data.read_coordinates(index, field='p2')
-        p3= self.data.read_coordinates(index, field='p3')
-        p4= self.data.read_coordinates(index, field='p4')
-        p1 = torch.tensor([x.decode("utf-8") for x in p1], requires_grad=False)
-        p2 = torch.tensor([x.decode("utf-8") for x in p2], requires_grad=False)
-        p3 = torch.tensor([x.decode("utf-8") for x in p3], requires_grad=False)
-        p4 = torch.tensor([x.decode("utf-8") for x in p4], requires_grad=False)
-
-        # If a Tokenizer is set, we will tokenize and return pytorch tensor (padded)
-        if self.tokenizer is not None:
-            list_tokens = []
-            token_id = []
-            for text in item:
-                indexed_tokens = self.tokenizer.encode(text, add_special_tokens=False)
-                # If we wanted fixed size, not just padded to max, we need to cut
-                if self.fixed_seq_length is not None:
-                    indexed_tokens = indexed_tokens[:self.fixed_seq_length]
-                indexed_tokens = self.tokenizer.build_inputs_with_special_tokens(indexed_tokens)
-                inputs = torch.tensor([indexed_tokens], requires_grad=False)
-                inputs = inputs.squeeze(dim=0).squeeze()
-                list_tokens.append(inputs)
-                # Also save list of tokens
-                token_id.append(inputs[1:-1])
-
-            # If fixed size, add a sequence of desired length to fix padding
-            if self.fixed_seq_length is not None:
-                # Add padding sequence
-                list_tokens.append(torch.zeros([self.fixed_seq_length + 2], dtype=torch.int))
-                item = pad_sequence(list_tokens, batch_first=True, padding_value=self.tokenizer.pad_token_id)
-                # Detele padding sequence
-                item = item[:-1, :]
-            else:
-                item = pad_sequence(list_tokens, batch_first=True, padding_value=self.tokenizer.pad_token_id)
-
-            # Expand index vector to a 1-dim vector indexing each token by sequence-id
-            lengths = ([x.shape[0] for x in token_id])
-            indexvec = torch.repeat_interleave(torch.as_tensor(index), torch.as_tensor(lengths))
-
-            # Stack token-ids into vector of same length
-            token_id = torch.cat([x for x in token_id])
-
-            # Here will need custom collate fn
-            return item, indexvec, token_id, year_vec, p1,p2,p3,p4
-        else:
-            return index, item
-
-    def __len__(self):
-        return self.nitems
-
-
-def text_dataset_collate_randomsample(batch):
-    """
-    This function collates batches of text_dataset, if a batch is a
-    list or tuple of [dataset[i],dataset[j]] and so forth
-
-    In particular, this is to be used with the pyTorch RANDOM dataloader, who does exactly this
-    """
-
-    tokens = torch.cat([x[2] for x in batch])
-    indexvec = torch.cat([torch.as_tensor(x[1]) for x in batch])
-    elem = batch[0][0]
-    out = None
-    if torch.utils.data.get_worker_info() is not None:
-        # If we're in a background process, concatenate directly into a
-        # shared memory tensor to avoid an extra copy
-        numel = sum([x.numel() for batch_el in batch for x in batch_el[0]])
-        storage = elem.storage()._new_shared(numel)
-        out = elem.new(storage)
-    return torch.stack([x[0].squeeze() for x in batch], 0), indexvec, tokens
 
 
 def text_dataset_collate_batchsample(batch):

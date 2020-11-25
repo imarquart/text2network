@@ -1,7 +1,7 @@
 
 class bert_args():
     def __init__(self,database,where_string, output_dir, pretrained_dir, do_train= True, mlm_probability=0.15, block_size=30,
-                 loss_limit=0.5, gpu_batch=4, epochs=1, warmup_steps=0, save_steps=50000):
+                 loss_limit=0.5, gpu_batch=4, epochs=1, warmup_steps=0, save_steps=50000, eval_steps=50,eval_loss_limit=0.5,logging_level=40):
         """
         Normally, PyTorch Transformers loads parameters via the commandline.
         This class serves the same purpose
@@ -29,7 +29,7 @@ class bert_args():
         self.mlm_probability = mlm_probability
 
         self.loss_limit = loss_limit
-
+        self.logging_level=logging_level
         if do_train == True:
             self.do_train = True
             self.do_eval = True
@@ -62,7 +62,7 @@ class bert_args():
         self.adam_epsilon = 1e-8
         self.max_grad_norm = 1.0
         self.max_steps = -1
-        self.logging_steps = 1500
+        self.logging_steps = eval_steps
         self.save_steps = save_steps
         self.save_total_limit = None
         self.eval_all_checkpoints = False
@@ -75,6 +75,7 @@ class bert_args():
         self.local_rank = -1
         self.n_gpu = 1
         self.server_ip = ''
+        self.eval_loss_limit=eval_loss_limit
         self.server_port = ''
 
         self.device = None
