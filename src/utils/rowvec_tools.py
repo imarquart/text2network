@@ -15,10 +15,18 @@ def softmax(x):
     return np.exp(x) / np.sum(np.exp(x), axis=-1, keepdims=True)
 
 
-def simple_norm(x):
-    """Just want to start at zero and sum to 1, without norming anything else"""
+def simple_norm(x, min_zero=True):
+    """
+    Norms a vector (or list)
+    :param x: vector
+    :param min_zero: If True, the smallest non-zero value is substracted before normalization
+    :return: normed np.array
+    """
     x_org=x
-    x = x - np.min(x, axis=-1)
+    x=np.array(x)
+    if min_zero==True:
+        x = x - np.min(x[x>0], axis=-1)
+        x[x<0]=0
     if np.sum(x, axis=-1) > 0:
         return x / np.sum(x, axis=-1)
     else:

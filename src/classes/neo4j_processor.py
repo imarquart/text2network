@@ -86,6 +86,28 @@ class neo4j_processor():
         self.DICT_SIZE=len(tokenizer.vocab)
         return tokenizer, bert
 
+    def run_all_queries(self,clean_database=True,split_hierarchy=None,logging_level=None):
+
+        # SEt up logging
+        if logging_level is not None:
+            logging.disable(logging_level)
+        else:
+            logging.disable(self.logging_level)
+
+        # Check if new split hierarchy needs to be processed
+        if split_hierarchy is not None:
+            self.setup_uniques(split_hierarchy)
+
+        # Clean the database
+        if clean_database == True:
+            logging.info("Cleaning Neo4j Database of all prior connections")
+            self.neograph.db.clean_database()
+
+        for query in self.uniques['query']:
+            logging.info("Processing query {}".format(query))
+            self.process_query(query)
+
+
 
     def process_query(self,query,text_db=None,logging_level=None):
         """
@@ -216,7 +238,7 @@ class neo4j_processor():
                         # Get rid of delnorm links
                         replacement[delwords] = 0
                         # We norm the distributions here
-                        replacement = simple_norm(replacement)
+                        replacement = self.norm(replacement)
 
                         # %% Context Element
                         context = (
@@ -231,7 +253,7 @@ class neo4j_processor():
                         # Get rid of delnorm links
                         context[delwords] = 0
                         # We norm the distributions here
-                        context = simple_norm(context)
+                        context =self.norm(context)
 
                         # Add values to network
                         # Replacement ties
@@ -263,15 +285,14 @@ class neo4j_processor():
 
 
         # Write remaining
-        print(self.neograph.db.neo_queue)
         self.neograph.db.write_queue()
         torch.cuda.empty_cache()
 
         del dataloader, dataset, batch_sampler
-        logging.info("Average Load Time: %s seconds" % (np.mean(load_timings)))
-        logging.info("Average Model Time: %s seconds" % (np.mean(model_timings)))
-        logging.info("Average Processing Time: %s seconds" % (np.mean(process_timings)))
-        logging.info("Ratio Load/Operations: %s seconds" % (np.mean(load_timings) / np.mean(process_timings + model_timings)))
+        logging.debug("Average Load Time: %s seconds" % (np.mean(load_timings)))
+        logging.debug("Average Model Time: %s seconds" % (np.mean(model_timings)))
+        logging.debug("Average Processing Time: %s seconds" % (np.mean(process_timings)))
+        logging.debug("Ratio Load/Operations: %s seconds" % (np.mean(load_timings) / np.mean(process_timings + model_timings)))
 
     def get_bert_tensor(self,args, bert,tokens,pad_token_id,mask_token_id,device=torch.device("cpu")):
         """
@@ -380,29 +401,36 @@ class neo4j_processor():
         return predictions.cpu(), attn.cpu()
 
     # %% Utilities
-    def calculate_cutoffs(self,x, method="mean", percent=100, max_degree=100,min_cut=0.001):
+    def calculate_cutoffs(self,x, method="percent", percent=100, max_degree=100,min_cut=0.001):
         """
         Different methods to calculate cutoff probability and number.
 
-        :param x: Contextual vector
+        :param x: Contextual/Replacement vector
         :param method: mean: Only accept entries above the mean; percent: Take the k biggest elements that explain X% of mass.
-        :return: cutoff_number and probability
+        :return: cutoff_degree and probability
         """
         if method == "mean":
             cutoff_probability = max(np.mean(x), min_cut)
-            cutoff_number = max(np.int(len(x) / 100), 100)
+            sortx = np.sort(x)[::-1]
+            cutoff_degree = len(np.where(sortx >= cutoff_probability)[0])
+
         elif method == "percent":
             sortx = np.sort(x)[::-1]
+            # Get cumulative sum
             cum_sum = np.cumsum(sortx)
+            # Get cutoff value as fraction of largest cumulative element (in case vector does not sum to 1)
+            # This is the threshold to cross to explain 'percent' of mass in the vector
             cutoff = cum_sum[-1] * percent/100
-            cutoff_number = np.where(cum_sum >= cutoff)[0][0]
-            if cutoff_number == 0: cutoff_number=max_degree
-            cutoff_probability = min_cut
+            # Determine first position where cumulative sum crosses cutoff threshold
+            # Python indexing - add 1
+            cutoff_degree = np.where(cum_sum >= cutoff)[0][0]+1
+            # Calculate corresponding probability
+            cutoff_probability = sortx[cutoff_degree-1]
         else:
             cutoff_probability = min_cut
-            cutoff_number = 0
+            cutoff_degree = max_degree
 
-        return min(cutoff_number,max_degree), cutoff_probability
+        return min(cutoff_degree,max_degree), cutoff_probability
 
     
     def get_weighted_edgelist(self,token, x, time, cutoff_number=100, cutoff_probability=0, seq_id=0, pos=0,p1="0",p2="0",p3="0",p4="0",max_degree=100):
@@ -423,11 +451,14 @@ class neo4j_processor():
             neighbors = np.argsort(-x)[:max_degree]
 
         # Cutoff probability (zeros)
-        # 20.08.2020 Added simple norm
+        # 20.08.2020 Added norm
         if len(neighbors > 0):
             if cutoff_probability>0:
-                neighbors = neighbors[x[neighbors] > cutoff_probability]
-            weights = simple_norm(x[neighbors])
+                neighbors = neighbors[x[neighbors] >= cutoff_probability]
+            weights = self.norm(x[neighbors], min_zero=False)
             return [(int(token), int(x[0]), int(time), {'weight': float(x[1]), 'seq_id': int(seq_id), 'pos': int(pos), 'p1': str(p1), 'p2': str(p2), 'p3': str(p3), 'p4': str(p4)}) for x in list(zip(neighbors, weights))]
         else:
             return None
+
+    def norm(self,x, min_zero=True):
+        return simple_norm(x, min_zero=min_zero)

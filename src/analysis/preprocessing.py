@@ -45,8 +45,6 @@ test=neo4j_database(neo_creds)
 neograph = neo4j_network(neo_creds)
 
 
-processor=neo4j_processor(config['Paths']['trained_berts'], neograph, config['Preprocessing'].getint('max_seq_length'), config['Processing'],text_db=config['Paths']['database'], split_hierarchy=json.loads(config.get('General','split_hierarchy')))
+processor=neo4j_processor(config['Paths']['trained_berts'], neograph, config['Preprocessing'].getint('max_seq_length'), config['Processing'],text_db=config['Paths']['database'], split_hierarchy=json.loads(config.get('General','split_hierarchy')),logging_level=config['General'].getint('logging_level'))
 
-
-query=processor.uniques['query'][1]
-processor.process_query(query)
+processor.run_all_queries()

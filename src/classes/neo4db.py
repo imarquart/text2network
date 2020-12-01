@@ -66,6 +66,37 @@ class neo4j_database():
         self.add_queries(queries)
         self.non_con_write_queue()
 
+    def clean_database(self, time=None):
+        # DEBUG
+        nr_nodes = self.connector.run("MATCH (n) RETURN count(n) AS nodes")[0]['nodes']
+        nr_ties = self.connector.run("MATCH ()-->() RETURN count(*) AS ties")[0]['ties']
+        logging.info("Before cleaning: Network has %i nodes and %i ties" % (nr_nodes, nr_ties))
+
+        if time is not None:
+            # Delete previous edges
+            query = ''.join(
+                ["MATCH (p:edge {time:", str(time), "}) DETACH DELETE p"])
+            self.connector.run(query)
+
+            # Delete previous context edges
+            query = ''.join(
+                ["MATCH (p:context {time:", str(time), "}) DETACH DELETE p"])
+            self.connector.run(query)
+        else:
+            # Delete previous edges
+            query = ''.join(
+                ["MATCH (p:edge) DETACH DELETE p"])
+            self.connector.run(query)
+
+            # Delete previous context edges
+            query = ''.join(
+                ["MATCH (p:context) DETACH DELETE p"])
+            self.connector.run(query)
+
+        # DEBUG
+        nr_nodes = self.connector.run("MATCH (n) RETURN count(n) AS nodes")[0]['nodes']
+        nr_ties = self.connector.run("MATCH ()-->() RETURN count(*) AS ties")[0]['ties']
+        logging.info("After cleaning: Network has %i nodes and %i ties" % (nr_nodes, nr_ties))
     
     # %% Initializations
     def init_tokens(self):
@@ -251,7 +282,9 @@ class neo4j_database():
         return ties
 
     # %% Insert functions
-    def insert_edges_context(self, ego, ties, contexts):
+    def insert_edges_context(self, ego, ties, contexts,logging_level=logging.DEBUG):
+        if logging_level is not None:
+            logging.disable(logging_level)
         logging.debug("Insert {} ego nodes with {} ties".format(ego,len(ties)))
         # Tie direction matters
         # Ego by default is the focal token to be replaced. Normal insertion points the link accordingly.
@@ -295,55 +328,6 @@ class neo4j_database():
         else:
             logging.error("Batched edge creation with context for multiple egos not supported.")
             raise NotImplementedError
-
-        self.add_query(query, params)
-
-    def insert_edges_multiple(self, ties, reverse_insertion=False):
-        # Tie direction matters
-        # Default is forward, in which case ego points to alters. Ego by default is the focal token to be replaced.
-        # Hence, a->b is an instance of b replacing a!
-        if reverse_insertion == True:
-            egos = np.array([x[1] for x in ties])
-            alters = np.array([x[0] for x in ties])
-            insert_direction = "-1"
-        else:
-            egos = np.array([x[0] for x in ties])
-            alters = np.array([x[1] for x in ties])
-            insert_direction = "1"
-        times = np.array([x[2] for x in ties])
-        dicts = np.array([x[3] for x in ties])
-
-        unique_egos = np.unique(egos)
-        sets = []
-        if len(unique_egos) == 1:
-            ties_formatted = [{"alter": int(x[0]), "time": int(x[1]), "weight": float(x[2]['weight']),
-                               "p1": (int(x[2]['p1']) if len(x[2]) > 1 else 0),
-                               "p2": (int(x[2]['p2']) if len(x[2]) > 2 else 0)}
-                              for x in zip(alters.tolist(), times.tolist(), dicts.tolist())]
-            params = {"ego": int(egos[0]), "ties": ties_formatted}
-            query = ''.join(
-                [" MATCH (a:word {token_id: $ego}) WITH a UNWIND $ties as tie MATCH (b:word {token_id: tie.alter}) ",
-                 self.creation_statement,
-                 " (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, p1:tie.p1,p2:tie.p2, direction:",
-                 insert_direction, "})<-[:onto]-(a)"])
-        else:
-            for u_ego in unique_egos:
-                mask = egos == u_ego
-                subalters = alters[mask]
-                subtimes = times[mask]
-                subdicts = dicts[mask]
-                ties_formatted = [{"alter": int(x[0]), "time": int(x[1]), "weight": float(x[2]['weight']),
-                                   "p1": (int(x[2]['p1']) if len(x[2]) > 1 else 0),
-                                   "p2": (int(x[2]['p2']) if len(x[2]) > 2 else 0)}
-                                  for x in zip(subalters.tolist(), subtimes.tolist(), subdicts.tolist())]
-                set = {'ego': int(u_ego), 'ties': ties_formatted}
-                sets.append(set)
-            params = {"sets": sets}
-            query = ''.join([
-                                "UNWIND $sets as set MATCH (a:word {token_id: set.ego}) WITH a,set UNWIND set.ties as tie MATCH (b:word {token_id: tie.alter}) ",
-                                self.creation_statement,
-                                "  (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, p1:tie.p1,p2:tie.p2, direction:",
-                                insert_direction, "})<-[:onto]-(a)"])
 
         self.add_query(query, params)
 
