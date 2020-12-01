@@ -1,6 +1,7 @@
 
 # TODO: Redo Comments
 # TODO: Initialize BERT and Tokenizer based on hierarchy
+# TODO: Adding parameters in network class
 
 import logging
 import time
@@ -14,9 +15,10 @@ from src.datasets.text_dataset import query_dataset, text_dataset_collate_batchs
 from src.utils.delwords import create_stopword_list
 from src.utils.rowvec_tools import simple_norm
 from src.utils.get_uniques import get_uniques
+from src.utils.load_bert import get_bert_and_tokenizer
 
 class neo4j_processor():
-    def __init__(self, tokenizer, bert, neograph, MAX_SEQ_LENGTH, DICT_SIZE, batch_size,text_db=None,  maxn=None,nr_workers=0,cutoff_percent=99, max_degree=50,context_cutoff_percent=80,context_max_degree=25,split_hierarchy=None,logging_level=logging.NOTSET):
+    def __init__(self, trained_folder,neograph, MAX_SEQ_LENGTH,processing_options,text_db=None,  maxn=None,nr_workers=0,split_hierarchy=None,logging_level=logging.NOTSET):
         """
         Extracts pre-processed sentences, gets predictions by BERT and creates a network
 
@@ -27,33 +29,65 @@ class neo4j_processor():
         :param bert: BERT model
         :param text_db: HDF5 File of processes sentences, string of tokens, ending with punctuation
         :param MAX_SEQ_LENGTH:  maximal length of sequences
-        :param DICT_SIZE: tokenizer dict size
         :param batch_size: batch size to send to BERT
         :param nr_workers: Nr workers for dataloader. Probably should be set to 0 on windows
         :param method: "attention": Weigh by BERT attention; "context_element": Sum probabilities unweighted
         :param cutoff_percent: Amount of probability mass to use to create links. Smaller values, less ties.
         """
         # Assign parameters
-        self.tokenizer=tokenizer
-        self.bert=bert
+        self.trained_folder=trained_folder
+        self.tokenizer=None
+        self.bert=None
         self.text_db=text_db
         self.neograph=neograph
         self.MAX_SEQ_LENGTH=MAX_SEQ_LENGTH
-        self.DICT_SIZE=DICT_SIZE
-        self.batch_size=batch_size
+        self.DICT_SIZE=0
+        self.batch_size=int(processing_options['batch_size'])
         self.maxn=maxn
         self.nr_workers=nr_workers
-        self.cutoff_percent=cutoff_percent
-        self.max_degree=max_degree
-        self.context_cutoff_percent=context_cutoff_percent
-        self.context_max_degree=context_max_degree
+        self.cutoff_percent=int(processing_options['cutoff_percent'])
+        self.max_degree=int(processing_options['max_degree'])
+        self.context_cutoff_percent=int(processing_options['context_cutoff_percent'])
+        self.context_max_degree=int(processing_options['context_max_degree'])
         self.split_hierarchy=split_hierarchy
         self.logging_level=logging_level
 
+        # Set uniques
+        self.setup_uniques(self.split_hierarchy)
         # Set logging level
         logging.disable(logging_level)
 
-    def process_query(self,query,text_db=None):
+    def setup_uniques(self, split_hierarchy=None):
+        """
+        Set up unique queries
+        :param split_hierarchy: can provide other hierarchy here
+        :return:
+        """
+        if split_hierarchy is not None:
+            self.split_hierarchy=split_hierarchy
+        assert self.split_hierarchy is not None
+
+        self.uniques=get_uniques(self.split_hierarchy,self.text_db)
+
+    def get_file_from_query(self, query):
+        """
+        Helper function to match query with filename
+        :param query:
+        :return:
+        """
+        index=np.where(np.array(self.uniques["query"]) == query)[0][0]
+        return self.uniques["file"][index]
+
+    def setup_bert(self, query):
+
+        fname=self.get_file_from_query(query)
+        bert_folder = ''.join([self.trained_folder, '/', fname])
+        tokenizer, bert= get_bert_and_tokenizer(bert_folder, True)
+        self.DICT_SIZE=len(tokenizer.vocab)
+        return tokenizer, bert
+
+
+    def process_query(self,query,text_db=None,logging_level=None):
         """
         Extracts pre-processed sentences, gets predictions by BERT and creates network ties
         Ties are then added to the neo4j database.
@@ -65,6 +99,11 @@ class neo4j_processor():
         """
         tables.set_blosc_max_threads(15)
 
+        # SEt up logging
+        if logging_level is not None:
+            logging.disable(logging_level)
+        else:
+            logging.disable(self.logging_level)
 
         # Check if text database has changed
         if text_db is not None:
@@ -72,6 +111,15 @@ class neo4j_processor():
         elif self.text_db==None:
             logging.error("No text database provided!")
             raise ConnectionError("No text database provided!")
+
+        # Setup Bert and tokenizer
+        self.tokenizer, self.bert = self.setup_bert(query)
+
+        # Setup Neo4j network
+        # Setup network
+        tokens = list(self.tokenizer.vocab.keys())
+        tokens = [x.translate(x.maketrans({"\"": '#e1#', "'": '#e2#', "\\": '#e3#'})) for x in tokens]
+        self.neograph.db.setup_neo_db(tokens, list(self.tokenizer.vocab.values()))
 
         # %% Initialize text dataset
         dataset = query_dataset(self.text_db, self.tokenizer, self.MAX_SEQ_LENGTH,maxn=self.maxn, query=query,logging_level=self.logging_level)
@@ -103,8 +151,7 @@ class neo4j_processor():
             # This seems to allow slightly higher batch sizes on my GPU
             # torch.cuda.empty_cache()
             # Run BERT and get predictions
-            predictions, attn = self.get_bert_tensor(0, self.bert, batch, self.tokenizer.pad_token_id, self.tokenizer.mask_token_id, device,
-                                                return_max=False)
+            predictions, attn = self.get_bert_tensor(0, self.bert, batch, self.tokenizer.pad_token_id, self.tokenizer.mask_token_id, device)
 
             # compute model timings time
             prepare_time = time.time() - start_time - load_time
@@ -203,27 +250,30 @@ class neo4j_processor():
                             self.neograph.insert_edges_context(token, ties, context_ties)
 
 
+
                 del dists
 
             del predictions #, attn, token_ids, seq_ids, batch
             # compute processing time
             process_timings.append(time.time() - start_time - prepare_time - load_time)
+            self.neograph.db.write_queue()
             # New start time
+
             start_time = time.time()
 
 
         # Write remaining
+        print(self.neograph.db.neo_queue)
         self.neograph.db.write_queue()
         torch.cuda.empty_cache()
 
-        dataset.close()
         del dataloader, dataset, batch_sampler
         logging.info("Average Load Time: %s seconds" % (np.mean(load_timings)))
         logging.info("Average Model Time: %s seconds" % (np.mean(model_timings)))
         logging.info("Average Processing Time: %s seconds" % (np.mean(process_timings)))
         logging.info("Ratio Load/Operations: %s seconds" % (np.mean(load_timings) / np.mean(process_timings + model_timings)))
 
-    def get_bert_tensor(args, bert,tokens,pad_token_id,mask_token_id,device=torch.device("cpu"),return_max=False):
+    def get_bert_tensor(self,args, bert,tokens,pad_token_id,mask_token_id,device=torch.device("cpu")):
         """
         Extracts tensors of probability distributions for each word in sentence from BERT.
         This is done by running BERT separately for each token, masking the focal token.
@@ -308,8 +358,8 @@ class neo4j_processor():
         # Only return predictions of masked words (gives one per word for each sentence)
         predictions = predictions[eyes.bool(), :]
 
-        if return_max==True:
-            predictions=torch.argmax(predictions, dim=1)
+        #if return_max==True:
+        #    predictions=torch.argmax(predictions, dim=1)
 
 
         # Softmax prediction probabilities

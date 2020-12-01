@@ -7,7 +7,7 @@ import numpy as np
 import neo4jCon as neo_connector
 
 
-class neo4j_database(MutableSequence):
+class neo4j_database():
     def __init__(self, neo4j_creds, agg_operator="SUM",
                  write_before_query=True,
                  neo_batch_size=10000, queue_size=100000, tie_query_limit=100000, tie_creation="UNSAFE", logging_level=logging.NOTSET):
@@ -252,7 +252,7 @@ class neo4j_database(MutableSequence):
 
     # %% Insert functions
     def insert_edges_context(self, ego, ties, contexts):
-        logging.debug("Insert {} ego nodes with {} ties".format(len(ego),len(ties)))
+        logging.debug("Insert {} ego nodes with {} ties".format(ego,len(ties)))
         # Tie direction matters
         # Ego by default is the focal token to be replaced. Normal insertion points the link accordingly.
         # Hence, a->b is an instance of b replacing a!
@@ -270,20 +270,28 @@ class neo4j_database(MutableSequence):
         unique_egos = np.unique(egos)
         if len(unique_egos) == 1:
             ties_formatted = [{"alter": int(x[0]), "time": int(x[1]), "weight": float(x[2]['weight']),
-                               "p1": (int(x[2]['p1']) if len(x[2]) > 1 else 0),
-                               "p2": (int(x[2]['p2']) if len(x[2]) > 2 else 0)}
+                               "seq_id": int(x[2]['seq_id']),
+                               "pos": int(x[2]['pos']),
+                               "p1": ((x[2]['p1']) if len(x[2]) > 3 else 0),
+                               "p2": ((x[2]['p2']) if len(x[2]) > 4 else 0),
+                               "p3": ((x[2]['p3']) if len(x[2]) > 5 else 0),
+                               "p4": ((x[2]['p4']) if len(x[2]) > 6 else 0),}
                               for x in zip(alters.tolist(), times.tolist(), dicts.tolist())]
             contexts_formatted = [{"alter": int(x[0]), "time": int(x[1]), "weight": float(x[2]['weight']),
-                                   "p1": (int(x[2]['p1']) if len(x[2]) > 1 else 0),
-                                   "p2": (int(x[2]['p2']) if len(x[2]) > 2 else 0)}
+                               "seq_id": int(x[2]['seq_id']),
+                               "pos": int(x[2]['pos']),
+                               "p1": ((x[2]['p1']) if len(x[2]) > 3 else 0),
+                               "p2": ((x[2]['p2']) if len(x[2]) > 4 else 0),
+                               "p3": ((x[2]['p3']) if len(x[2]) > 5 else 0),
+                               "p4": ((x[2]['p4']) if len(x[2]) > 6 else 0),}
                                   for x in zip(con_alters.tolist(), con_times.tolist(), con_dicts.tolist())]
             params = {"ego": int(egos[0]), "ties": ties_formatted, "contexts": contexts_formatted}
             query = ''.join(
                 [" MATCH (a:word {token_id: $ego}) WITH a UNWIND $ties as tie MATCH (b:word {token_id: tie.alter}) ",
                  self.creation_statement,
-                 " (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, p1:tie.p1,p2:tie.p2})<-[:onto]-(a) WITH r UNWIND $contexts as con MATCH (q:word {token_id: con.alter}) WITH r,q,con ",
+                 " (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, seq_id:tie.seq_id,pos:tie.pos, p1:tie.p1,p2:tie.p2,p3:tie.p3,p4:tie.p4})<-[:onto]-(a) WITH r UNWIND $contexts as con MATCH (q:word {token_id: con.alter}) WITH r,q,con ",
                  self.creation_statement,
-                 " (r)-[:conto]->(c:context {weight:con.weight, time:con.time})-[:conto]->(q)"])
+                 " (r)-[:conto]->(c:context {weight:con.weight, time:con.time, seq_id:con.seq_id,pos:con.pos, p1:con.p1,p2:con.p2,p3:con.p3,p4:con.p4})-[:conto]->(q)"])
         else:
             logging.error("Batched edge creation with context for multiple egos not supported.")
             raise NotImplementedError
@@ -380,7 +388,8 @@ class neo4j_database(MutableSequence):
         :return:
         """
         if len(self.neo_queue) > 0:
-            self.connector.run_multiple(self.neo_queue, self.neo_batch_size)
+            ret = self.connector.run_multiple(self.neo_queue, self.neo_batch_size)
+            logging.debug(ret)
 
             self.neo_queue = []
 

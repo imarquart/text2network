@@ -7,7 +7,6 @@ import numpy as np
 # import neo4j utilities and classes
 import neo4jCon as neo_connector
 from src.classes.neo4db import neo4j_database
-from src.classes.neo4jnw_aggregator import neo4jnw_aggregator
 try:
     import networkx as nx
 except:
@@ -28,7 +27,7 @@ class neo4j_network(MutableSequence):
         # Set logging level
         logging.disable(logging_level)
 
-        db=neo4j_database(neo4j_creds,agg_operator,write_before_query,neo_batch_size,queue_size,tie_query_limit,tie_creation,logging_level)
+        self.db=neo4j_database(neo4j_creds,agg_operator,write_before_query,neo_batch_size,queue_size,tie_query_limit,tie_creation,logging_level)
 
         # Conditioned graph information
         self.graph_type = graph_type
@@ -517,5 +516,5 @@ class neo4j_network(MutableSequence):
     def insert_edges_context(self, ego, ties, contexts):
         return self.db.insert_edges_context(ego, ties, contexts)
 
-    def insert_edges_multiple(self, ties, reverse_insertion=False):
-        return self.db.insert_edges_multiple(self, ties, reverse_insertion)
+    #def insert_edges_multiple(self, ties, reverse_insertion=False):
+    #    return self.db.insert_edges_multiple(self, ties, reverse_insertion)

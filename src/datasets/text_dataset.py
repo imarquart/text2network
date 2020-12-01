@@ -23,9 +23,9 @@ class query_dataset(Dataset):
         self.query=query
         self.logging_level=logging_level
         logging.disable(logging_level)
-        logging.info("Creating features from database file at %s", self.database)
+        logging.info("Creating features from database file at %s", self.data_path)
 
-        self.tables = tables.open_file(self.database, mode="r")
+        self.tables = tables.open_file(self.data_path, mode="r")
         self.data = self.tables.root.textdata.table
 
         items=self.data.read_where(self.query)
@@ -33,7 +33,7 @@ class query_dataset(Dataset):
         # Get data
         items_text = items['text']
         items_year = items['year']
-        items_seqid = items['seqid'] #?
+        items_seqid = items['seq_id'] #?
         items_p1 = items['p1']
         items_p2 = items['p2']
         items_p3 = items['p3']
