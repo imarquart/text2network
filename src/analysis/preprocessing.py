@@ -37,14 +37,18 @@ logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message
 
 from src.classes.neo4jnw import neo4j_network
 from src.classes.neo4db import neo4j_database
+from src.classes.neo4jnw_aggregator import neo4jnw_aggregator
 db_uri = "http://localhost:7474"
 db_pwd = ('neo4j', 'nlp')
 neo_creds = (db_uri, db_pwd)
 
 test=neo4j_database(neo_creds)
 neograph = neo4j_network(neo_creds)
-
+nagg=neo4jnw_aggregator(neograph)
 
 #processor=neo4j_processor(config['Paths']['trained_berts'], neograph, config['Preprocessing'].getint('max_seq_length'), config['Processing'],text_db=config['Paths']['database'], split_hierarchy=json.loads(config.get('General','split_hierarchy')),logging_level=config['General'].getint('logging_level'))
-
 #processor.run_all_queries()
+
+
+neograph.condition(years=None, tokens=None, weight_cutoff=None, depth=None,  context=None)
+neograph.export_gefx("E:/NLPInspeech/test.gefx")
