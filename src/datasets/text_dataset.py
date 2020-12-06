@@ -29,7 +29,7 @@ class query_dataset(Dataset):
         self.data = self.tables.root.textdata.table
 
         items=self.data.read_where(self.query)
-        self.nitems=len(items)
+        self.nitems=len(items['text'])
         # Get data
         items_text = items['text']
         items_year = items['year']
@@ -45,6 +45,8 @@ class query_dataset(Dataset):
         items_p2 = [x.decode("utf-8") for x in items_p2]
         items_p3 = [x.decode("utf-8") for x in items_p3]
         items_p4 = [x.decode("utf-8") for x in items_p4]
+
+
         self.data =pd.DataFrame(
             {"year": items_year, "seq_id": items_seqid, "text": items_text, "p1": items_p1, "p2": items_p2,
              "p3": items_p3, "p4": items_p4})

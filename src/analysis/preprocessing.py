@@ -21,7 +21,7 @@ config = configparser.ConfigParser()
 config.read('D:/NLP/InSpeech/BERTNLP/config/config.ini')
 logging_level=config['General'].getint('logging_level')
 
-neo_creds = (config['NeoConfig']["db_uri"], config['NeoConfig']["db_pwd"])
+neo_creds = (config['NeoConfig']["db_uri"], (config['NeoConfig']["db_db"],config['NeoConfig']["db_pwd"]))
 
 
 # Set up logging
@@ -48,6 +48,7 @@ nagg=neo4jnw_aggregator(neograph)
 processor=neo4j_processor(config['Paths']['trained_berts'], neograph, config['Preprocessing'].getint('max_seq_length'), config['Processing'],text_db=config['Paths']['database'], split_hierarchy=json.loads(config.get('General','split_hierarchy')),logging_level=config['General'].getint('logging_level'))
 processor.run_all_queries()
 
+#processor.process_query("(year == 1793) & (p2 == b'Washington') & (p1 == b'2')")
 
 neograph.condition(years=None, tokens=None, weight_cutoff=None, depth=None,  context=None)
-neograph.export_gefx("E:/NLPInspeech/test.gefx")
+neograph.export_gefx("E:/NLPInspeech/tes2t.gefx")

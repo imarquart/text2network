@@ -16,6 +16,7 @@ from src.utils.delwords import create_stopword_list
 from src.utils.rowvec_tools import simple_norm
 from src.utils.get_uniques import get_uniques
 from src.utils.load_bert import get_bert_and_tokenizer
+import gc
 
 class neo4j_processor():
     def __init__(self, trained_folder,neograph, MAX_SEQ_LENGTH,processing_options,text_db=None,  maxn=None,nr_workers=0,split_hierarchy=None,logging_level=logging.NOTSET):
@@ -104,6 +105,8 @@ class neo4j_processor():
             self.neograph.db.clean_database()
 
         for query in self.uniques['query']:
+            gc.collect()
+            torch.cuda.empty_cache()
             logging.info("Processing query {}".format(query))
             self.process_query(query)
 
@@ -146,6 +149,13 @@ class neo4j_processor():
         # %% Initialize text dataset
         dataset = query_dataset(self.text_db, self.tokenizer, self.MAX_SEQ_LENGTH,maxn=self.maxn, query=query,logging_level=self.logging_level)
         logging.info("Number of sentences found: %i"%dataset.nitems)
+
+        # Error fix: Batch size must not be larger than dataset size
+        original_batch_size = self.batch_size
+        if dataset.nitems < self.batch_size:
+            logging.warning("Number of sentences less than batch size. Reducing batch size!")
+            self.batch_size=dataset.nitems
+
         batch_sampler = BatchSampler(SequentialSampler(range(0, dataset.nitems)), batch_size=self.batch_size, drop_last=False)
         dataloader = DataLoaderX(dataset=dataset, batch_size=None, sampler=batch_sampler, num_workers=self.nr_workers,
                                 collate_fn=text_dataset_collate_batchsample, pin_memory=False)
@@ -199,6 +209,9 @@ class neo4j_processor():
                 # idx[0, :sequence_size] = token_ids[sequence_mask]
                 # Pad and add distributions per token, we need to save to maximum sequence size
                 dists = torch.zeros([self.MAX_SEQ_LENGTH, self.DICT_SIZE], requires_grad=False)
+
+
+
                 dists[:sequence_size, :] = predictions[sequence_mask, :]
 
                 # Context element selection matrix
@@ -287,6 +300,11 @@ class neo4j_processor():
         # Write remaining
         self.neograph.db.write_queue()
         torch.cuda.empty_cache()
+
+        # Reset batch size
+        if self.batch_size != original_batch_size:
+            logging.info("Resetting original batch size")
+            self.batch_size = original_batch_size
 
         del dataloader, dataset, batch_sampler
         logging.debug("Average Load Time: %s seconds" % (np.mean(load_timings)))

@@ -79,7 +79,7 @@ class neo4j_preprocessor():
         # Once done, return completed list
         return text_list
 
-    def preprocess_files(self,folder, max_seq=0):
+    def preprocess_files(self,folder, max_seq=0, overwrite=True):
         """
         Pre-processes files from raw data into a HD5 Table
         :param folder: folder with text files
@@ -101,15 +101,21 @@ class neo4j_preprocessor():
             max_length = tables.UInt32Col()
 
         # Initiate pytable database
-        try:
-            data_file = tables.open_file(self.database, mode="a", title="Sequence Data")
-        except:
+        if overwrite is not True:
+            try:
+                data_file = tables.open_file(self.database, mode="a", title="Sequence Data")
+            except:
+                try:
+                    data_file = tables.open_file(self.database, mode="w", title="Sequence Data")
+                except:
+                    logging.error("Could not open existing database file.")
+                    raise IOError("Could not open existing database file.")
+        else:
             try:
                 data_file = tables.open_file(self.database, mode="w", title="Sequence Data")
             except:
                 logging.error("Could not open existing database file.")
                 raise IOError("Could not open existing database file.")
-
         try:
             data_table = data_file.root.textdata.table
             start_index = data_file.root.textdata.table.nrows - 1
