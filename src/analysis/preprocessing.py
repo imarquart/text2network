@@ -15,14 +15,12 @@ from src.classes.neo4jnw import neo4j_network
 from src.classes.neo4db import neo4j_database
 from src.classes.neo4jnw_aggregator import neo4jnw_aggregator
 
-
 # Load Configuration file
 config = configparser.ConfigParser()
 config.read('D:/NLP/InSpeech/BERTNLP/config/config.ini')
-logging_level=config['General'].getint('logging_level')
+logging_level = config['General'].getint('logging_level')
 
-neo_creds = (config['NeoConfig']["db_uri"], (config['NeoConfig']["db_db"],config['NeoConfig']["db_pwd"]))
-
+neo_creds = (config['NeoConfig']["db_uri"], (config['NeoConfig']["db_db"], config['NeoConfig']["db_pwd"]))
 
 # Set up logging
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
@@ -30,25 +28,30 @@ logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message
                     level=logging_level)
 
 # Set up preprocessor
-preprocessor=neo4j_preprocessor(config['Paths']['database'], config['Preprocessing'].getint('max_seq_length'),config['Preprocessing'].getint('char_mult'),config['Preprocessing']['split_symbol'],config['Preprocessing'].getint('number_params'), logging_level=logging_level)
+preprocessor = neo4j_preprocessor(config['Paths']['database'], config['Preprocessing'].getint('max_seq_length'),
+                                  config['Preprocessing'].getint('char_mult'), config['Preprocessing']['split_symbol'],
+                                  config['Preprocessing'].getint('number_params'), logging_level=logging_level)
 
 # Preprocess file
 preprocessor.preprocess_files(config['Paths']['import_folder'])
-
 
 trainer=bert_trainer(config['Paths']['database'],config['Paths']['pretrained_bert'], config['Paths']['trained_berts'],config['BertTraining'],json.loads(config.get('General','split_hierarchy')),logging_level=logging_level)
 trainer.train_berts()
 
 
-
-test=neo4j_database(neo_creds)
+test = neo4j_database(neo_creds)
 neograph = neo4j_network(neo_creds)
-nagg=neo4jnw_aggregator(neograph)
+nagg = neo4jnw_aggregator(neograph)
 
-processor=neo4j_processor(config['Paths']['trained_berts'], neograph, config['Preprocessing'].getint('max_seq_length'), config['Processing'],text_db=config['Paths']['database'], split_hierarchy=json.loads(config.get('General','split_hierarchy')),logging_level=config['General'].getint('logging_level'))
-processor.run_all_queries()
+processor = neo4j_processor(config['Paths']['trained_berts'], neograph,
+                            config['Preprocessing'].getint('max_seq_length'), config['Processing'],
+                            text_db=config['Paths']['database'],
+                            split_hierarchy=json.loads(config.get('General', 'split_hierarchy')),
+                            processing_cache=config['Paths']['processing_cache'],
+                            logging_level=config['General'].getint('logging_level'))
+processor.run_all_queries(clean_database=True)
 
-#processor.process_query("(year == 1793) & (p2 == b'Washington') & (p1 == b'2')")
-
-neograph.condition(years=None, tokens=None, weight_cutoff=None, depth=None,  context=None)
+neograph.condition(years=None, tokens=None, weight_cutoff=None, depth=None, context=None)
 neograph.export_gefx("E:/NLPInspeech/tes2t.gefx")
+
+

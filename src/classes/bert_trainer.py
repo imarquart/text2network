@@ -53,11 +53,12 @@ class bert_trainer():
 
         logging.info("With the current hierarchy, there are %i BERT models to train" % (len(self.uniques["query"])))
 
-        for idx, query in enumerate(self.uniques["query"]):
+        for idx, query_filename in enumerate(self.uniques["query_filename"]):
             logging.disable(self.logging_level)
             logging.info("----------------------------------------------------------------------")
             # Set up BERT folder
-            fname = self.uniques["file"][idx]
+            query=query_filename[0]
+            fname = query_filename[1]
             bert_folder = ''.join([self.trained_folder, '/', fname])
 
             # Set up Hash

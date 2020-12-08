@@ -7,6 +7,7 @@ import numpy as np
 # import neo4j utilities and classes
 import neo4jCon as neo_connector
 from src.classes.neo4db import neo4j_database
+
 try:
     import networkx as nx
 except:
@@ -23,11 +24,13 @@ class neo4j_network(MutableSequence):
     # %% Initialization functions
     def __init__(self, neo4j_creds, graph_type="networkx", agg_operator="SUM",
                  write_before_query=True,
-                 neo_batch_size=10000, queue_size=100000, tie_query_limit=100000, tie_creation="UNSAFE", logging_level=logging.NOTSET):
+                 neo_batch_size=10000, queue_size=100000, tie_query_limit=100000, tie_creation="UNSAFE",
+                 logging_level=logging.NOTSET):
         # Set logging level
         logging.disable(logging_level)
 
-        self.db=neo4j_database(neo4j_creds,agg_operator,write_before_query,neo_batch_size,queue_size,tie_query_limit,tie_creation,logging_level)
+        self.db = neo4j_database(neo4j_creds, agg_operator, write_before_query, neo_batch_size, queue_size,
+                                 tie_query_limit, tie_creation, logging_level)
 
         # Conditioned graph information
         self.graph_type = graph_type
@@ -164,13 +167,14 @@ class neo4j_network(MutableSequence):
         self.db.add_queries(queries)
 
     def get_times_list(self):
-        query="MATCH (n) WHERE EXISTS(n.time) RETURN DISTINCT  n.time AS time"
+        query = "MATCH (n) WHERE EXISTS(n.time) RETURN DISTINCT  n.time AS time"
         res = self.db.connector.run(query)
-        times=[x['time'] for x in res]
+        times = [x['time'] for x in res]
         return times
 
     # %% Conditoning functions
-    def condition(self, years=None, tokens=None, weight_cutoff=None, depth=None,  context=None, norm=False,batchsize=10000):
+    def condition(self, years=None, tokens=None, weight_cutoff=None, depth=None, context=None, norm=False,
+                  batchsize=10000):
         """
         :param years: None, integer YYYY, or interval dict of the form {"start":YYYY,"end":YYYY}
         :param tokens: None or list of strings or integers (ids)
@@ -181,19 +185,19 @@ class neo4j_network(MutableSequence):
         :return:
         """
         # Without times, we query all
-        if years==None:
-            years=self.get_times_list()
+        if years == None:
+            years = self.get_times_list()
 
-        if tokens==None:
+        if tokens == None:
             logging.debug("Conditioning dispatch: Yearly")
-            self.year_condition(years, weight_cutoff,context, norm, batchsize)
+            self.year_condition(years, weight_cutoff, context, norm, batchsize)
         else:
             logging.debug("Conditioning dispatch: Ego")
-            self.ego_condition(years,tokens,weight_cutoff,depth,context, norm)
+            self.ego_condition(years, tokens, weight_cutoff, depth, context, norm)
 
-        self.conditioned=True
+        self.conditioned = True
 
-    def year_condition(self,years, weight_cutoff=None, context=None, norm=False,batchsize=10000):
+    def year_condition(self, years, weight_cutoff=None, context=None, norm=False, batchsize=10000):
         """ Condition the entire network over all years """
         if self.conditioned == False:  # This is the first conditioning
             # Preserve node and token lists
@@ -208,7 +212,7 @@ class neo4j_network(MutableSequence):
             self.update_dicts()
 
             # All tokens
-            worklist=self.neo_ids
+            worklist = self.neo_ids
             # Add all tokens to graph
             self.graph.add_nodes_from(worklist)
 
@@ -216,11 +220,12 @@ class neo4j_network(MutableSequence):
             for i in range(0, len(worklist), batchsize):
 
                 token_ids = worklist[i:i + batchsize]
-                logging.debug("Conditioning by query batch {} of {} tokens.".format(i,len(token_ids)))
+                logging.debug("Conditioning by query batch {} of {} tokens.".format(i, len(token_ids)))
                 # Query Neo4j
                 try:
                     self.graph.add_edges_from(
-                        self.query_nodes(token_ids, context=context, times=years, weight_cutoff=weight_cutoff, norm_ties=norm))
+                        self.query_nodes(token_ids, context=context, times=years, weight_cutoff=weight_cutoff,
+                                         norm_ties=norm))
                 except:
                     logging.error("Could not condition graph by query method.")
 
@@ -251,46 +256,50 @@ class neo4j_network(MutableSequence):
             self.update_dicts()
 
             # Depth 0 and Depth 1 really mean the same thing here
-            if depth==0 or depth==None:
-                depth=1
+            if depth == 0 or depth == None:
+                depth = 1
             # Create a dict to hold previously queried ids
-            prev_queried_ids=list()
-            while depth>0:
+            prev_queried_ids = list()
+            while depth > 0:
                 if not isinstance(token_ids, (list, np.ndarray)): token_ids = [token_ids]
                 # Work from ID list, give error if tokens are not in database
                 token_ids = self.ensure_ids(token_ids)
                 # Do not consider already added tokens
                 token_ids = np.setdiff1d(token_ids, prev_queried_ids)
-                logging.debug("Depth {} conditioning: {} new found tokens, where {} already added.".format(depth,len(token_ids), len(prev_queried_ids)))
+                logging.debug(
+                    "Depth {} conditioning: {} new found tokens, where {} already added.".format(depth, len(token_ids),
+                                                                                                 len(prev_queried_ids)))
                 # Add token_ids to list since they will be queried this iteration
                 prev_queried_ids.extend(token_ids)
                 # Add starting nodes
                 self.graph.add_nodes_from(token_ids)
                 # Query Neo4j
                 try:
-                    self.graph.add_edges_from(self.query_nodes(token_ids, context=context, times=years, weight_cutoff=weight_cutoff, norm_ties=norm))
+                    self.graph.add_edges_from(
+                        self.query_nodes(token_ids, context=context, times=years, weight_cutoff=weight_cutoff,
+                                         norm_ties=norm))
                 except:
                     logging.error("Could not condition graph by query method.")
                     raise Exception("Could not condition graph by query method.")
 
                 # Update IDs and Tokens to reflect conditioning
                 all_ids = list(self.graph.nodes)
-                #("{} All ids: {}".format(len(all_ids),all_ids))
+                # ("{} All ids: {}".format(len(all_ids),all_ids))
                 self.tokens = [self.get_token_from_id(x) for x in all_ids]
                 self.ids = all_ids
                 self.update_dicts()
 
                 # Set the next set of tokens as those that have not been previously queried
                 token_ids = np.setdiff1d(all_ids, prev_queried_ids)
-                #print("{} tokens post setdiff: {}".format(len(token_ids),token_ids))
+                # print("{} tokens post setdiff: {}".format(len(token_ids),token_ids))
                 # Set additional attributes
                 att_list = [{"token": x} for x in self.tokens]
                 att_dict = dict(list(zip(self.ids, att_list)))
                 nx.set_node_attributes(self.graph, att_dict)
 
                 # decrease depth
-                depth = depth -1
-                if token_ids==[]:
+                depth = depth - 1
+                if token_ids == []:
                     depth = 0
 
             # Set conditioning true
@@ -299,7 +308,7 @@ class neo4j_network(MutableSequence):
         else:  # Remove conditioning and recondition
             # TODO: "Allow for conditioning on conditioning"
             self.decondition()
-            self.condition( years, token_ids, weight_cutoff, depth, context, norm)
+            self.condition(years, token_ids, weight_cutoff, depth, context, norm)
 
         # Continue conditioning
 
@@ -374,11 +383,11 @@ class neo4j_network(MutableSequence):
 
     def ensure_ids(self, tokens):
         """This is just to confirm mixed lists of tokens and ids get converted to ids"""
-        if isinstance(tokens, (list,np.ndarray)) :
+        if isinstance(tokens, (list, np.ndarray)):
             # Transform strings to corresponding IDs
-            tokens= [self.get_id_from_token(x) if not np.issubdtype(type(x), np.integer) else x for x in tokens]
+            tokens = [self.get_id_from_token(x) if not np.issubdtype(type(x), np.integer) else x for x in tokens]
             # Make sure np arrays get transformed to int lists
-            return [int(x) if not isinstance(x,int) else x for x in tokens]
+            return [int(x) if not isinstance(x, int) else x for x in tokens]
         else:
             if not np.issubdtype(type(tokens), np.integer):
                 return self.get_id_from_token(tokens)
@@ -408,8 +417,6 @@ class neo4j_network(MutableSequence):
             except:
                 raise SystemError("Could not save to %s " % path)
 
-
-
     # %% Graph Database Aliases
     def setup_neo_db(self, tokens, token_ids):
         """
@@ -418,7 +425,7 @@ class neo4j_network(MutableSequence):
         :param token_ids: list of corresponding token IDs
         :return: None
         """
-        self.db.setup_neo_db(tokens,token_ids)
+        self.db.setup_neo_db(tokens, token_ids)
         self.init_tokens()
 
     def init_tokens(self):
@@ -428,7 +435,7 @@ class neo4j_network(MutableSequence):
         :return:
         """
         # Run neo query to get all nodes
-        ids,tokens = self.db.init_tokens()
+        ids, tokens = self.db.init_tokens()
         # Update results
         self.ids = ids
         self.tokens = tokens
@@ -446,9 +453,9 @@ class neo4j_network(MutableSequence):
         :return: list of tuples (u,occurrences)
         """
         # Make sure we have a list of ids
-        ids=self.ensure_ids(ids)
+        ids = self.ensure_ids(ids)
         if not isinstance(ids, (list, np.ndarray)):
-            ids=[ids]
+            ids = [ids]
         # Dispatch with or without context
         if context is not None:
             context = self.ensure_ids(context)
@@ -468,7 +475,7 @@ class neo4j_network(MutableSequence):
         """
         Old interface
         """
-        return self.db.query_nodes(self, ids, context, times, weight_cutoff,norm_ties)
+        return self.db.query_nodes(self, ids, context, times, weight_cutoff, norm_ties)
 
     def insert_edges_context(self, ego, ties, contexts):
         return self.db.insert_edges_context(ego, ties, contexts)

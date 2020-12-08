@@ -1,8 +1,7 @@
-
 # TODO: Comment
 # TODO: Add parameters
 
-
+import numpy as np
 import torch
 import tables
 import pandas as pd
@@ -13,27 +12,29 @@ import logging
 import os
 import pickle
 
+
 class query_dataset(Dataset):
-    def __init__(self, data_path, tokenizer=None, fixed_seq_length=None, maxn=None, query=None, logging_level=logging.DEBUG):
+    def __init__(self, data_path, tokenizer=None, fixed_seq_length=None, maxn=None, query=None,
+                 logging_level=logging.DEBUG):
         # TODO: Redo out of memory if necessary
         # TODO: Add maxn option
         self.data_path = data_path
         self.tokenizer = tokenizer
         self.fixed_seq_length = fixed_seq_length
-        self.query=query
-        self.logging_level=logging_level
+        self.query = query
+        self.logging_level = logging_level
         logging.disable(logging_level)
         logging.info("Creating features from database file at %s", self.data_path)
 
         self.tables = tables.open_file(self.data_path, mode="r")
         self.data = self.tables.root.textdata.table
 
-        items=self.data.read_where(self.query)
-        self.nitems=len(items['text'])
+        items = self.data.read_where(self.query)
+        self.nitems = len(items['text'])
         # Get data
         items_text = items['text']
         items_year = items['year']
-        items_seqid = items['seq_id'] #?
+        items_seqid = items['seq_id']  # ?
         items_p1 = items['p1']
         items_p2 = items['p2']
         items_p3 = items['p3']
@@ -46,11 +47,21 @@ class query_dataset(Dataset):
         items_p3 = [x.decode("utf-8") for x in items_p3]
         items_p4 = [x.decode("utf-8") for x in items_p4]
 
-
-        self.data =pd.DataFrame(
+        self.data = pd.DataFrame(
             {"year": items_year, "seq_id": items_seqid, "text": items_text, "p1": items_p1, "p2": items_p2,
              "p3": items_p3, "p4": items_p4})
         self.tables.close()
+
+
+        # Setup unique words ID masking
+        logging.info("Setting up unique words")
+        all_tokens=[tokenizer.tokenize(x) for x in items_text]
+        all_ids=[tokenizer.convert_tokens_to_ids(x) for x in all_tokens]
+        all_ids=list(set(sum(all_ids,[])))
+        # ID mask is 1 for tokens that do not appear in the text
+        self.id_mask=torch.ones(tokenizer.vocab_size)
+        self.id_mask[all_ids]=0
+        self.id_mask=np.where(self.id_mask==1)[0]
 
     def __getitem__(self, index):
         """
@@ -83,8 +94,7 @@ class query_dataset(Dataset):
         if type(index) is not list:
             index = [index]
 
-
-        item=self.data.iloc[index, :]
+        item = self.data.iloc[index, :]
         # Get numpy or torch vectors (numpy for the strings)
         texts = item['text'].to_numpy()
         year_vec = torch.tensor(item['year'].to_numpy(dtype="int32"), requires_grad=False)
@@ -118,16 +128,15 @@ class query_dataset(Dataset):
         index_vec = torch.repeat_interleave(torch.as_tensor(index), torch.as_tensor(lengths))
         seq_vec = torch.repeat_interleave(torch.as_tensor(seq_vec), torch.as_tensor(lengths))
         year_vec = torch.repeat_interleave(torch.as_tensor(year_vec), torch.as_tensor(lengths))
-        p1_vec=p1_vec.repeat(lengths)
-        p2_vec=p2_vec.repeat(lengths)
-        p3_vec=p3_vec.repeat(lengths)
-        p4_vec=p4_vec.repeat(lengths)
-
+        p1_vec = p1_vec.repeat(lengths)
+        p2_vec = p2_vec.repeat(lengths)
+        p3_vec = p3_vec.repeat(lengths)
+        p4_vec = p4_vec.repeat(lengths)
 
         # Cat token_id_vec list into a single tensor for the whole batch
         token_id_vec = torch.cat([x for x in token_id_vec])
 
-        return token_input_vec, token_id_vec, index_vec, seq_vec, year_vec,p1_vec, p2_vec, p3_vec, p4_vec
+        return token_input_vec, token_id_vec, index_vec, seq_vec, year_vec, p1_vec, p2_vec, p3_vec, p4_vec
 
     def __len__(self):
         return len(self.data)
@@ -135,7 +144,7 @@ class query_dataset(Dataset):
 
 class bert_dataset(Dataset):
     # TODO: Padd sentences instead of joining and splitting!
-    def __init__(self, tokenizer, database,where_string, block_size=30, logging_level=logging.DEBUG):
+    def __init__(self, tokenizer, database, where_string, block_size=30, logging_level=logging.DEBUG):
         self.database = database
         logging.disable(logging_level)
         logging.info("Creating features from database file at %s", self.database)
@@ -149,10 +158,9 @@ class bert_dataset(Dataset):
         # Because of pyTables, we have to encode.
         items = [x.decode("utf-8") for x in items]
 
-        text= ' '.join(items)
+        text = ' '.join(items)
 
         self.examples = []
-
 
         tokenized_text = tokenizer.convert_tokens_to_ids(tokenizer.tokenize(text))
 

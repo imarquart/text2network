@@ -1,4 +1,3 @@
-
 # TODO: Redo Comments
 # TODO: Initialize BERT and Tokenizer based on hierarchy
 # TODO: Adding parameters in network class
@@ -17,9 +16,12 @@ from src.utils.rowvec_tools import simple_norm
 from src.utils.get_uniques import get_uniques
 from src.utils.load_bert import get_bert_and_tokenizer
 import gc
+from src.utils.hash_file import hash_string, check_step, complete_step
+
 
 class neo4j_processor():
-    def __init__(self, trained_folder,neograph, MAX_SEQ_LENGTH,processing_options,text_db=None,  maxn=None,nr_workers=0,split_hierarchy=None,logging_level=logging.NOTSET):
+    def __init__(self, trained_folder, neograph, MAX_SEQ_LENGTH, processing_options, text_db=None, maxn=None,
+                 nr_workers=0, split_hierarchy=None, processing_cache=None,logging_level=logging.NOTSET):
         """
         Extracts pre-processed sentences, gets predictions by BERT and creates a network
 
@@ -36,22 +38,23 @@ class neo4j_processor():
         :param cutoff_percent: Amount of probability mass to use to create links. Smaller values, less ties.
         """
         # Assign parameters
-        self.trained_folder=trained_folder
-        self.tokenizer=None
-        self.bert=None
-        self.text_db=text_db
-        self.neograph=neograph
-        self.MAX_SEQ_LENGTH=MAX_SEQ_LENGTH
-        self.DICT_SIZE=0
-        self.batch_size=int(processing_options['batch_size'])
-        self.maxn=maxn
-        self.nr_workers=nr_workers
-        self.cutoff_percent=int(processing_options['cutoff_percent'])
-        self.max_degree=int(processing_options['max_degree'])
-        self.context_cutoff_percent=int(processing_options['context_cutoff_percent'])
-        self.context_max_degree=int(processing_options['context_max_degree'])
-        self.split_hierarchy=split_hierarchy
-        self.logging_level=logging_level
+        self.trained_folder = trained_folder
+        self.tokenizer = None
+        self.bert = None
+        self.text_db = text_db
+        self.neograph = neograph
+        self.MAX_SEQ_LENGTH = MAX_SEQ_LENGTH
+        self.DICT_SIZE = 0
+        self.batch_size = int(processing_options['batch_size'])
+        self.maxn = maxn
+        self.nr_workers = nr_workers
+        self.cutoff_percent = int(processing_options['cutoff_percent'])
+        self.max_degree = int(processing_options['max_degree'])
+        self.context_cutoff_percent = int(processing_options['context_cutoff_percent'])
+        self.context_max_degree = int(processing_options['context_max_degree'])
+        self.split_hierarchy = split_hierarchy
+        self.logging_level = logging_level
+        self.processing_cache=processing_cache
 
         # Set uniques
         self.setup_uniques(self.split_hierarchy)
@@ -65,29 +68,23 @@ class neo4j_processor():
         :return:
         """
         if split_hierarchy is not None:
-            self.split_hierarchy=split_hierarchy
+            self.split_hierarchy = split_hierarchy
         assert self.split_hierarchy is not None
 
-        self.uniques=get_uniques(self.split_hierarchy,self.text_db)
+        self.uniques = get_uniques(self.split_hierarchy, self.text_db)
 
-    def get_file_from_query(self, query):
-        """
-        Helper function to match query with filename
-        :param query:
-        :return:
-        """
-        index=np.where(np.array(self.uniques["query"]) == query)[0][0]
-        return self.uniques["file"][index]
 
-    def setup_bert(self, query):
+    def setup_bert(self, fname):
 
-        fname=self.get_file_from_query(query)
+        del self.bert
+        del self.tokenizer
+
         bert_folder = ''.join([self.trained_folder, '/', fname])
-        tokenizer, bert= get_bert_and_tokenizer(bert_folder, True)
-        self.DICT_SIZE=len(tokenizer.vocab)
+        tokenizer, bert = get_bert_and_tokenizer(bert_folder, True)
+        self.DICT_SIZE = len(tokenizer.vocab)
         return tokenizer, bert
 
-    def run_all_queries(self,clean_database=True,split_hierarchy=None,logging_level=None):
+    def run_all_queries(self, clean_database=True, split_hierarchy=None, logging_level=None):
 
         # SEt up logging
         if logging_level is not None:
@@ -104,15 +101,27 @@ class neo4j_processor():
             logging.info("Cleaning Neo4j Database of all prior connections")
             self.neograph.db.clean_database()
 
-        for query in self.uniques['query']:
-            gc.collect()
-            torch.cuda.empty_cache()
-            logging.info("Processing query {}".format(query))
-            self.process_query(query)
+        for idx,query_filename in enumerate(self.uniques['query_filename']):
+            # Get File name
+            query = query_filename[0]
+            fname = query_filename[1]
+            if self.processing_cache is not None:
+                processing_folder= ''.join([self.processing_cache, '/', fname])
+            else:
+                processing_folder = 'None'
+            # Set up Hash
+            hash = hash_string(processing_folder, hash_factory="md5")
+            if (check_step(processing_folder, hash) and (self.processing_cache is not None)):
+                logging.info("Found processed cache for %s. Skipping" % processing_folder)
+            else:
+                gc.collect()
+                torch.cuda.empty_cache()
+                logging.info("Processing query {}".format(query))
+                self.process_query(query, fname)
+                if self.processing_cache is not None:
+                    complete_step(processing_folder, hash)
 
-
-
-    def process_query(self,query,text_db=None,logging_level=None):
+    def process_query(self, query, fname, text_db=None, logging_level=None):
         """
         Extracts pre-processed sentences, gets predictions by BERT and creates network ties
         Ties are then added to the neo4j database.
@@ -132,13 +141,13 @@ class neo4j_processor():
 
         # Check if text database has changed
         if text_db is not None:
-            self.text_db=text_db
-        elif self.text_db==None:
+            self.text_db = text_db
+        elif self.text_db == None:
             logging.error("No text database provided!")
             raise ConnectionError("No text database provided!")
 
         # Setup Bert and tokenizer
-        self.tokenizer, self.bert = self.setup_bert(query)
+        self.tokenizer, self.bert = self.setup_bert(fname)
 
         # Setup Neo4j network
         # Setup network
@@ -147,18 +156,20 @@ class neo4j_processor():
         self.neograph.db.setup_neo_db(tokens, list(self.tokenizer.vocab.values()))
 
         # %% Initialize text dataset
-        dataset = query_dataset(self.text_db, self.tokenizer, self.MAX_SEQ_LENGTH,maxn=self.maxn, query=query,logging_level=self.logging_level)
-        logging.info("Number of sentences found: %i"%dataset.nitems)
-
+        dataset = query_dataset(self.text_db, self.tokenizer, self.MAX_SEQ_LENGTH, maxn=self.maxn, query=query,
+                                logging_level=self.logging_level)
+        logging.info("Number of sentences found: %i" % dataset.nitems)
+        logging.info("Number of unique tokens in dataset: {}".format(self.tokenizer.vocab_size-len(dataset.id_mask)))
         # Error fix: Batch size must not be larger than dataset size
         original_batch_size = self.batch_size
         if dataset.nitems < self.batch_size:
             logging.warning("Number of sentences less than batch size. Reducing batch size!")
-            self.batch_size=dataset.nitems
+            self.batch_size = dataset.nitems
 
-        batch_sampler = BatchSampler(SequentialSampler(range(0, dataset.nitems)), batch_size=self.batch_size, drop_last=False)
+        batch_sampler = BatchSampler(SequentialSampler(range(0, dataset.nitems)), batch_size=self.batch_size,
+                                     drop_last=False)
         dataloader = DataLoaderX(dataset=dataset, batch_size=None, sampler=batch_sampler, num_workers=self.nr_workers,
-                                collate_fn=text_dataset_collate_batchsample, pin_memory=False)
+                                 collate_fn=text_dataset_collate_batchsample, pin_memory=False)
 
         # Push BERT to GPU
         torch.cuda.empty_cache()
@@ -175,15 +186,17 @@ class neo4j_processor():
         process_timings = []
         load_timings = []
         start_time = time.time()
-        for batch, token_ids, index_vec, seq_ids, year_vec,p1_vec, p2_vec, p3_vec, p4_vec in tqdm.tqdm(dataloader, desc="Iteration"):
-            #batch, seq_ids, token_ids
+        for batch, token_ids, index_vec, seq_ids, year_vec, p1_vec, p2_vec, p3_vec, p4_vec in tqdm.tqdm(dataloader,
+                                                                                                        desc="Iteration"):
+            # batch, seq_ids, token_ids
             # Data spent on loading batch
             load_time = time.time() - start_time
             load_timings.append(load_time)
             # This seems to allow slightly higher batch sizes on my GPU
             # torch.cuda.empty_cache()
             # Run BERT and get predictions
-            predictions, attn = self.get_bert_tensor(0, self.bert, batch, self.tokenizer.pad_token_id, self.tokenizer.mask_token_id, device)
+            predictions, attn = self.get_bert_tensor(0, self.bert, batch, self.tokenizer.pad_token_id,
+                                                     self.tokenizer.mask_token_id, device)
 
             # compute model timings time
             prepare_time = time.time() - start_time - load_time
@@ -197,8 +210,8 @@ class neo4j_processor():
                 sequence_size = sum(sequence_mask)
 
                 # Get parameters
-                seq_year=year_vec[sequence_mask]
-                seq_p1=p1_vec[sequence_mask]
+                seq_year = year_vec[sequence_mask]
+                seq_p1 = p1_vec[sequence_mask]
                 seq_p2 = p2_vec[sequence_mask]
                 seq_p3 = p3_vec[sequence_mask]
                 seq_p4 = p4_vec[sequence_mask]
@@ -209,8 +222,6 @@ class neo4j_processor():
                 # idx[0, :sequence_size] = token_ids[sequence_mask]
                 # Pad and add distributions per token, we need to save to maximum sequence size
                 dists = torch.zeros([self.MAX_SEQ_LENGTH, self.DICT_SIZE], requires_grad=False)
-
-
 
                 dists[:sequence_size, :] = predictions[sequence_mask, :]
 
@@ -231,8 +242,8 @@ class neo4j_processor():
                     # Should all be np
                     token = token.item()
                     # Extract parameters for token
-                    year=seq_year[pos]
-                    p1=seq_p1[pos]
+                    year = seq_year[pos]
+                    p1 = seq_p1[pos]
                     p2 = seq_p2[pos]
                     p3 = seq_p3[pos]
                     p4 = seq_p4[pos]
@@ -250,13 +261,15 @@ class neo4j_processor():
                         replacement[replacement == np.min(replacement)] = 0
                         # Get rid of delnorm links
                         replacement[delwords] = 0
+                        # Get rid of tokens not in text
+                        replacement[self.id_mask] = 0
                         # We norm the distributions here
                         replacement = self.norm(replacement)
 
                         # %% Context Element
                         context = (
                             torch.sum((seq_ce[pos] * dists[context_index, :].transpose(-1, 0)).transpose(-1, 0),
-                                    dim=0).unsqueeze(0))
+                                      dim=0).unsqueeze(0))
                         # Flatten, since it is one row each
                         context = context.numpy().flatten()
                         # Sparsify
@@ -265,37 +278,42 @@ class neo4j_processor():
                         context[context == np.min(context)] = 0
                         # Get rid of delnorm links
                         context[delwords] = 0
+                        # Get rid of tokens not in text
+                        context[self.id_mask] = 0
                         # We norm the distributions here
-                        context =self.norm(context)
+                        context = self.norm(context)
 
                         # Add values to network
                         # Replacement ties
                         cutoff_number, cutoff_probability = self.calculate_cutoffs(replacement, method="percent",
-                                                                            percent=self.cutoff_percent, max_degree=self.max_degree)
+                                                                                   percent=self.cutoff_percent,
+                                                                                   max_degree=self.max_degree)
                         ties = self.get_weighted_edgelist(token, replacement, year, cutoff_number, cutoff_probability,
-                                                    sequence_id, pos, p1=p1,p2=p2,p3=p3,p4=p4, max_degree=self.max_degree)
+                                                          sequence_id, pos, p1=p1, p2=p2, p3=p3, p4=p4,
+                                                          max_degree=self.max_degree)
 
                         # Context ties
                         cutoff_number, cutoff_probability = self.calculate_cutoffs(context, method="percent",
-                                                                            percent=self.context_cutoff_percent, max_degree=self.context_max_degree)
-                        context_ties = self.get_weighted_edgelist(token, context, year, cutoff_number, cutoff_probability,
-                                                            sequence_id, pos, p1=p1,p2=p2,p3=p3,p4=p4, max_degree=self.context_max_degree)
+                                                                                   percent=self.context_cutoff_percent,
+                                                                                   max_degree=self.context_max_degree)
+                        context_ties = self.get_weighted_edgelist(token, context, year, cutoff_number,
+                                                                  cutoff_probability,
+                                                                  sequence_id, pos, p1=p1, p2=p2, p3=p3, p4=p4,
+                                                                  max_degree=self.context_max_degree,
+                                                                  simplify_context=True)
 
                         if (ties is not None) and (context_ties is not None):
                             self.neograph.insert_edges_context(token, ties, context_ties)
 
-
-
                 del dists
 
-            del predictions #, attn, token_ids, seq_ids, batch
+            del predictions, attn
             # compute processing time
             process_timings.append(time.time() - start_time - prepare_time - load_time)
             self.neograph.db.write_queue()
             # New start time
 
             start_time = time.time()
-
 
         # Write remaining
         self.neograph.db.write_queue()
@@ -310,9 +328,10 @@ class neo4j_processor():
         logging.debug("Average Load Time: %s seconds" % (np.mean(load_timings)))
         logging.debug("Average Model Time: %s seconds" % (np.mean(model_timings)))
         logging.debug("Average Processing Time: %s seconds" % (np.mean(process_timings)))
-        logging.debug("Ratio Load/Operations: %s seconds" % (np.mean(load_timings) / np.mean(process_timings + model_timings)))
+        logging.debug(
+            "Ratio Load/Operations: %s seconds" % (np.mean(load_timings) / np.mean(process_timings + model_timings)))
 
-    def get_bert_tensor(self,args, bert,tokens,pad_token_id,mask_token_id,device=torch.device("cpu")):
+    def get_bert_tensor(self, args, bert, tokens, pad_token_id, mask_token_id, device=torch.device("cpu")):
         """
         Extracts tensors of probability distributions for each word in sentence from BERT.
         This is done by running BERT separately for each token, masking the focal token.
@@ -328,23 +347,22 @@ class neo4j_processor():
         """
 
         # We use lists of tensors first
-        list_tokens=[]
-        list_segments=[]
-        list_labels=[]
-        list_eye=[]
+        list_tokens = []
+        list_segments = []
+        list_labels = []
+        list_eye = []
 
-        max_seq_length=tokens.shape[1]
+        max_seq_length = tokens.shape[1]
         # Create a batch for each token in sentence
-        for idx,text in enumerate(tokens):
-
+        for idx, text in enumerate(tokens):
             # Check how many non-zero tokens are in this text (including special tokens)
-            seq_length=sum((text != pad_token_id).int()).item()
+            seq_length = sum((text != pad_token_id).int()).item()
             # We repeat the input text for each actual word in sentence
             # -2 because we do not run BERT for <CLS> and <SEP>
-            inputs  = text.repeat(seq_length- 2, 1)
+            inputs = text.repeat(seq_length - 2, 1)
 
             # We do the same for the segments, which are just zero
-            segments_tensor = torch.zeros(seq_length-2, max_seq_length, dtype=torch.int64)
+            segments_tensor = torch.zeros(seq_length - 2, max_seq_length, dtype=torch.int64)
 
             # Create the basis version of our labels
             labels_tensor = inputs.clone()
@@ -354,7 +372,7 @@ class neo4j_processor():
             nr_mask_tokens = seq_length - 2
             # Create square eye matrix of max_sequence length
             # But cut both the first token, as well as passing tokens as rows
-            eye_matrix = torch.eye(max_seq_length, dtype=torch.bool)[1:seq_length-1, :]
+            eye_matrix = torch.eye(max_seq_length, dtype=torch.bool)[1:seq_length - 1, :]
 
             # We Mask diagonal tokens
             inputs[eye_matrix] = mask_token_id
@@ -367,7 +385,6 @@ class neo4j_processor():
             list_labels.append(labels_tensor)
             list_eye.append(eye_matrix.int())
 
-
         tokens = torch.tensor([], requires_grad=False)
         segments = torch.tensor([], requires_grad=False)
         labels = torch.tensor([], requires_grad=False)
@@ -375,9 +392,9 @@ class neo4j_processor():
 
         # Send to GPU
         tokens = torch.cat(list_tokens).to(device)
-        segments=torch.cat(list_segments).to(device)
-        labels=torch.cat(list_labels).to(device)
-        eyes=torch.cat(list_eye).to(device)
+        segments = torch.cat(list_segments).to(device)
+        labels = torch.cat(list_labels).to(device)
+        eyes = torch.cat(list_eye).to(device)
 
         # Save some memory insallah
         del list_tokens
@@ -388,7 +405,7 @@ class neo4j_processor():
         # Get predictions
         bert.eval()
         with torch.no_grad():
-            loss, predictions, attn= bert(tokens, masked_lm_labels=labels, token_type_ids=segments)
+            loss, predictions, attn = bert(tokens, masked_lm_labels=labels, token_type_ids=segments)
 
         del tokens
         del labels
@@ -397,29 +414,27 @@ class neo4j_processor():
         # Only return predictions of masked words (gives one per word for each sentence)
         predictions = predictions[eyes.bool(), :]
 
-        #if return_max==True:
+        # if return_max==True:
         #    predictions=torch.argmax(predictions, dim=1)
 
-
         # Softmax prediction probabilities
-        softmax=torch.nn.Softmax(dim=1)
-        predictions=softmax(predictions)
-
+        softmax = torch.nn.Softmax(dim=1)
+        predictions = softmax(predictions)
 
         # Operate on attention
-        attn=torch.stack(attn)
+        attn = torch.stack(attn)
         # Max over layers and attention heads
-        attn,_ =torch.max(attn,dim=0)
-        attn,_ = torch.max(attn, dim=1)
+        attn, _ = torch.max(attn, dim=0)
+        attn, _ = torch.max(attn, dim=1)
         # We are left with a one matrix for each batch
         # Select the attention of the focal tokens only
-        attn=attn[eyes.bool(),:]
+        attn = attn[eyes.bool(), :]
         # Note attention is now of (nr_tokens,sequence_size+2)
         # because we added <SEP> and <CLS> tokens
         return predictions.cpu(), attn.cpu()
 
     # %% Utilities
-    def calculate_cutoffs(self,x, method="percent", percent=100, max_degree=100,min_cut=0.001):
+    def calculate_cutoffs(self, x, method="percent", percent=100, max_degree=100, min_cut=0.001):
         """
         Different methods to calculate cutoff probability and number.
 
@@ -438,20 +453,20 @@ class neo4j_processor():
             cum_sum = np.cumsum(sortx)
             # Get cutoff value as fraction of largest cumulative element (in case vector does not sum to 1)
             # This is the threshold to cross to explain 'percent' of mass in the vector
-            cutoff = cum_sum[-1] * percent/100
+            cutoff = cum_sum[-1] * percent / 100
             # Determine first position where cumulative sum crosses cutoff threshold
             # Python indexing - add 1
-            cutoff_degree = np.where(cum_sum >= cutoff)[0][0]+1
+            cutoff_degree = np.where(cum_sum >= cutoff)[0][0] + 1
             # Calculate corresponding probability
-            cutoff_probability = sortx[cutoff_degree-1]
+            cutoff_probability = sortx[cutoff_degree - 1]
         else:
             cutoff_probability = min_cut
             cutoff_degree = max_degree
 
-        return min(cutoff_degree,max_degree), cutoff_probability
+        return min(cutoff_degree, max_degree), cutoff_probability
 
-    
-    def get_weighted_edgelist(self,token, x, time, cutoff_number=100, cutoff_probability=0, seq_id=0, pos=0,p1="0",p2="0",p3="0",p4="0",max_degree=100):
+    def get_weighted_edgelist(self, token, x, time, cutoff_number=100, cutoff_probability=0, seq_id=0, pos=0, p1="0",
+                              p2="0", p3="0", p4="0", max_degree=100, simplify_context=False):
         """
         Sort probability distribution to get the most likely neighbor nodes.
         Return a networksx weighted edge list for a given focal token as node.
@@ -471,12 +486,18 @@ class neo4j_processor():
         # Cutoff probability (zeros)
         # 20.08.2020 Added norm
         if len(neighbors > 0):
-            if cutoff_probability>0:
+            if cutoff_probability > 0:
                 neighbors = neighbors[x[neighbors] >= cutoff_probability]
             weights = self.norm(x[neighbors], min_zero=False)
-            return [(int(token), int(x[0]), int(time), {'weight': float(x[1]), 'seq_id': int(seq_id), 'pos': int(pos), 'p1': str(p1), 'p2': str(p2), 'p3': str(p3), 'p4': str(p4)}) for x in list(zip(neighbors, weights))]
+            if simplify_context == False:
+                return [(int(token), int(x[0]), int(time),
+                         {'weight': float(x[1]), 'seq_id': int(seq_id), 'pos': int(pos), 'p1': str(p1), 'p2': str(p2),
+                          'p3': str(p3), 'p4': str(p4)}) for x in list(zip(neighbors, weights))]
+            else:
+                return [(int(token), int(x[0]), int(time),
+                         {'weight': float(x[1])}) for x in list(zip(neighbors, weights))]
         else:
             return None
 
-    def norm(self,x, min_zero=True):
+    def norm(self, x, min_zero=True):
         return simple_norm(x, min_zero=min_zero)

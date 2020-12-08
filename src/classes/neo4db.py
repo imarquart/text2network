@@ -10,13 +10,14 @@ import neo4jCon as neo_connector
 class neo4j_database():
     def __init__(self, neo4j_creds, agg_operator="SUM",
                  write_before_query=True,
-                 neo_batch_size=10000, queue_size=100000, tie_query_limit=100000, tie_creation="UNSAFE", logging_level=logging.NOTSET):
+                 neo_batch_size=10000, queue_size=100000, tie_query_limit=100000, tie_creation="UNSAFE",
+                 logging_level=logging.NOTSET):
         # Set logging level
         logging.disable(logging_level)
 
         self.neo4j_connection, self.neo4j_credentials = neo4j_creds
         self.write_before_query = write_before_query
- 
+
         # Neo4J Internals
         # Pick Merge or Create. Create will double ties but Merge becomes very slow for large networks
         if tie_creation == "SAFE":
@@ -33,7 +34,7 @@ class neo4j_database():
         # Init parent class
         super().__init__()
 
-     # %% Setup
+    # %% Setup
     def setup_neo_db(self, tokens, token_ids):
         """
         Creates tokens and token_ids in Neo database. Does not delete existing network!
@@ -66,38 +67,43 @@ class neo4j_database():
         self.add_queries(queries)
         self.non_con_write_queue()
 
-    def clean_database(self, time=None):
+    def clean_database(self, time=None, del_limit=1000000):
         # DEBUG
-        nr_nodes = self.connector.run("MATCH (n) RETURN count(n) AS nodes")[0]['nodes']
-        nr_ties = self.connector.run("MATCH ()-->() RETURN count(*) AS ties")[0]['ties']
-        logging.info("Before cleaning: Network has %i nodes and %i ties" % (nr_nodes, nr_ties))
+        nr_nodes = self.connector.run("MATCH (n:edge) RETURN count(n) AS nodes")[0]['nodes']
+        nr_context = self.connector.run("MATCH (n:context) RETURN count(*) AS nodes")[0]['nodes']
+        logging.info("Before cleaning: Network has %i edge-nodes and %i context-nodes" % (nr_nodes, nr_context))
 
         if time is not None:
             # Delete previous edges
-            query = ''.join(
-                ["MATCH (p:edge {time:", str(time), "}) DETACH DELETE p"])
-            self.connector.run(query)
-
+            node_query = ''.join(
+                ["MATCH (p:edge {time:", str(time), "}) WITH p LIMIT ", str(del_limit), " DETACH DELETE p"])
             # Delete previous context edges
-            query = ''.join(
-                ["MATCH (p:context {time:", str(time), "}) DETACH DELETE p"])
-            self.connector.run(query)
+            context_query = ''.join(
+                ["MATCH (p:context {time:", str(time), "})  WITH p LIMIT ", str(del_limit), "  DETACH DELETE p"])
         else:
             # Delete previous edges
-            query = ''.join(
-                ["MATCH (p:edge) DETACH DELETE p"])
-            self.connector.run(query)
-
+            node_query = ''.join(
+                ["MATCH (p:edge)  WITH p LIMIT ", str(del_limit), " DETACH DELETE p"])
             # Delete previous context edges
-            query = ''.join(
-                ["MATCH (p:context) DETACH DELETE p"])
-            self.connector.run(query)
+            context_query = ''.join(
+                ["MATCH (p:context)  WITH p LIMIT ", str(del_limit), " DETACH DELETE p"])
+
+        while nr_nodes > 0:
+            # Delete edge nodes
+            self.connector.run(node_query)
+            nr_nodes = self.connector.run("MATCH (n:edge) RETURN count(n) AS nodes")[0]['nodes']
+            logging.info("Network has %i edge-nodes and %i context-nodes" % (nr_nodes, nr_context))
+        while nr_context > 0:
+            # Delete context nodes
+            self.connector.run(context_query)
+            nr_context = self.connector.run("MATCH (n:context) RETURN count(*) AS nodes")[0]['nodes']
+            logging.info("Network has %i edge-nodes and %i context-nodes" % (nr_nodes, nr_context))
 
         # DEBUG
-        nr_nodes = self.connector.run("MATCH (n) RETURN count(n) AS nodes")[0]['nodes']
-        nr_ties = self.connector.run("MATCH ()-->() RETURN count(*) AS ties")[0]['ties']
-        logging.info("After cleaning: Network has %i nodes and %i ties" % (nr_nodes, nr_ties))
-    
+        nr_nodes = self.connector.run("MATCH (n:edge) RETURN count(n) AS nodes")[0]['nodes']
+        nr_context = self.connector.run("MATCH (n:context) RETURN count(*) AS nodes")[0]['nodes']
+        logging.info("After cleaning: Network has %i nodes and %i ties" % (nr_nodes, nr_context))
+
     # %% Initializations
     def init_tokens(self):
         """
@@ -111,7 +117,7 @@ class neo4j_database():
         # Update results
         ids = [x['n.token_id'] for x in res]
         tokens = [x['n.token'] for x in res]
-        return ids,tokens
+        return ids, tokens
 
     # %% Query Functions
     def query_multiple_nodes(self, ids, times=None, weight_cutoff=None, norm_ties=True):
@@ -162,20 +168,20 @@ class neo4j_database():
         query = "".join([match_query, where_query, return_query])
         res = self.connector.run(query, params)
 
-
         tie_weights = np.array([x['agg_weight'] for x in res])
         senders = [x['sender'] for x in res]
         receivers = [x['receiver'] for x in res]
         occurrences = [x['occurrences'] for x in res]
         # Normalization
         # Ties should be normalized by the number of occurrences of the receiver
-        if norm_ties==True:
+        if norm_ties == True:
             norms = dict(self.query_occurrences(receivers, times, weight_cutoff))
-            for i,token in enumerate(receivers):
-                tie_weights[i] = tie_weights[i]/norms[token]
+            for i, token in enumerate(receivers):
+                tie_weights[i] = tie_weights[i] / norms[token]
 
         ties = [
-            (x[0], x[1], {'weight': x[2], 'time': nw_time['m'],'start': nw_time['s'], 'end': nw_time['e'], 'occurrences': x[3]})
+            (x[0], x[1],
+             {'weight': x[2], 'time': nw_time['m'], 'start': nw_time['s'], 'end': nw_time['e'], 'occurrences': x[3]})
             for x in zip(senders, receivers, tie_weights, occurrences)]
 
         return ties
@@ -208,7 +214,7 @@ class neo4j_database():
                 where_query = "WHERE "
 
         # Join where and context query
-        where_query =' '.join([where_query, context_where])
+        where_query = ' '.join([where_query, context_where])
 
         # Create query depending on graph direction and whether time variable is queried via where or node property
         # By default, a->b when ego->is_replaced_by->b
@@ -232,13 +238,12 @@ class neo4j_database():
 
         # Create params with or without time
         if isinstance(times, dict) or isinstance(times, int):
-            params = {"ids": ids, "times": times, "clist":context}
+            params = {"ids": ids, "times": times, "clist": context}
         else:
-            params = {"ids": ids, "clist":context}
+            params = {"ids": ids, "clist": context}
 
         query = "".join([match_query, where_query, return_query])
         res = self.connector.run(query, params)
-
 
         tie_weights = np.array([x['agg_weight'] for x in res])
         senders = [x['sender'] for x in res]
@@ -246,17 +251,17 @@ class neo4j_database():
         occurrences = [x['occurrences'] for x in res]
         # Normalization
         # Ties should be normalized by the number of occurrences of the receiver
-        if norm_ties==True:
+        if norm_ties == True:
             norms = dict(self.query_occurrences_in_context(receivers, context, times, weight_cutoff))
-            for i,token in enumerate(receivers):
-                tie_weights[i] = tie_weights[i]/norms[token]
+            for i, token in enumerate(receivers):
+                tie_weights[i] = tie_weights[i] / norms[token]
 
         ties = [
-            (x[0], x[1], {'weight': x[2], 'time': nw_time['m'],'start': nw_time['s'], 'end': nw_time['e'], 'occurrences': x[3]})
+            (x[0], x[1],
+             {'weight': x[2], 'time': nw_time['m'], 'start': nw_time['s'], 'end': nw_time['e'], 'occurrences': x[3]})
             for x in zip(senders, receivers, tie_weights, occurrences)]
 
         return ties
-
 
     def query_occurrences(self, ids, times=None, weight_cutoff=None):
         """
@@ -284,7 +289,8 @@ class neo4j_database():
         else:
             params = {"ids": ids}
 
-        return_query = ''.join([" WITH a.token_id AS idx, r.seq_id AS sequence_id ,(r.time) as year, count(DISTINCT(r.pos)) as pos_count RETURN idx, sum(pos_count) AS occurrences order by idx"])
+        return_query = ''.join([
+                                   " WITH a.token_id AS idx, r.seq_id AS sequence_id ,(r.time) as year, count(DISTINCT(r.pos)) as pos_count RETURN idx, sum(pos_count) AS occurrences order by idx"])
 
         if isinstance(times, int):
             match_query = "UNWIND $ids AS id MATCH p=(a:word  {token_id:id})-[:onto]->(r:edge {time:$times})-[:onto]->(b:word) "
@@ -298,7 +304,7 @@ class neo4j_database():
 
         return ties
 
-    def query_occurrences_in_context(self, ids, context,times=None, weight_cutoff=None):
+    def query_occurrences_in_context(self, ids, context, times=None, weight_cutoff=None):
         """
         Query multiple nodes by ID and over a set of time intervals, return distinct occurrences
         under the condition that elements of context are present in the context element distribution of
@@ -313,7 +319,7 @@ class neo4j_database():
         logging.debug("Querying {} node occurrences for normalization".format(len(ids)))
 
         # Create context query
-        context_where=' ALL(r in nodes(p) WHERE size([(r) - [: conto]->(:context) - [: conto]->(e:word) WHERE e.token_id IN $clist | e]) > 0 OR(r: word))'
+        context_where = ' ALL(r in nodes(p) WHERE size([(r) - [: conto]->(:context) - [: conto]->(e:word) WHERE e.token_id IN $clist | e]) > 0 OR(r: word))'
 
         # Allow cutoff value of (non-aggregated) weights and set up time-interval query
         # If times is a dict, we want an interval and hence where query
@@ -328,7 +334,7 @@ class neo4j_database():
                 # Always need a WHERE query for context
                 where_query = "WHERE "
         # Join where and context query
-        where_query =' '.join([where_query, context_where])
+        where_query = ' '.join([where_query, context_where])
 
         # Create params with or without time
         if isinstance(times, dict) or isinstance(times, int):
@@ -336,8 +342,8 @@ class neo4j_database():
         else:
             params = {"ids": ids, "clist": context}
 
-        #return_query = ''.join([" WITH a.token_id AS idx, r.seq_id AS sequence_id ,(r.time) as year, count(DISTINCT(r.pos)) as pos_count RETURN idx, sum(pos_count) AS occurrences order by idx"])
-        return_query=" WITH s.token_id as idx, count(r.pos) as pos_count, r.seq_id as seq_id return idx, sum(pos_count) as occurrences order by idx"
+        # return_query = ''.join([" WITH a.token_id AS idx, r.seq_id AS sequence_id ,(r.time) as year, count(DISTINCT(r.pos)) as pos_count RETURN idx, sum(pos_count) AS occurrences order by idx"])
+        return_query = " WITH s.token_id as idx, count(r.pos) as pos_count, r.seq_id as seq_id return idx, sum(pos_count) as occurrences order by idx"
         if isinstance(times, int):
             match_query = "UNWIND $ids AS id MATCH p=(s:word  {token_id:id})-[:onto]->(r:edge {time:$times})-[:onto]->(v:word) "
         else:
@@ -351,7 +357,8 @@ class neo4j_database():
 
         return ties
 
-    def query_context_element(self,ids,times=None, weight_cutoff=None, disable_normalization=False, replacement_ce=False,):
+    def query_context_element(self, ids, times=None, weight_cutoff=None, disable_normalization=False,
+                              replacement_ce=False, ):
         """
         Queries the aggregated context element distribution for tokens given by ids.
         P(c|t € s) where t is the focal token appearing in s, and c is another random token appearing in s.
@@ -383,7 +390,7 @@ class neo4j_database():
         return_query = ''.join(
             [" RETURN b.token_id AS context_token,a.token_id AS focal_token,count(c.time) AS occurrences,",
              self.aggregate_operator, "(c.weight) AS agg_weight order by agg_weight"])
-        if replacement_ce==False:
+        if replacement_ce == False:
             if isinstance(times, int):
                 match_query = "UNWIND $ids AS id MATCH p=(a: word {token_id:id})-[: onto]->(r:edge) - [: conto]->(c:context {time:$times}) - [: conto]->(b:word)"
             else:
@@ -404,16 +411,16 @@ class neo4j_database():
 
         query = "".join([match_query, where_query, return_query])
         res = self.connector.run(query, params)
-        focal_tokens=np.array([x['focal_token'] for x in res])
+        focal_tokens = np.array([x['focal_token'] for x in res])
         context_tokens = np.array([x['context_token'] for x in res])
-        weights=  np.array([x['agg_weight'] for x in res])
-        occurrences =  np.array([x['occurrences'] for x in res])
+        weights = np.array([x['agg_weight'] for x in res])
+        occurrences = np.array([x['occurrences'] for x in res])
         # Normalize context element
         if disable_normalization == False:
             for focal_token in np.unique(focal_tokens):
-                mask = focal_tokens==focal_token
-                weight_sum=np.sum(weights[mask])
-                weights[mask]=weights[mask]/weight_sum
+                mask = focal_tokens == focal_token
+                weight_sum = np.sum(weights[mask])
+                weights[mask] = weights[mask] / weight_sum
 
         ties = [(x[0], x[1], nw_time['m'],
                  {'weight': x[2], 't1': nw_time['s'], 't2': nw_time['e'], 'occurrences': x[3]})
@@ -421,10 +428,10 @@ class neo4j_database():
         return ties
 
     # %% Insert functions
-    def insert_edges_context(self, ego, ties, contexts,logging_level=logging.DEBUG):
+    def insert_edges_context(self, ego, ties, contexts, logging_level=logging.DEBUG):
         if logging_level is not None:
             logging.disable(logging_level)
-        logging.debug("Insert {} ego nodes with {} ties".format(ego,len(ties)))
+        logging.debug("Insert {} ego nodes with {} ties".format(ego, len(ties)))
         # Tie direction matters
         # Ego by default is the focal token to be replaced. Normal insertion points the link accordingly.
         # Hence, a->b is an instance of b replacing a!
@@ -447,15 +454,15 @@ class neo4j_database():
                                "p1": ((x[2]['p1']) if len(x[2]) > 3 else 0),
                                "p2": ((x[2]['p2']) if len(x[2]) > 4 else 0),
                                "p3": ((x[2]['p3']) if len(x[2]) > 5 else 0),
-                               "p4": ((x[2]['p4']) if len(x[2]) > 6 else 0),}
+                               "p4": ((x[2]['p4']) if len(x[2]) > 6 else 0), }
                               for x in zip(alters.tolist(), times.tolist(), dicts.tolist())]
             contexts_formatted = [{"alter": int(x[0]), "time": int(x[1]), "weight": float(x[2]['weight']),
-                               "seq_id": int(x[2]['seq_id']),
-                               "pos": int(x[2]['pos']),
-                               "p1": ((x[2]['p1']) if len(x[2]) > 3 else 0),
-                               "p2": ((x[2]['p2']) if len(x[2]) > 4 else 0),
-                               "p3": ((x[2]['p3']) if len(x[2]) > 5 else 0),
-                               "p4": ((x[2]['p4']) if len(x[2]) > 6 else 0),}
+                                   "seq_id": int(x[2]['seq_id'] if len(x[2]) > 1 else 0),
+                                   "pos": int(x[2]['pos'] if len(x[2]) > 2 else 0),
+                                   "p1": ((x[2]['p1']) if len(x[2]) > 3 else 0),
+                                   "p2": ((x[2]['p2']) if len(x[2]) > 4 else 0),
+                                   "p3": ((x[2]['p3']) if len(x[2]) > 5 else 0),
+                                   "p4": ((x[2]['p4']) if len(x[2]) > 6 else 0), }
                                   for x in zip(con_alters.tolist(), con_times.tolist(), con_dicts.tolist())]
             params = {"ego": int(egos[0]), "ties": ties_formatted, "contexts": contexts_formatted}
             query = ''.join(
@@ -470,8 +477,6 @@ class neo4j_database():
 
         self.add_query(query, params)
 
-
-    
     # %% Neo4J interaction
     # All function that interact with neo are here, dispatched as needed from above
 

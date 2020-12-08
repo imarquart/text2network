@@ -8,6 +8,7 @@ def check_step(folder,hash):
         return False
 
 def complete_step(folder, hash):
+    if not os.path.exists(folder): os.mkdir(folder)
     x=''.join([folder,'/',hash,'.txt'])
     open(x, 'a').close()
     return

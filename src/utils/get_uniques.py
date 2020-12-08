@@ -16,10 +16,13 @@ def get_uniques(split_hierarchy,db_folder):
         uniques[param] = []
     uniques["query"] = []
     uniques["file"] = []
+    uniques["query_filename"]  = []
+
     # Iterate to get unqiue values and create query strings and file-names
     for row in data.iterrows():
         query = []
         filename = []
+
         for param in split_hierarchy:
             val = row[param]
             uniques[param].append(val)
@@ -29,11 +32,15 @@ def get_uniques(split_hierarchy,db_folder):
             if type(val) == bytes:
                 val = val.decode("utf-8")
             filename.append("%s" % (val))
+
         # Add (uniquely) query strings and file-names
         query = " & ".join(query)
         filename = "-".join(filename)
-        uniques["query"].append(query)
-        uniques["query"] = list(set(uniques["query"]))
-        uniques["file"].append(filename)
-        uniques["file"] = list(set(uniques["file"]))
+        uniques["query_filename"].append((query,filename))
+        uniques["query_filename"] = list(set(uniques["query_filename"]))
+
+    # Split up tuple to get single instances
+    uniques["query"]=[x[0] for x in uniques['query_filename']]
+    uniques["file"] = [x[1] for x in uniques['query_filename']]
+
     return uniques

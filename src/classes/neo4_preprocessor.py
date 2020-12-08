@@ -2,7 +2,7 @@
 import logging
 import unicodedata
 from os import listdir, mkdir
-from os.path import isfile, join, abspath,exists,dirname,basename, normpath
+from os.path import isfile, join, abspath, exists, dirname, basename, normpath
 import os
 import re
 import glob
@@ -12,7 +12,8 @@ import tables
 
 class neo4j_preprocessor():
 
-    def __init__(self, database, MAX_SEQ_LENGTH, char_mult, split_symbol="-", number_params=4, logging_level=logging.NOTSET):
+    def __init__(self, database, MAX_SEQ_LENGTH, char_mult, split_symbol="-", number_params=4,
+                 logging_level=logging.NOTSET):
         """
         Pre-process class
         reads text files of the format
@@ -26,18 +27,18 @@ class neo4j_preprocessor():
         # Set logging level
         logging.disable(logging_level)
         # Create network
-        self.database=database
-        self.MAX_SEQ_LENGTH=MAX_SEQ_LENGTH
-        self.char_mult=char_mult
+        self.database = database
+        self.MAX_SEQ_LENGTH = MAX_SEQ_LENGTH
+        self.char_mult = char_mult
         self.split_symbol = split_symbol
-        self.number_params=number_params
+        self.number_params = number_params
 
-        db_folder=dirname(database)
+        db_folder = dirname(database)
         if not exists(db_folder):
             logging.info("Database folder does not exist. Creating folder.")
             mkdir(db_folder)
 
-    def resplit_sentences(self,sentences,max_tokens):
+    def resplit_sentences(self, sentences, max_tokens):
         """
         Functions takes a list of tokenized sentences and returns a new list, where
         each sentence has a maximum length
@@ -45,15 +46,14 @@ class neo4j_preprocessor():
         :param max_length: maximum length in words / tokens
         :return: List of strings conforming to maximum length
         """
-        split_sentences=[]
+        split_sentences = []
         # Iterate over sentences and add each, split appropriately, to list
         for sent in sentences:
-            split_sentences=self.check_split_sentence(sent,split_sentences,max_tokens)
+            split_sentences = self.check_split_sentence(sent, split_sentences, max_tokens)
 
         return split_sentences
 
-
-    def check_split_sentence(self,sent,text_list, max_tokens):
+    def check_split_sentence(self, sent, text_list, max_tokens):
         """
         Recursively splits tokenizer sentences to conform to max sentence length.
         Adds fake periods in between cut sentences.
@@ -74,12 +74,12 @@ class neo4j_preprocessor():
         if len(sent) > max_tokens:
             rest_sent = ' '.join(sent[self.MAX_SEQ_LENGTH:])
             # Recurse
-            text_list = self.check_split_sentence(rest_sent,text_list, max_tokens)
+            text_list = self.check_split_sentence(rest_sent, text_list, max_tokens)
 
         # Once done, return completed list
         return text_list
 
-    def preprocess_files(self,folder, max_seq=0, overwrite=True):
+    def preprocess_files(self, folder, max_seq=0, overwrite=True):
         """
         Pre-processes files from raw data into a HD5 Table
         :param folder: folder with text files
@@ -128,27 +128,27 @@ class neo4j_preprocessor():
 
         logging.info("Loading files from %s" % folder)
         # Get list of files
-        #files = [abspath(f) for f in listdir(folder) if isfile(join(folder, f))]
+        # files = [abspath(f) for f in listdir(folder) if isfile(join(folder, f))]
 
-        folder=normpath(folder)
+        folder = normpath(folder)
         files = glob.glob(''.join([folder, '/*.txt']))
 
         # Main loop over files
         for file_path in files:
             # Derive file name and year
-            file_dirname=dirname(file_path)
+            file_dirname = dirname(file_path)
             file_name = os.path.split(file_path)[-1]
-            logging.info("Loading file %s" %file_name)
+            logging.info("Loading file %s" % file_name)
 
             file_name = re.split(".txt", file_name)[0]
             file_source = file_name
 
             # Set up params list
-            params=[]
-            for i in range(1,self.number_params+1):
+            params = []
+            for i in range(1, self.number_params + 1):
                 params.append(re.split(self.split_symbol, file_name)[-i])
 
-            year = re.split(self.split_symbol, file_name)[-(self.number_params+1)]
+            year = re.split(self.split_symbol, file_name)[-(self.number_params + 1)]
             year = int(year[-4:])
 
             try:
@@ -168,8 +168,9 @@ class neo4j_preprocessor():
             text = text.replace(" .", ".")
             text = text.replace(" ,", ",")
             text = text.replace("...", ".")
-            killchars = ['#', '<p>', '$', '%', '(', ')', '*', '/', '<', '>', '@', '\\', '{', '}', '[', ']', '+', '^', '~',
-                        '"']
+            killchars = ['#', '<p>', '$', '%', '(', ')', '*', '/', '<', '>', '@', '\\', '{', '}', '[', ']', '+', '^',
+                         '~',
+                         '"']
             for k in killchars: text = str.replace(text, k, '')
             text = text.strip()
             text = " ".join(re.split("\s+", text, flags=re.UNICODE))
@@ -181,9 +182,8 @@ class neo4j_preprocessor():
             if (run_index - start_index >= max_seq) & (max_seq != 0):
                 break
 
-            text=nltk.sent_tokenize(text)
-            tokenized_text=self.resplit_sentences(text,self.MAX_SEQ_LENGTH)
-
+            text = nltk.sent_tokenize(text)
+            tokenized_text = self.resplit_sentences(text, self.MAX_SEQ_LENGTH)
 
             for idx, sent in enumerate(tokenized_text):
                 # Create table row
@@ -199,9 +199,9 @@ class neo4j_preprocessor():
                 particle['year'] = year
                 particle['max_length'] = self.MAX_SEQ_LENGTH
                 # Add parameters
-                for i,p in enumerate(params):
-                    idx=''.join(['p',str(i+1)])
-                    particle[idx]=params[i]
+                for i, p in enumerate(params):
+                    idx = ''.join(['p', str(i + 1)])
+                    particle[idx] = params[i]
 
                 # If the sentence has too many tokens, we cut using nltk tokenizer
                 sent = sent.split()
@@ -222,7 +222,7 @@ class neo4j_preprocessor():
                     sent = ''.join([sent, '.'])
 
                 # pyTables does not work with unicode
-                sent=unicodedata.normalize('NFKD', sent).encode('ascii', 'ignore').decode('ascii')
+                sent = unicodedata.normalize('NFKD', sent).encode('ascii', 'ignore').decode('ascii')
 
                 try:
                     particle['text'] = sent
@@ -233,7 +233,6 @@ class neo4j_preprocessor():
                 particle.append()
 
             data_file.flush()
-
 
         data_file.close()
         f.close()
