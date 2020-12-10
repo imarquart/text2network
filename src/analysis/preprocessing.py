@@ -17,7 +17,7 @@ from src.classes.neo4jnw_aggregator import neo4jnw_aggregator
 
 # Load Configuration file
 config = configparser.ConfigParser()
-config.read('D:/NLP/InSpeech/BERTNLP/config/config.ini')
+config.read('D:/NLP/HBR/config/config.ini')
 logging_level = config['General'].getint('logging_level')
 
 neo_creds = (config['NeoConfig']["db_uri"], (config['NeoConfig']["db_db"], config['NeoConfig']["db_pwd"]))
@@ -33,25 +33,25 @@ preprocessor = neo4j_preprocessor(config['Paths']['database'], config['Preproces
                                   config['Preprocessing'].getint('number_params'), logging_level=logging_level)
 
 # Preprocess file
-preprocessor.preprocess_files(config['Paths']['import_folder'])
+#preprocessor.preprocess_folders(config['Paths']['import_folder'],overwrite=True,excludelist=['checked', 'Error'])
 
 trainer=bert_trainer(config['Paths']['database'],config['Paths']['pretrained_bert'], config['Paths']['trained_berts'],config['BertTraining'],json.loads(config.get('General','split_hierarchy')),logging_level=logging_level)
 trainer.train_berts()
 
 
-test = neo4j_database(neo_creds)
-neograph = neo4j_network(neo_creds)
-nagg = neo4jnw_aggregator(neograph)
+#test = neo4j_database(neo_creds)
+#neograph = neo4j_network(neo_creds)
+#nagg = neo4jnw_aggregator(neograph)
 
-processor = neo4j_processor(config['Paths']['trained_berts'], neograph,
-                            config['Preprocessing'].getint('max_seq_length'), config['Processing'],
-                            text_db=config['Paths']['database'],
-                            split_hierarchy=json.loads(config.get('General', 'split_hierarchy')),
-                            processing_cache=config['Paths']['processing_cache'],
-                            logging_level=config['General'].getint('logging_level'))
-processor.run_all_queries(clean_database=True)
+#processor = neo4j_processor(config['Paths']['trained_berts'], neograph,
+#                            config['Preprocessing'].getint('max_seq_length'), config['Processing'],
+#                            text_db=config['Paths']['database'],
+#                            split_hierarchy=json.loads(config.get('General', 'split_hierarchy')),
+#                            processing_cache=config['Paths']['processing_cache'],
+#                            logging_level=config['General'].getint('logging_level'))
+#processor.run_all_queries(clean_database=True)
 
-neograph.condition(years=None, tokens=None, weight_cutoff=None, depth=None, context=None)
-neograph.export_gefx("E:/NLPInspeech/test4norpune.gexf")
+#neograph.condition(years=None, tokens=None, weight_cutoff=None, depth=None, context=None)
+#neograph.export_gefx("E:/NLPInspeech/test4norpune.gexf")
 
 

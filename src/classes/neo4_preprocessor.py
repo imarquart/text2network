@@ -79,7 +79,24 @@ class neo4j_preprocessor():
         # Once done, return completed list
         return text_list
 
-    def preprocess_files(self, folder, max_seq=0, overwrite=True):
+    def preprocess_folders(self, folder,max_seq=0, overwrite=True,excludelist=[]):
+        folder = normpath(folder)
+        folders=[''.join([folder,'/',name]) for name in os.listdir(folder)]
+        if overwrite==True:
+            try:
+                data_file = tables.open_file(self.database, mode="w", title="Sequence Data")
+            except:
+                logging.error("Could not open existing database file.")
+                raise IOError("Could not open existing database file.")
+            data_file.close()
+        for dir in folders:
+            year =  int(os.path.split(dir)[-1])
+            if year>=1980:
+                self.preprocess_files(dir,max_seq,False,year,excludelist)
+
+
+
+    def preprocess_files(self, folder, max_seq=0, overwrite=True, year=None, excludelist=[]):
         """
         Pre-processes files from raw data into a HD5 Table
         :param folder: folder with text files
@@ -143,20 +160,35 @@ class neo4j_preprocessor():
             file_name = re.split(".txt", file_name)[0]
             file_source = file_name
 
+            if year == None:
+                year = re.split(self.split_symbol, file_name)[-(self.number_params + 1)]
+                year = int(year[-4:])
+                offset=1
+            else:
+                offset=0
+
             # Set up params list
             params = []
-            for i in range(1, self.number_params + 1):
-                params.append(re.split(self.split_symbol, file_name)[-i])
+            exclude=False
+            for i in range(offset, self.number_params + offset):
+                par=re.split(self.split_symbol, file_name)[-i]
+                if par in excludelist:
+                    exclude=True
+                params.append(par)
 
-            year = re.split(self.split_symbol, file_name)[-(self.number_params + 1)]
-            year = int(year[-4:])
+            if exclude == True:
+                pass
 
             try:
-                with open(file_path, encoding="utf-8") as f:
+                with open(file_path) as f:
                     text = f.read()
             except:
-                logging.error("Could not load %s" % file_path)
-                raise ImportError("Could not open file. Make sure, only .txt files in folder!")
+                try:
+                    with open(file_path, encoding="utf-8",errors='ignore') as f:
+                        text = f.read()
+                except:
+                    logging.error("Could not load %s" % file_path)
+                    raise ImportError("Could not open file. Make sure, only .txt files in folder!")
 
             text = text.replace('\n', ' ')
 
