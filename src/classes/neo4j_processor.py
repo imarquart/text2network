@@ -21,7 +21,7 @@ from src.utils.hash_file import hash_string, check_step, complete_step
 
 class neo4j_processor():
     def __init__(self, trained_folder, neograph, MAX_SEQ_LENGTH, processing_options, text_db=None, maxn=None,
-                 nr_workers=0, split_hierarchy=None, processing_cache=None,logging_level=logging.NOTSET):
+                 nr_workers=0, split_hierarchy=None, processing_cache=None, prune_missing_tokens=True, logging_level=logging.NOTSET):
         """
         Extracts pre-processed sentences, gets predictions by BERT and creates a network
 
@@ -43,6 +43,7 @@ class neo4j_processor():
         self.bert = None
         self.text_db = text_db
         self.neograph = neograph
+        self.prune_missing_tokens=prune_missing_tokens
         self.MAX_SEQ_LENGTH = MAX_SEQ_LENGTH
         self.DICT_SIZE = 0
         self.batch_size = int(processing_options['batch_size'])
@@ -262,7 +263,8 @@ class neo4j_processor():
                         # Get rid of delnorm links
                         replacement[delwords] = 0
                         # Get rid of tokens not in text
-                        replacement[self.id_mask] = 0
+                        if self.prune_missing_tokens == True:
+                            replacement[dataset.id_mask] = 0
                         # We norm the distributions here
                         replacement = self.norm(replacement)
 
@@ -279,7 +281,8 @@ class neo4j_processor():
                         # Get rid of delnorm links
                         context[delwords] = 0
                         # Get rid of tokens not in text
-                        context[self.id_mask] = 0
+                        if self.prune_missing_tokens==True:
+                            context[dataset.id_mask] = 0
                         # We norm the distributions here
                         context = self.norm(context)
 

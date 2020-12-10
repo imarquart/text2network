@@ -52,6 +52,6 @@ processor = neo4j_processor(config['Paths']['trained_berts'], neograph,
 processor.run_all_queries(clean_database=True)
 
 neograph.condition(years=None, tokens=None, weight_cutoff=None, depth=None, context=None)
-neograph.export_gefx("E:/NLPInspeech/tes2t.gefx")
+neograph.export_gefx("E:/NLPInspeech/test4norpune.gexf")
 
 

@@ -404,16 +404,25 @@ class neo4j_network(MutableSequence):
             else:
                 return ids
 
-    def export_gefx(self, path):
+    def export_gefx(self, path, delete_isolates=True):
         if self.conditioned == True:
             try:
                 # Relabel nodes
                 labeldict = dict(zip(self.ids, [self.get_token_from_id(x) for x in self.ids]))
                 reverse_dict = dict(zip([self.get_token_from_id(x) for x in self.ids], self.ids))
                 self.graph = nx.relabel_nodes(self.graph, labeldict)
-                nx.write_gexf(self.graph, path)
-                self.graph = nx.relabel_nodes(self.graph, reverse_dict)
 
+                print(len(self.graph.nodes))
+                if delete_isolates==True:
+                    isolates = list(nx.isolates(self.graph))
+                    logging.info("Found {} isolated nodes in graph, deleting.".format(len(isolates)))
+                    cleaned_graph=self.graph.copy()
+                    cleaned_graph.remove_nodes_from(isolates)
+                    nx.write_gexf(cleaned_graph, path)
+                else:
+                    nx.write_gexf(self.graph, path)
+                self.graph = nx.relabel_nodes(self.graph, reverse_dict)
+                print(len(self.graph.nodes))
             except:
                 raise SystemError("Could not save to %s " % path)
 
