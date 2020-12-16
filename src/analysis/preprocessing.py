@@ -27,6 +27,16 @@ logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message
                     datefmt='%m/%d/%Y %H:%M:%S',
                     level=logging_level)
 
+rootLogger = logging.getLogger()
+logFormatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s -   %(message)s')
+fileHandler = logging.FileHandler("{0}/{1}.log".format(config['Paths']['log'], "preprocessing"))
+fileHandler.setFormatter(logFormatter)
+rootLogger.addHandler(fileHandler)
+#consoleHandler = logging.StreamHandler()
+#consoleHandler.setFormatter(logFormatter)
+#rootLogger.addHandler(consoleHandler)
+
+
 # Set up preprocessor
 preprocessor = neo4j_preprocessor(config['Paths']['database'], config['Preprocessing'].getint('max_seq_length'),
                                   config['Preprocessing'].getint('char_mult'), config['Preprocessing']['split_symbol'],

@@ -67,7 +67,6 @@ class bert_trainer():
             if (check_step(bert_folder, hash)):
                 logging.info("Found trained BERT for %s. Skipping" % bert_folder)
             else:
-
                 args = bert_args(self.db_folder, query, bert_folder, self.pretrained_folder,
                                  mlm_probability=self.bert_config.getfloat('mlm_probability'),
                                  block_size=self.bert_config.getint('max_seq_length'),
