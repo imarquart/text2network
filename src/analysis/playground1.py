@@ -4,39 +4,37 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 from src.classes.neo4jnw_dummy import neo4j_network_dummy
-from src.classes.neo4jnw_measures import neo4jnw_measures
-from src.functions.node_mearues import proximities, centrality, yearly_centralities
+from src.functions.node_measures import proximity, centrality, yearly_centrality
 from src.functions.backout_measure import backout_measure
 from src.functions.format import pd_format
 from src.utils.network_tools import make_symmetric
 
 neo4nw=neo4j_network_dummy()
-print(pd_format(proximities(neo4nw,["president"])))
-g2=backout_measure(neo4nw.graph)
-print(pd_format(proximities(neo4nw,["president"],nw=g2)))
+# neo4nw.conditioned=False
+# print(pd_format(neo4nw.proximities()))
+# neo4nw.to_backout()
+# print(pd_format(neo4nw.proximities()))
 
+# neo4nw=neo4j_network_dummy()
+# neo4nw.conditioned=False
+# print(pd_format(neo4nw.centrality()))
+# neo4nw.to_backout()
+# print(pd_format(neo4nw.centrality()))
 
-print(pd_format(centrality(neo4nw,types=['normedPageRank'])))
-g2=backout_measure(neo4nw.graph)
-print(pd_format(centrality(neo4nw,types=['normedPageRank'],nw=g2)))
-
-
-
-
-g2=make_symmetric(neo4nw.graph)
-print(pd_format(proximities(neo4nw,["president"])))
-print(pd_format(proximities(neo4nw,["president"],nw=g2)))
-
-
-print(pd_format(centrality(neo4nw,types=['normedPageRank'])))
-print(pd_format(centrality(neo4nw,types=['normedPageRank'],nw=g2)))
-print(pd_format(centrality(neo4nw,types=['normedPageRank'])))
-
-neo4nw.graph=g2
-print(pd_format(centrality(neo4nw,types=['normedPageRank'],nw=g2)))
+neo4nw=neo4j_network_dummy()
+print(pd_format(neo4nw.proximities(focal_tokens=['president','tyrant'],alter_subset=['man', 'woman'])))
+neo4nw.to_backout()
+print(pd_format(neo4nw.proximities(focal_tokens=['president','tyrant'],alter_subset=['man', 'woman'])))
+neo4nw=neo4j_network_dummy()
+neo4nw.to_symmetric()
+print(pd_format(neo4nw.proximities(focal_tokens=['president','tyrant'],alter_subset=['man', 'woman'])))
 
 
 
-test=yearly_centralities(neo4nw,[1991,1992,1993,1994])
-
-#print(pd_format(test))
+neo4nw=neo4j_network_dummy()
+print(pd_format(neo4nw.centralities(focal_tokens=['president','tyrant','man', 'woman'])))
+neo4nw.to_backout()
+print(pd_format(neo4nw.centralities(focal_tokens=['president','tyrant','man', 'woman'])))
+neo4nw=neo4j_network_dummy()
+neo4nw.to_symmetric()
+print(pd_format(neo4nw.centralities(focal_tokens=['president','tyrant','man', 'woman'])))

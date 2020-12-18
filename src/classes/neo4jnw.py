@@ -3,7 +3,10 @@ import logging
 from collections.abc import MutableSequence
 from src.utils.twowaydict import TwoWayDict
 import numpy as np
-
+from src.functions.backout_measure import backout_measure
+from src.functions.node_measures import proximity, centrality
+from src.utils.network_tools import make_symmetric
+from src.utils.input_check import input_check
 # import neo4j utilities and classes
 import neo4jCon as neo_connector
 from src.classes.neo4db import neo4j_database
@@ -88,14 +91,17 @@ class neo4j_network(MutableSequence):
 
                 neighbors = [x[0] for x in value]
                 neighbors = self.ensure_ids(neighbors)
-                weights = [{'weight': x[2]} if isinstance(x[2], (int, float)) else x[2] for x in value]
+                weights = [{'weight': x[2]} if isinstance(
+                    x[2], (int, float)) else x[2] for x in value]
                 years = [x[1] for x in value]
                 token = map(int, np.repeat(key, len(neighbors)))
             except:
-                raise ValueError("Adding requires an iterable over tuples e.g. [(neighbor,time, weight))]")
+                raise ValueError(
+                    "Adding requires an iterable over tuples e.g. [(neighbor,time, weight))]")
 
             # Check if all neighbor tokens present
-            assert set(neighbors) < set(self.ids), "ID of node to connect not found. Not in network?"
+            assert set(neighbors) < set(
+                self.ids), "ID of node to connect not found. Not in network?"
             ties = list(zip(token, neighbors, years, weights))
 
             # TODO Dispatch if graph conditioned
@@ -117,7 +123,8 @@ class neo4j_network(MutableSequence):
             assert len(
                 i) == 2, "Please format a call as <token>,<YYYYMMDD> or <token>,{'start:'<YYYYMMDD>, 'end':<YYYYMMDD>"
             if not isinstance(i[1], dict):
-                assert isinstance(i[1],int), "Please timestamp as <YYYYMMDD>, or{'start:'<YYYYMMDD>, 'end':<YYYYMMDD>"
+                assert isinstance(
+                    i[1], int), "Please timestamp as <YYYYMMDD>, or{'start:'<YYYYMMDD>, 'end':<YYYYMMDD>"
             year = i[1]
             i = i[0]
         else:
@@ -125,22 +132,22 @@ class neo4j_network(MutableSequence):
         if isinstance(i, (list, tuple, range, str, int)):
             i = self.ensure_ids(i)
         else:
-            raise AssertionError("Please format a call as <token> or <token_id>")
+            raise AssertionError(
+                "Please format a call as <token> or <token_id>")
 
         # TODO Dispatch in case of graph
         if self.conditioned == False:
             return self.query_nodes(i, year)
         else:
-            if isinstance(i, (list,tuple, np.ndarray)):
-                returndict=[]
+            if isinstance(i, (list, tuple, np.ndarray)):
+                returndict = []
                 for token in i:
-                    neighbors=dict(self.graph[token])
+                    neighbors = dict(self.graph[token])
                     returndict.extend({token: neighbors})
             else:
-                neighbors=dict(self.graph[token])
-                returndict={token: neighbors}
+                neighbors = dict(self.graph[token])
+                returndict = {token: neighbors}
             return returndict
-            
 
     def __len__(self):
         return len(self.tokens)
@@ -152,7 +159,8 @@ class neo4j_network(MutableSequence):
         :param token_id: Token ID
         :return: None
         """
-        assert isinstance(token, str) and isinstance(token_id, int), "Please add <token>,<token_id> as str,int"
+        assert isinstance(token, str) and isinstance(
+            token_id, int), "Please add <token>,<token_id> as str,int"
         self.add_token(token_id, token)
 
     def add_token(self, id, token):
@@ -162,7 +170,8 @@ class neo4j_network(MutableSequence):
         self.update_dicts()
 
         # Update database
-        queries = [''.join(["MERGE (n:word {token_id: ", str(id), ", token: '", token, "'})"])]
+        queries = [
+            ''.join(["MERGE (n:word {token_id: ", str(id), ", token: '", token, "'})"])]
         self.db.add_queries(queries)
 
     def remove_token(self, key):
@@ -171,7 +180,8 @@ class neo4j_network(MutableSequence):
         self.update_dicts()
 
         # Update database
-        queries = [''.join(["MATCH (n:word {token_id: ", str(key), "}) DETACH DELETE n"])]
+        queries = [
+            ''.join(["MATCH (n:word {token_id: ", str(key), "}) DETACH DELETE n"])]
         self.db.add_queries(queries)
 
     def get_times_list(self):
@@ -201,7 +211,8 @@ class neo4j_network(MutableSequence):
             self.year_condition(years, weight_cutoff, context, norm, batchsize)
         else:
             logging.debug("Conditioning dispatch: Ego")
-            self.ego_condition(years, tokens, weight_cutoff, depth, context, norm)
+            self.ego_condition(years, tokens, weight_cutoff,
+                               depth, context, norm)
 
         self.conditioned = True
 
@@ -228,7 +239,8 @@ class neo4j_network(MutableSequence):
             for i in range(0, len(worklist), batchsize):
 
                 token_ids = worklist[i:i + batchsize]
-                logging.debug("Conditioning by query batch {} of {} tokens.".format(i, len(token_ids)))
+                logging.debug(
+                    "Conditioning by query batch {} of {} tokens.".format(i, len(token_ids)))
                 # Query Neo4j
                 try:
                     self.graph.add_edges_from(
@@ -269,7 +281,8 @@ class neo4j_network(MutableSequence):
             # Create a dict to hold previously queried ids
             prev_queried_ids = list()
             while depth > 0:
-                if not isinstance(token_ids, (list, np.ndarray)): token_ids = [token_ids]
+                if not isinstance(token_ids, (list, np.ndarray)):
+                    token_ids = [token_ids]
                 # Work from ID list, give error if tokens are not in database
                 token_ids = self.ensure_ids(token_ids)
                 # Do not consider already added tokens
@@ -288,7 +301,8 @@ class neo4j_network(MutableSequence):
                                          norm_ties=norm))
                 except:
                     logging.error("Could not condition graph by query method.")
-                    raise Exception("Could not condition graph by query method.")
+                    raise Exception(
+                        "Could not condition graph by query method.")
 
                 # Update IDs and Tokens to reflect conditioning
                 all_ids = list(self.graph.nodes)
@@ -316,7 +330,8 @@ class neo4j_network(MutableSequence):
         else:  # Remove conditioning and recondition
             # TODO: "Allow for conditioning on conditioning"
             self.decondition()
-            self.condition(years, token_ids, weight_cutoff, depth, context, norm)
+            self.condition(years, token_ids, weight_cutoff,
+                           depth, context, norm)
 
         # Continue conditioning
 
@@ -336,7 +351,245 @@ class neo4j_network(MutableSequence):
         else:
             self.db.neo_queue = []
 
+    # %% Measures
+
+       
+    def yearly_centralities(self, year_list, focal_tokens=None,  types=["PageRank", "normedPageRank"],ego_nw_tokens=None, depth=1, context=None, weight_cutoff=None, norm_ties=True):
+        """
+        Compute directly year-by-year centralities for provided list.
+    
+        Parameters
+        ----------
+        semantic_network : semantic network class
+            semantic network to use.
+        year_list : list
+            List of years for which to calculate centrality.
+        focal_tokens : list, str
+            List of tokens of interest. If not provided, centralities for all tokens will be returned.
+        types : list, optional
+            types of centrality to calculate. The default is ["PageRank"].
+        ego_nw_tokens : list, optional - used when conditioning
+             List of tokens for an ego-network if desired. Only used if no graph is supplied. The default is None.
+        depth : TYPE, optional - used when conditioning
+            Maximal path length for ego network. Only used if no graph is supplied. The default is 1.
+        context : list, optional - used when conditioning
+            List of tokens that need to appear in the context distribution of a tie. The default is None.
+        weight_cutoff : float, optional - used when conditioning
+            Only links of higher weight are considered in conditioning.. The default is None.
+        norm_ties : bool, optional - used when conditioning
+            Please see semantic network class. The default is True.
+    
+        Returns
+        -------
+        dict
+            Dict of years with dict of centralities for focal tokens.
+    
+        """
+        cent_year = {}
+        assert isinstance(year_list, list), "Please provide list of years."
+        for year in year_list:
+            cent_measures = self.centralities(focal_tokens=focal_tokens, types=types, years=[year], ego_nw_tokens=ego_nw_tokens, depth=depth,context=context,weight_cutoff=weight_cutoff,norm_ties=norm_ties)
+            cent_year.update({year: cent_measures})
+    
+        return {'yearly_centralities':cent_year}
+
+    def centralities(self, focal_tokens=None,  types=["PageRank", "normedPageRank"],years=None,ego_nw_tokens=None,depth=1, context=None, weight_cutoff=None, norm_ties=True):
+        """
+        Calculate centralities for given tokens over an aggregate of given years.
+        If not conditioned, the semantic network will be conditioned according to the parameters given.
+    
+        Parameters
+        ----------
+        focal_tokens : list, str, optional
+            List of tokens of interest. If not provided, centralities for all tokens will be returned.
+        types : list, optional
+            Types of centrality to calculate. The default is ["PageRank", "normedPageRank"].
+        years : dict, int, optional - used when conditioning
+            Given year, or an interval dict {"start":YYYYMMDD,"end":YYYYMMDD}. The default is None.
+        ego_nw_tokens : list, optional - used when conditioning
+             List of tokens for an ego-network if desired. Only used if no graph is supplied. The default is None.
+        depth : TYPE, optional - used when conditioning
+            Maximal path length for ego network. Only used if no graph is supplied. The default is 1.
+        context : list, optional - used when conditioning
+            List of tokens that need to appear in the context distribution of a tie. The default is None.
+        weight_cutoff : float, optional - used when conditioning
+            Only links of higher weight are considered in conditioning.. The default is None.
+        norm_ties : bool, optional - used when conditioning
+            Please see semantic network class. The default is True.
+     
+        Returns
+        -------
+        dict
+            Dict of centralities for focal tokens.
+    
+        """
+        input_check(tokens=focal_tokens)
+        input_check(tokens=ego_nw_tokens)
+        input_check(tokens=context)
+        input_check(years=years)
+        
+        if self.conditioned == False:
+            was_conditioned = False
+            if ego_nw_tokens == None:
+                logging.debug("Conditioning year(s) {} with focus on tokens {}".format(
+                    years, focal_tokens))
+                self.condition(years=years, tokens=None, weight_cutoff=weight_cutoff,
+                                           depth=depth, context=context, norm=norm_ties)
+                logging.debug("Finished conditioning, {} nodes and {} edges in graph".format(
+                    len(self.graph.nodes), len(self.graph.edges)))
+            else:
+                logging.debug("Conditioning ego-network for {} tokens with depth {}, for year(s) {} with focus on tokens {}".format(
+                    len(ego_nw_tokens), depth, years, focal_tokens))
+                self.condition(years=years, tokens=ego_nw_tokens, weight_cutoff=weight_cutoff,
+                                           depth=depth, context=context, norm=norm_ties)
+                logging.debug("Finished ego conditioning, {} nodes and {} edges in graph".format(
+                    len(self.graph.nodes), len(self.graph.edges)))
+        else:
+            logging.warning(
+                "Network already conditioned! No reconditioning attempted, parameters unused.")
+            was_conditioned = True
+            
+        cent_dict=centrality(self.graph, focal_tokens=focal_tokens,  types=types)
+        
+        if was_conditioned == False:
+            # Decondition
+            self.decondition()
+            
+        return cent_dict
+
+
+
+    def proximities(self, focal_tokens=None,  alter_subset=None, years=None, context=None, weight_cutoff=None, norm_ties=True):
+        """
+        Calculate proximities for given tokens.
+        Conditions if network is not already conditioned.
+
+        Parameters
+        ----------
+        focal_tokens : list, str, optional
+            List of tokens of interest. If not provided, centralities for all tokens will be returned.
+        alter_subset : list, str optional
+            List of alters to show. Others are hidden. The default is None.
+        years : dict, int, optional - used when conditioning
+            Given year, or an interval dict {"start":YYYYMMDD,"end":YYYYMMDD}. The default is None.
+        context : list, optional - used when conditioning
+            List of tokens that need to appear in the context distribution of a tie. The default is None.
+        weight_cutoff : float, optional - used when conditioning
+            Only ties of higher weight are considered. The default is None.
+        norm_ties : bool, optional - used when conditioning
+            Norm ties to get correct probabilities. The default is True.
+
+        Returns
+        -------
+        proximity_dict : dict
+            Dictionary of form {token_id:{alter_id: proximity}}.
+
+        """
+
+        input_check(tokens=focal_tokens)
+        input_check(tokens=alter_subset)
+        input_check(tokens=context)
+        input_check(years=years)
+
+        if alter_subset is not None:
+            alter_subset = self.ensure_ids(alter_subset)
+        if focal_tokens is not None:
+            focal_tokens = self.ensure_ids(focal_tokens)
+        else:
+            focal_tokens = self.ids
+
+        if self.conditioned == True:
+            logging.warning(
+                "Network already conditioned! No reconditioning attempted, parameters unused.")
+        proximity_dict = {}
+        for token in focal_tokens:
+            if self.conditioned == True:
+                was_conditioned = True
+            else:
+                logging.debug(
+                    "Conditioning year(s) {} with focus on token {}".format(years, token))
+                self.condition(years, tokens=[
+                    token], weight_cutoff=weight_cutoff, depth=1, context=context, norm=norm_ties)
+                was_conditioned = False
+
+            tie_dict = proximity(self.graph, focal_tokens=focal_tokens, alter_subset=alter_subset)[
+                'proximity'][token]
+
+            proximity_dict.update({token: tie_dict})
+
+        if was_conditioned == False:
+            # Decondition
+            self.decondition()
+
+        return {"proximity": proximity_dict}
+
+    def to_backout(self, decay=None, method="invert", stopping=25):
+        """
+        If each node is defined by the ties to its neighbors, and neighbors
+        are equally defined in this manner, what is the final composition
+        of each node?
+
+        Function redefines neighborhood of a node by following all paths
+        to other nodes, weighting each path according to its length by the 
+        decay parameter:
+            a_ij is the sum of weighted, discounted paths from i to j
+
+        Row sum then corresponds to Eigenvector or Bonacich centrality.
+
+
+        Parameters
+        ----------
+        decay : float, optional
+            Decay parameter determining the weight of higher order ties. The default is None.
+        method : "invert" or "series", optional
+            "invert" tries to invert the adjacency matrix.
+            "series" uses a series computation. The default is "invert".
+        stopping : int, optional
+            Used if method is "series". Determines the maximum order of series computation. The default is 25.
+
+
+        Returns
+        -------
+        None.
+
+        """
+        if self.conditioned == False:
+            logging.warning(
+                "Network is not conditioned. Conditioning on all data...")
+            self.condition()
+
+        self.graph = backout_measure(
+            self.graph, decay=decay, method=method, stopping=stopping)
+
+    def to_symmetric(self, technique="avg-sym"):
+        """
+        Make graph symmetric
+
+        Parameters
+        ----------
+        technique : string, optional
+            transpose: Transpose and average adjacency matrix. Note: Loses other edge parameters!
+            min-sym: Retain minimum direction, no tie if zero / unidirectional.
+            max-sym: Retain maximum direction; tie exists even if unidirectional.
+            avg-sym: Average ties. 
+            min-sym-avg: Average ties if link is bidirectional, otherwise no tie.
+            The default is "avg-sym".
+
+        Returns
+        -------
+        None.
+
+        """
+
+        if self.conditioned == False:
+            logging.warning(
+                "Network is not conditioned. Conditioning on all data...")
+            self.condition()
+
+        self.graph = make_symmetric(self.graph, technique)
+
     # %% Graph abstractions - for now only networkx
+
     def create_empty_graph(self):
         return nx.DiGraph()
 
@@ -356,7 +609,8 @@ class neo4j_network(MutableSequence):
         try:
             index = self.id_index_dict[id]
         except:
-            raise LookupError("".join(["Index of token with id ", str(id), " missing. Token not in network?"]))
+            raise LookupError("".join(
+                ["Index of token with id ", str(id), " missing. Token not in network?"]))
         return index.item()
 
     def get_token_from_id(self, id):
@@ -371,7 +625,8 @@ class neo4j_network(MutableSequence):
             try:
                 token = self.neo_token_id_dict[id]
             except:
-                raise LookupError("".join(["Token with ID ", str(id), " missing. Token not in network or database?"]))
+                raise LookupError("".join(["Token with ID ", str(
+                    id), " missing. Token not in network or database?"]))
         return token
 
     def get_id_from_token(self, token):
@@ -386,14 +641,16 @@ class neo4j_network(MutableSequence):
             try:
                 id = int(self.neo_token_id_dict[token])
             except:
-                raise LookupError("".join(["ID of token ", token, " missing. Token not in network or database?"]))
+                raise LookupError(
+                    "".join(["ID of token ", token, " missing. Token not in network or database?"]))
         return id
 
     def ensure_ids(self, tokens):
         """This is just to confirm mixed lists of tokens and ids get converted to ids"""
-        if isinstance(tokens, (list,tuple, np.ndarray)):
+        if isinstance(tokens, (list, tuple, np.ndarray)):
             # Transform strings to corresponding IDs
-            tokens = [self.get_id_from_token(x) if not np.issubdtype(type(x), np.integer) else x for x in tokens]
+            tokens = [self.get_id_from_token(x) if not np.issubdtype(
+                type(x), np.integer) else x for x in tokens]
             # Make sure np arrays get transformed to int lists
             return [int(x) if not isinstance(x, int) else x for x in tokens]
         else:
@@ -416,15 +673,18 @@ class neo4j_network(MutableSequence):
         if self.conditioned == True:
             try:
                 # Relabel nodes
-                labeldict = dict(zip(self.ids, [self.get_token_from_id(x) for x in self.ids]))
-                reverse_dict = dict(zip([self.get_token_from_id(x) for x in self.ids], self.ids))
+                labeldict = dict(
+                    zip(self.ids, [self.get_token_from_id(x) for x in self.ids]))
+                reverse_dict = dict(
+                    zip([self.get_token_from_id(x) for x in self.ids], self.ids))
                 self.graph = nx.relabel_nodes(self.graph, labeldict)
 
                 print(len(self.graph.nodes))
-                if delete_isolates==True:
+                if delete_isolates == True:
                     isolates = list(nx.isolates(self.graph))
-                    logging.info("Found {} isolated nodes in graph, deleting.".format(len(isolates)))
-                    cleaned_graph=self.graph.copy()
+                    logging.info(
+                        "Found {} isolated nodes in graph, deleting.".format(len(isolates)))
+                    cleaned_graph = self.graph.copy()
                     cleaned_graph.remove_nodes_from(isolates)
                     nx.write_gexf(cleaned_graph, path)
                 else:

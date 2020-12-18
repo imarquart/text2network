@@ -24,9 +24,9 @@ def input_check( years=None, tokens=None):
 
     """
     if years is not None:
-        if (not isinstance(years, dict)) and (not isinstance(years, int)):
-            logging.error("Parameter years must be int or interval dict ('start':int,'end':int). Supplied: {}".format(type(years)))
-        assert isinstance(years, dict) or isinstance(years, int), "Parameter years must be int or interval dict ('start':int,'end':int). Supplied: {}".format(type(years))
+        if (not isinstance(years, ndarray)) and (not isinstance(years, list)) and (not isinstance(years, dict)) and (not isinstance(years, int)):
+            logging.error("Parameter years must be int, list, array or interval dict ('start':int,'end':int). Supplied: {}".format(type(years)))
+        assert isinstance(years, ndarray) or isinstance(years, list) or isinstance(years, dict) or isinstance(years, int), "Parameter years must be int, list, array or interval dict ('start':int,'end':int).  or interval dict ('start':int,'end':int). Supplied: {}".format(type(years))
     if tokens is not None:
         if (not isinstance(tokens, ndarray)) and (not isinstance(tokens, list)) and (not isinstance(tokens, int)) and (not isinstance(tokens, str)):
             logging.error("Token parameter should be string, int or list. Supplied: {}".format(type(tokens)))

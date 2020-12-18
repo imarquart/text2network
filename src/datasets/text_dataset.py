@@ -1,5 +1,3 @@
-# TODO: Comment
-# TODO: Add parameters
 
 import numpy as np
 import torch
