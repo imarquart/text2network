@@ -10,7 +10,7 @@ import nltk
 import tables
 
 
-class neo4j_preprocessor():
+class nw_preprocessor():
 
     def __init__(self, database, MAX_SEQ_LENGTH, char_mult, split_symbol="-", number_params=4,
                  logging_level=logging.NOTSET):

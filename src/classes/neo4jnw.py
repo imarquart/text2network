@@ -106,7 +106,7 @@ class neo4j_network(MutableSequence):
     def __getitem__(self, i):
         """
         Retrieve node information with input checking
-        :param i: int or list or nodes, or tuple of nodes with timestamp. Format as int YYYYMMDD, or dict with {'start:'<YYYYMMDD>, 'end':<YYYYMMDD>.
+        :param i: int or list of nodes, or tuple of nodes with timestamp. Format as int YYYYMMDD, or dict with {'start:'<YYYYMMDD>, 'end':<YYYYMMDD>.
         :return: NetworkX compatible node format
         """
         # If so desired, induce a queue write before any query
@@ -117,8 +117,7 @@ class neo4j_network(MutableSequence):
             assert len(
                 i) == 2, "Please format a call as <token>,<YYYYMMDD> or <token>,{'start:'<YYYYMMDD>, 'end':<YYYYMMDD>"
             if not isinstance(i[1], dict):
-                assert len(str(i[1])) == 8 and isinstance(i[1],
-                                                          int), "Please timestamp as <YYYYMMDD>, or{'start:'<YYYYMMDD>, 'end':<YYYYMMDD>"
+                assert isinstance(i[1],int), "Please timestamp as <YYYYMMDD>, or{'start:'<YYYYMMDD>, 'end':<YYYYMMDD>"
             year = i[1]
             i = i[0]
         else:
@@ -130,9 +129,18 @@ class neo4j_network(MutableSequence):
 
         # TODO Dispatch in case of graph
         if self.conditioned == False:
-            return self.query_multiple_nodes(i, year)
+            return self.query_nodes(i, year)
         else:
-            pass
+            if isinstance(i, (list,tuple, np.ndarray)):
+                returndict=[]
+                for token in i:
+                    neighbors=dict(self.graph[token])
+                    returndict.extend({token: neighbors})
+            else:
+                neighbors=dict(self.graph[token])
+                returndict={token: neighbors}
+            return returndict
+            
 
     def __len__(self):
         return len(self.tokens)
@@ -173,7 +181,7 @@ class neo4j_network(MutableSequence):
         return times
 
     # %% Conditoning functions
-    def condition(self, years=None, tokens=None, weight_cutoff=None, depth=None, context=None, norm=False,
+    def condition(self, years=None, tokens=None, weight_cutoff=None, depth=None, context=None, norm=True,
                   batchsize=10000):
         """
         :param years: None, integer YYYY, or interval dict of the form {"start":YYYY,"end":YYYY}
@@ -197,7 +205,7 @@ class neo4j_network(MutableSequence):
 
         self.conditioned = True
 
-    def year_condition(self, years, weight_cutoff=None, context=None, norm=False, batchsize=10000):
+    def year_condition(self, years, weight_cutoff=None, context=None, norm=True, batchsize=10000):
         """ Condition the entire network over all years """
         if self.conditioned == False:  # This is the first conditioning
             # Preserve node and token lists
@@ -242,7 +250,7 @@ class neo4j_network(MutableSequence):
             self.decondition()
             self.year_condition(years, weight_cutoff, context, norm)
 
-    def ego_condition(self, years, token_ids, weight_cutoff=None, depth=None, context=None, norm=False):
+    def ego_condition(self, years, token_ids, weight_cutoff=None, depth=None, context=None, norm=True):
         if self.conditioned == False:  # This is the first conditioning
             # Preserve node and token lists
             self.neo_ids = copy.deepcopy(self.ids)
@@ -383,7 +391,7 @@ class neo4j_network(MutableSequence):
 
     def ensure_ids(self, tokens):
         """This is just to confirm mixed lists of tokens and ids get converted to ids"""
-        if isinstance(tokens, (list, np.ndarray)):
+        if isinstance(tokens, (list,tuple, np.ndarray)):
             # Transform strings to corresponding IDs
             tokens = [self.get_id_from_token(x) if not np.issubdtype(type(x), np.integer) else x for x in tokens]
             # Make sure np arrays get transformed to int lists

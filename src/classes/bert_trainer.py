@@ -2,7 +2,7 @@ from src.utils.hash_file import hash_string, check_step, complete_step
 from src.utils.load_bert import get_bert_and_tokenizer
 from src.utils.bert_args import bert_args
 from src.datasets.text_dataset import bert_dataset
-from src.classes.run_bert import run_bert
+from src.functions.run_bert import run_bert
 from src.utils.get_uniques import get_uniques
 import tables
 import torch

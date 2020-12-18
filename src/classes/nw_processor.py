@@ -19,7 +19,7 @@ import gc
 from src.utils.hash_file import hash_string, check_step, complete_step
 
 
-class neo4j_processor():
+class nw_processor():
     def __init__(self, trained_folder, neograph, MAX_SEQ_LENGTH, processing_options, text_db=None, maxn=None,
                  nr_workers=0, split_hierarchy=None, processing_cache=None, prune_missing_tokens=True, logging_level=logging.NOTSET):
         """
