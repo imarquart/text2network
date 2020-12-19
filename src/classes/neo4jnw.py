@@ -353,15 +353,12 @@ class neo4j_network(MutableSequence):
 
     # %% Measures
 
-       
-    def yearly_centralities(self, year_list, focal_tokens=None,  types=["PageRank", "normedPageRank"],ego_nw_tokens=None, depth=1, context=None, weight_cutoff=None, norm_ties=True):
+    def yearly_centralities(self, year_list, focal_tokens=None,  types=["PageRank", "normedPageRank"], ego_nw_tokens=None, depth=1, context=None, weight_cutoff=None, norm_ties=True):
         """
         Compute directly year-by-year centralities for provided list.
-    
+
         Parameters
         ----------
-        semantic_network : semantic network class
-            semantic network to use.
         year_list : list
             List of years for which to calculate centrality.
         focal_tokens : list, str
@@ -378,26 +375,27 @@ class neo4j_network(MutableSequence):
             Only links of higher weight are considered in conditioning.. The default is None.
         norm_ties : bool, optional - used when conditioning
             Please see semantic network class. The default is True.
-    
+
         Returns
         -------
         dict
             Dict of years with dict of centralities for focal tokens.
-    
+
         """
         cent_year = {}
         assert isinstance(year_list, list), "Please provide list of years."
         for year in year_list:
-            cent_measures = self.centralities(focal_tokens=focal_tokens, types=types, years=[year], ego_nw_tokens=ego_nw_tokens, depth=depth,context=context,weight_cutoff=weight_cutoff,norm_ties=norm_ties)
+            cent_measures = self.centralities(focal_tokens=focal_tokens, types=types, years=[
+                                              year], ego_nw_tokens=ego_nw_tokens, depth=depth, context=context, weight_cutoff=weight_cutoff, norm_ties=norm_ties)
             cent_year.update({year: cent_measures})
-    
-        return {'yearly_centralities':cent_year}
 
-    def centralities(self, focal_tokens=None,  types=["PageRank", "normedPageRank"],years=None,ego_nw_tokens=None,depth=1, context=None, weight_cutoff=None, norm_ties=True):
+        return {'yearly_centralities': cent_year}
+
+    def centralities(self, focal_tokens=None,  types=["PageRank", "normedPageRank"], years=None, ego_nw_tokens=None, depth=1, context=None, weight_cutoff=None, norm_ties=True):
         """
         Calculate centralities for given tokens over an aggregate of given years.
         If not conditioned, the semantic network will be conditioned according to the parameters given.
-    
+
         Parameters
         ----------
         focal_tokens : list, str, optional
@@ -416,48 +414,47 @@ class neo4j_network(MutableSequence):
             Only links of higher weight are considered in conditioning.. The default is None.
         norm_ties : bool, optional - used when conditioning
             Please see semantic network class. The default is True.
-     
+
         Returns
         -------
         dict
             Dict of centralities for focal tokens.
-    
+
         """
         input_check(tokens=focal_tokens)
         input_check(tokens=ego_nw_tokens)
         input_check(tokens=context)
         input_check(years=years)
-        
+
         if self.conditioned == False:
             was_conditioned = False
             if ego_nw_tokens == None:
                 logging.debug("Conditioning year(s) {} with focus on tokens {}".format(
                     years, focal_tokens))
                 self.condition(years=years, tokens=None, weight_cutoff=weight_cutoff,
-                                           depth=depth, context=context, norm=norm_ties)
+                               depth=depth, context=context, norm=norm_ties)
                 logging.debug("Finished conditioning, {} nodes and {} edges in graph".format(
                     len(self.graph.nodes), len(self.graph.edges)))
             else:
                 logging.debug("Conditioning ego-network for {} tokens with depth {}, for year(s) {} with focus on tokens {}".format(
                     len(ego_nw_tokens), depth, years, focal_tokens))
                 self.condition(years=years, tokens=ego_nw_tokens, weight_cutoff=weight_cutoff,
-                                           depth=depth, context=context, norm=norm_ties)
+                               depth=depth, context=context, norm=norm_ties)
                 logging.debug("Finished ego conditioning, {} nodes and {} edges in graph".format(
                     len(self.graph.nodes), len(self.graph.edges)))
         else:
             logging.warning(
                 "Network already conditioned! No reconditioning attempted, parameters unused.")
             was_conditioned = True
-            
-        cent_dict=centrality(self.graph, focal_tokens=focal_tokens,  types=types)
-        
+
+        cent_dict = centrality(
+            self.graph, focal_tokens=focal_tokens,  types=types)
+
         if was_conditioned == False:
             # Decondition
             self.decondition()
-            
+
         return cent_dict
-
-
 
     def proximities(self, focal_tokens=None,  alter_subset=None, years=None, context=None, weight_cutoff=None, norm_ties=True):
         """
