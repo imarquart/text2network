@@ -451,26 +451,73 @@ class neo4j_database():
             ties_formatted = [{"alter": int(x[0]), "time": int(x[1]), "weight": float(x[2]['weight']),
                                "seq_id": int(x[2]['seq_id']),
                                "pos": int(x[2]['pos']),
-                               "p1": ((x[2]['p1']) if len(x[2]) > 3 else 0),
-                               "p2": ((x[2]['p2']) if len(x[2]) > 4 else 0),
-                               "p3": ((x[2]['p3']) if len(x[2]) > 5 else 0),
-                               "p4": ((x[2]['p4']) if len(x[2]) > 6 else 0), }
+                               "run_index": int(x[2]['run_index']),
+                               "p1": ((x[2]['p1']) if len(x[2]) > 4 else 0),
+                               "p2": ((x[2]['p2']) if len(x[2]) > 5 else 0),
+                               "p3": ((x[2]['p3']) if len(x[2]) > 6 else 0),
+                               "p4": ((x[2]['p4']) if len(x[2]) > 7 else 0), }
                               for x in zip(alters.tolist(), times.tolist(), dicts.tolist())]
             contexts_formatted = [{"alter": int(x[0]), "time": int(x[1]), "weight": float(x[2]['weight']),
                                    "seq_id": int(x[2]['seq_id'] if len(x[2]) > 1 else 0),
                                    "pos": int(x[2]['pos'] if len(x[2]) > 2 else 0),
-                                   "p1": ((x[2]['p1']) if len(x[2]) > 3 else 0),
-                                   "p2": ((x[2]['p2']) if len(x[2]) > 4 else 0),
-                                   "p3": ((x[2]['p3']) if len(x[2]) > 5 else 0),
-                                   "p4": ((x[2]['p4']) if len(x[2]) > 6 else 0), }
+                                   "run_index": int(x[2]['run_index'] if len(x[2]) > 3 else 0),
+                                   "p1": ((x[2]['p1']) if len(x[2]) > 4 else 0),
+                                   "p2": ((x[2]['p2']) if len(x[2]) > 5 else 0),
+                                   "p3": ((x[2]['p3']) if len(x[2]) > 6 else 0),
+                                   "p4": ((x[2]['p4']) if len(x[2]) > 7 else 0), }
                                   for x in zip(con_alters.tolist(), con_times.tolist(), con_dicts.tolist())]
             params = {"ego": int(egos[0]), "ties": ties_formatted, "contexts": contexts_formatted}
+
+            # Select order of parameters
+            p1 = np.array([str(x['p1']) if (len(x)>4) else "0" for x in dicts ])
+            p2 = np.array([str(x['p2']) if (len(x)>5) else "0" for x in dicts ])
+            p3 = np.array([str(x['p3']) if (len(x)>6) else "0" for x in dicts ])
+            p4 = np.array([str(x['p4']) if (len(x)>7) else "0" for x in dicts ])
+            # Select order of context parameters
+            cseq_id = np.array([x['seq_id'] if len(x)>1 else "0" for x in con_dicts ], dtype=np.str)
+            cpos = np.array([x['pos'] if len(x)>2 else "0" for x in con_dicts ], dtype=np.str)
+            crun_index = np.array([x['run_index'] if len(x)>3 else "0" for x in con_dicts ], dtype=np.str)
+            cp1 =  np.array([str(x['p1']) if (len(x)>4) else "0" for x in con_dicts ])
+            cp2 =  np.array([str(x['p2']) if (len(x)>5) else "0" for x in con_dicts ])
+            cp3 =  np.array([str(x['p3']) if (len(x)>6) else "0" for x in con_dicts ])
+            cp4 = np.array([str(x['p4'] )if (len(x)>7) else "0" for x in con_dicts ])
+
+
+            # Build parameter string
+            parameter_string=""
+            if not all(p1 == "0") and not all(p1==''):
+                parameter_string=parameter_string+", p1:tie.p1"
+            if not all(p2 == "0") and not all( p2==''):
+                parameter_string=parameter_string+", p2:tie.p2"
+            if not all(p3 == "0") and not all(p3==''):
+                parameter_string=parameter_string+", p3:tie.p3"
+            if not all(p4 == "0") and not all( p4==''):
+                parameter_string=parameter_string+", p4:tie.p4 "
+
+
+            cparameter_string = ""
+            if not all(cseq_id == "0") and not all(cseq_id==''):
+                cparameter_string = cparameter_string + ", seq_id:con.seq_id"
+            if not all(cpos == "0" ) and not all(cpos==''):
+                cparameter_string = cparameter_string + ", pos:con.pos"
+            if not all(crun_index == "0") and not all(crun_index==''):
+                cparameter_string = cparameter_string + ", run_index:pos.run_index"
+            if not all(cp1 == "0") and not all(cp1==''):
+                cparameter_string = cparameter_string + ", p1:con.p1"
+            if not all(cp2 == "0" ) and not all( cp2==''):
+                cparameter_string = cparameter_string + ", p2:con.p2"
+            if not all(cp3 == "0" ) and not all(cp3==''):
+                cparameter_string = cparameter_string + ", p3:con.p3"
+            if not all(cp4 == "0" ) and not all(cp4==''):
+                cparameter_string = cparameter_string + ", p4:con.p4"
+
+
             query = ''.join(
                 [" MATCH (a:word {token_id: $ego}) WITH a UNWIND $ties as tie MATCH (b:word {token_id: tie.alter}) ",
                  self.creation_statement,
-                 " (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, seq_id:tie.seq_id,pos:tie.pos, p1:tie.p1,p2:tie.p2,p3:tie.p3,p4:tie.p4})<-[:onto]-(a) WITH r UNWIND $contexts as con MATCH (q:word {token_id: con.alter}) WITH r,q,con ",
+                 " (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, seq_id:tie.seq_id,pos:tie.pos, run_index:tie.run_index ",parameter_string, "})<-[:onto]-(a) WITH r UNWIND $contexts as con MATCH (q:word {token_id: con.alter}) WITH r,q,con ",
                  self.creation_statement,
-                 " (r)-[:conto]->(c:context {weight:con.weight, time:con.time, seq_id:con.seq_id,pos:con.pos, p1:con.p1,p2:con.p2,p3:con.p3,p4:con.p4})-[:conto]->(q)"])
+                 " (r)-[:conto]->(c:context {weight:con.weight, time:con.time ", cparameter_string, "})-[:conto]->(q)"])
         else:
             logging.error("Batched edge creation with context for multiple egos not supported.")
             raise NotImplementedError

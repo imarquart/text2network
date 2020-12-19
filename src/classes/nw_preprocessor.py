@@ -176,8 +176,7 @@ class nw_preprocessor():
                     exclude=True
                 params.append(par)
 
-            if exclude == True:
-                pass
+
 
             try:
                 with open(file_path) as f:
@@ -189,6 +188,11 @@ class nw_preprocessor():
                 except:
                     logging.error("Could not load %s" % file_path)
                     raise ImportError("Could not open file. Make sure, only .txt files in folder!")
+
+
+            if exclude == True:
+                text="Preprocessing Error"
+
 
             text = text.replace('\n', ' ')
 

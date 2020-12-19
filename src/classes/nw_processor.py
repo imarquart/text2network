@@ -187,7 +187,7 @@ class nw_processor():
         process_timings = []
         load_timings = []
         start_time = time.time()
-        for batch, token_ids, index_vec, seq_ids, year_vec, p1_vec, p2_vec, p3_vec, p4_vec in tqdm.tqdm(dataloader,
+        for batch, token_ids, index_vec, seq_id_vec, runindex_vec, year_vec, p1_vec, p2_vec, p3_vec, p4_vec in tqdm.tqdm(dataloader,
                                                                                                         desc="Iteration"):
             # batch, seq_ids, token_ids
             # Data spent on loading batch
@@ -205,13 +205,14 @@ class nw_processor():
 
             # %% Sequence Table
             # Iterate over sequences
-            for sequence_id in np.unique(seq_ids):
+            for run_index in np.unique(runindex_vec):
                 # Extract only current sequence
-                sequence_mask = seq_ids == sequence_id
+                sequence_mask = runindex_vec == run_index
                 sequence_size = sum(sequence_mask)
 
                 # Get parameters
                 seq_year = year_vec[sequence_mask]
+                seq_ids = seq_id_vec[sequence_mask]
                 seq_p1 = p1_vec[sequence_mask]
                 seq_p2 = p2_vec[sequence_mask]
                 seq_p3 = p3_vec[sequence_mask]
@@ -244,6 +245,7 @@ class nw_processor():
                     token = token.item()
                     # Extract parameters for token
                     year = seq_year[pos]
+                    sequence_id = seq_ids[pos]
                     p1 = seq_p1[pos]
                     p2 = seq_p2[pos]
                     p3 = seq_p3[pos]
@@ -292,7 +294,7 @@ class nw_processor():
                                                                                    percent=self.cutoff_percent,
                                                                                    max_degree=self.max_degree)
                         ties = self.get_weighted_edgelist(token, replacement, year, cutoff_number, cutoff_probability,
-                                                          sequence_id, pos, p1=p1, p2=p2, p3=p3, p4=p4,
+                                                          sequence_id, pos, p1=p1, p2=p2, p3=p3, p4=p4, run_index=run_index,
                                                           max_degree=self.max_degree)
 
                         # Context ties
@@ -302,7 +304,7 @@ class nw_processor():
                         context_ties = self.get_weighted_edgelist(token, context, year, cutoff_number,
                                                                   cutoff_probability,
                                                                   sequence_id, pos, p1=p1, p2=p2, p3=p3, p4=p4,
-                                                                  max_degree=self.context_max_degree,
+                                                                  max_degree=self.context_max_degree,run_index=run_index,
                                                                   simplify_context=True)
 
                         if (ties is not None) and (context_ties is not None):
@@ -469,7 +471,7 @@ class nw_processor():
         return min(cutoff_degree, max_degree), cutoff_probability
 
     def get_weighted_edgelist(self, token, x, time, cutoff_number=100, cutoff_probability=0, seq_id=0, pos=0, p1="0",
-                              p2="0", p3="0", p4="0", max_degree=100, simplify_context=False):
+                              p2="0", p3="0", p4="0", run_index=0,max_degree=100, simplify_context=False):
         """
         Sort probability distribution to get the most likely neighbor nodes.
         Return a networksx weighted edge list for a given focal token as node.
@@ -494,7 +496,7 @@ class nw_processor():
             weights = self.norm(x[neighbors], min_zero=False)
             if simplify_context == False:
                 return [(int(token), int(x[0]), int(time),
-                         {'weight': float(x[1]), 'seq_id': int(seq_id), 'pos': int(pos), 'p1': str(p1), 'p2': str(p2),
+                         {'weight': float(x[1]), 'seq_id': int(seq_id), 'pos': int(pos), 'run_index': int(run_index), 'p1': str(p1), 'p2': str(p2),
                           'p3': str(p3), 'p4': str(p4)}) for x in list(zip(neighbors, weights))]
             else:
                 return [(int(token), int(x[0]), int(time),

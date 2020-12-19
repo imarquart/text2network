@@ -33,6 +33,7 @@ class query_dataset(Dataset):
         items_text = items['text']
         items_year = items['year']
         items_seqid = items['seq_id']  # ?
+        items_runindex = items['run_index']
         items_p1 = items['p1']
         items_p2 = items['p2']
         items_p3 = items['p3']
@@ -46,7 +47,7 @@ class query_dataset(Dataset):
         items_p4 = [x.decode("utf-8") for x in items_p4]
 
         self.data = pd.DataFrame(
-            {"year": items_year, "seq_id": items_seqid, "text": items_text, "p1": items_p1, "p2": items_p2,
+            {"year": items_year, "seq_id": items_seqid, "run_index": items_runindex, "text": items_text, "p1": items_p1, "p2": items_p2,
              "p3": items_p3, "p4": items_p4})
         self.tables.close()
 
@@ -101,6 +102,7 @@ class query_dataset(Dataset):
         p3_vec = item['p3'].to_numpy()
         p4_vec = item['p4'].to_numpy()
         seq_vec = item['seq_id'].to_numpy(dtype="int32")
+        runindex_vec = item['run_index'].to_numpy(dtype="int32")
 
         token_input_vec = []  # tensor of padded inputs with special tokens
         token_id_vec = []  # List of token ids for each sequence, later transformed to 1-dim tensor over batch
@@ -125,6 +127,7 @@ class query_dataset(Dataset):
         lengths = ([x.shape[0] for x in token_id_vec])
         index_vec = torch.repeat_interleave(torch.as_tensor(index), torch.as_tensor(lengths))
         seq_vec = torch.repeat_interleave(torch.as_tensor(seq_vec), torch.as_tensor(lengths))
+        runindex_vec = torch.repeat_interleave(torch.as_tensor(runindex_vec), torch.as_tensor(lengths))
         year_vec = torch.repeat_interleave(torch.as_tensor(year_vec), torch.as_tensor(lengths))
         p1_vec = p1_vec.repeat(lengths)
         p2_vec = p2_vec.repeat(lengths)
@@ -134,7 +137,7 @@ class query_dataset(Dataset):
         # Cat token_id_vec list into a single tensor for the whole batch
         token_id_vec = torch.cat([x for x in token_id_vec])
 
-        return token_input_vec, token_id_vec, index_vec, seq_vec, year_vec, p1_vec, p2_vec, p3_vec, p4_vec
+        return token_input_vec, token_id_vec, index_vec, seq_vec, runindex_vec, year_vec, p1_vec, p2_vec, p3_vec, p4_vec
 
     def __len__(self):
         return len(self.data)

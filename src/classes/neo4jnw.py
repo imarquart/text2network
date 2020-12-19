@@ -145,8 +145,8 @@ class neo4j_network(MutableSequence):
                     neighbors = dict(self.graph[token])
                     returndict.extend({token: neighbors})
             else:
-                neighbors = dict(self.graph[token])
-                returndict = {token: neighbors}
+                neighbors = dict(self.graph[i])
+                returndict = {i: neighbors}
             return returndict
 
     def __len__(self):
