@@ -55,9 +55,9 @@ processor = nw_processor(config['Paths']['trained_berts'], neograph,
                             split_hierarchy=json.loads(config.get('General', 'split_hierarchy')),
                             processing_cache=config['Paths']['processing_cache'],
                             logging_level=config['General'].getint('logging_level'))
-#processor.run_all_queries(clean_database=True)
+processor.run_all_queries(clean_database=True)
 
-processor.process_query("(year == 1992)",'1992')
+#processor.process_query("(year == 1992)",'1992')
 
 #neograph.condition(years=None, tokens=None, weight_cutoff=None, depth=None, context=None)
 #neograph.export_gefx("E:/NLPInspeech/test4norpune.gexf")

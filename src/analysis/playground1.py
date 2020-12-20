@@ -38,3 +38,6 @@ print(pd_format(neo4nw.centralities(focal_tokens=['president','tyrant','man', 'w
 neo4nw=neo4j_network_dummy()
 neo4nw.to_symmetric()
 print(pd_format(neo4nw.centralities(focal_tokens=['president','tyrant','man', 'woman'])))
+
+
+measures=[neo4nw.proximities(focal_tokens=['president','tyrant'],alter_subset=['man', 'woman']),neo4nw.centralities(focal_tokens=['president','tyrant','man', 'woman'])]
