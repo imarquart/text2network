@@ -1,7 +1,3 @@
-# TODO: Redo Comments
-# TODO: Initialize BERT and Tokenizer based on hierarchy
-# TODO: Adding parameters in network class
-
 import logging
 import time
 import numpy as np

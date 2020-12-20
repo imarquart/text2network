@@ -1,2 +1,6 @@
+tables
+tqdm
+torch
+networkx
 numpy
 neo4j

@@ -91,7 +91,7 @@ def yearly_centrality(nw_graph, year_list, focal_tokens=None,  types=["PageRank"
                                    focal_tokens=focal_tokens, types=types)
         cent_year.update({year: cent_measures})
 
-    return {'yearly_centralities':cent_year}
+    return {'yearly_centrality':cent_year}
 
 
 def centrality(nw_graph, focal_tokens=None,  types=["PageRank", "normedPageRank"]):
@@ -144,7 +144,7 @@ def centrality(nw_graph, focal_tokens=None,  types=["PageRank", "normedPageRank"
 
         measures.update({measure: centralities})
 
-    return {"centralities":measures}
+    return {"centrality":measures}
 
 
 def compute_centrality(nw_graph, measure):

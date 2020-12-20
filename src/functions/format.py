@@ -29,7 +29,6 @@ def pd_format(format_list):
         
         
     for fdict in format_list:
-        print()
         ftypes = list(fdict.keys())
         for ftype in ftypes:
             if ftype == "proximity":
@@ -38,13 +37,13 @@ def pd_format(format_list):
                 output=output.fillna(0)
                 output=output.sort_values(output.columns[0], ascending = False)
                 result_list.append(output)
-            elif ftype =="centralities":
+            elif ftype =="centrality":
                 proxdict=fdict[ftype]
                 output=pd.DataFrame(proxdict)
                 output=output.fillna(0)
                 output=output.sort_values(output.columns[0], ascending = False)
                 result_list.append(output)
-            elif ftype =="yearly_centralities":
+            elif ftype =="yearly_centrality":
                 proxdict=fdict[ftype]
                 year_list=list(proxdict.keys())
                 output_dict={}

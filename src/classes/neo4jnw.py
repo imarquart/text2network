@@ -5,11 +5,24 @@ from src.utils.twowaydict import TwoWayDict
 import numpy as np
 from src.functions.backout_measure import backout_measure
 from src.functions.node_measures import proximity, centrality
-from src.utils.network_tools import make_symmetric
 from src.utils.input_check import input_check
 # import neo4j utilities and classes
-import neo4jCon as neo_connector
 from src.classes.neo4db import neo4j_database
+# Clustering
+from src.functions.graph_clustering import *
+
+# Type definition
+try: # Python 3.8+
+    from typing import TypedDict
+    class GraphDict(TypedDict):
+        graph: nx.DiGraph
+        name: str
+        parent: int
+        level: int
+        measures: List
+        metadata: [Union[Dict,defaultdict]]
+except:
+    GraphDict = Dict[str, Union[str,int,Dict,List,defaultdict]]
 
 try:
     import networkx as nx
@@ -351,6 +364,110 @@ class neo4j_network(MutableSequence):
         else:
             self.db.neo_queue = []
 
+    # %% Clustering
+    def cluster(self, levels:int = 1, name:Optional[str]="base", metadata: Optional[Union[dict,defaultdict]] = None, algorithm: Optional[Callable[[nx.DiGraph], List]] = None,to_measure: Optional[List[Callable[[nx.DiGraph], Dict]]] = None, ego_nw_tokens:Optional[List]=None, depth:Optional[int]=1,years:Optional[Union[int,Dict,List]]=None, context:Optional[List]=None, weight_cutoff:float=None, norm_ties:bool=True):
+        """
+        Cluster the network, run measures on the clusters and return them as networkx subgraph in packaged dicts with metadata.
+        Use the levels variable to determine how often to cluster hierarchically.
+
+        Function takes the usual conditioning argument when the network is not yet conditioned.
+        If it is conditioned, then the current graph will be used to cluster
+
+        Parameters
+        ----------
+        levels: int
+            Number of hierarchy levels to cluster
+        name: str. Optional.
+            Base name of the cluster. Further levels will add -i. Default is "base".
+        metadata: dict. Optional.
+            A dict of metadata that is kept for all clusters.
+        algorithm: callable.  Optional.
+            Any algorithm taking a networkx graph and return a list of lists of tokens.
+        to_measure: list of callables. Optional.
+            Functions that take a networkx graph as argument and return a formatted dict with measures.
+        ego_nw_tokens: list. Optional.
+            Ego network tokens. Used only when conditioning.
+        depth: int. Optional.
+            Depth of ego network. Used only when conditioning.
+        years: int, list, str. Optional
+            Given year, list of year, or an interval dict {"start":int,"end":int}. The default is None.
+        context : list, optional - used when conditioning
+            List of tokens that need to appear in the context distribution of a tie. The default is None.
+        weight_cutoff : float, optional - used when conditioning
+            Only ties of higher weight are considered. The default is None.
+        norm_ties : bool, optional - used when conditioning
+            Norm ties to get correct probabilities. The default is True.
+
+        Returns
+        -------
+        list of cluster-dictionaries.
+        """
+
+        input_check(tokens=ego_nw_tokens)
+        input_check(tokens=context)
+        input_check(years=years)
+
+        # Check and fix up token lists
+        if ego_nw_tokens is not None:
+            ego_nw_tokens = self.ensure_ids(ego_nw_tokens)
+        if context is not None:
+            context = self.ensure_ids(context)
+
+
+
+        # Prepare metadata with standard additions
+        # TODO Add standard metadata for conditioning
+        metadata_new=defaultdict(list)
+        if metadata is not None:
+            for (k, v) in metadata.items():
+                metadata_new[k].append(v)
+
+
+        if self.conditioned == False:
+            was_conditioned = False
+            if ego_nw_tokens == None:
+                logging.debug("Conditioning year(s) {} with all tokens".format(
+                    years))
+                self.condition(years=years, tokens=None, weight_cutoff=weight_cutoff,
+                               depth=depth, context=context, norm=norm_ties)
+                logging.debug("Finished conditioning, {} nodes and {} edges in graph".format(
+                    len(self.graph.nodes), len(self.graph.edges)))
+            else:
+                logging.debug("Conditioning ego-network for {} tokens with depth {}, for year(s) {} with focus on tokens {}".format(
+                    len(ego_nw_tokens), depth, years, ego_nw_tokens))
+                self.condition(years=years, tokens=ego_nw_tokens, weight_cutoff=weight_cutoff,
+                               depth=depth, context=context, norm=norm_ties)
+                logging.debug("Finished ego conditioning, {} nodes and {} edges in graph".format(
+                    len(self.graph.nodes), len(self.graph.edges)))
+        else:
+            logging.debug(
+                "Network already conditioned! No reconditioning attempted, parameters unused.")
+            was_conditioned = True
+
+        # Prepare base cluster
+        base_cluster=return_cluster(self.graph, name, "", 0, to_measure, metadata_new)
+        cluster_list=[]
+        step_list = []
+        base_step_list = []
+        prior_list = [base_cluster]
+        for t in range(0,levels):
+            step_list=[]
+            base_step_list=[]
+            for base in prior_list:
+                base,new_list=cluster_graph(base, to_measure, algorithm)
+                base_step_list.append(base)
+                step_list.extend(new_list)
+            prior_list=step_list
+            cluster_list.extend(base_step_list)
+        # Add last hierarchy
+        cluster_list.extend(step_list)
+
+        if was_conditioned == False:
+            # Decondition
+            self.decondition()
+
+        return cluster_list
+
     # %% Measures
 
     def yearly_centralities(self, year_list, focal_tokens=None,  types=["PageRank", "normedPageRank"], ego_nw_tokens=None, depth=1, context=None, weight_cutoff=None, norm_ties=True):
@@ -389,7 +506,7 @@ class neo4j_network(MutableSequence):
                                               year], ego_nw_tokens=ego_nw_tokens, depth=depth, context=context, weight_cutoff=weight_cutoff, norm_ties=norm_ties)
             cent_year.update({year: cent_measures})
 
-        return {'yearly_centralities': cent_year}
+        return {'yearly_centrality': cent_year}
 
     def centralities(self, focal_tokens=None,  types=["PageRank", "normedPageRank"], years=None, ego_nw_tokens=None, depth=1, context=None, weight_cutoff=None, norm_ties=True):
         """
