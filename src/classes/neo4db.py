@@ -10,7 +10,7 @@ import neo4jCon as neo_connector
 class neo4j_database():
     def __init__(self, neo4j_creds, agg_operator="SUM",
                  write_before_query=True,
-                 neo_batch_size=10000, queue_size=100000, tie_query_limit=100000, tie_creation="UNSAFE",
+                 neo_batch_size=10000, queue_size=100000, tie_query_limit=100000, tie_creation="UNSAFE",  context_tie_creation="SAFE",
                  logging_level=logging.NOTSET):
         # Set logging level
         logging.disable(logging_level)
@@ -24,6 +24,11 @@ class neo4j_database():
             self.creation_statement = "MERGE"
         else:
             self.creation_statement = "CREATE"
+
+        if context_tie_creation == "SAFE":
+            self.context_creation_statement = "MERGE"
+        else:
+            self.context_creation_statement = "CREATE"
         self.neo_queue = []
         self.neo_batch_size = neo_batch_size
         self.queue_size = queue_size
@@ -58,6 +63,18 @@ class neo4j_database():
             self.add_query(query)
         if 'contimeindex' not in constr:
             query = "CREATE INDEX contimeindex FOR (a:context) ON (a.time)"
+            self.add_query(query)
+        if 'runidxindex' not in constr:
+            query = "CREATE INDEX runidxindex FOR (a:edge) ON (a.run_index)"
+            self.add_query(query)
+        if 'conrunidxindex' not in constr:
+            query = "CREATE INDEX conrunidxindex FOR (a:context) ON (a.run_index)"
+            self.add_query(query)
+        if 'posedgeindex' not in constr:
+            query = "CREATE INDEX posedgeindex FOR (a:edge) ON (a.pos)"
+            self.add_query(query)
+        if 'posconindex' not in constr:
+            query = "CREATE INDEX posconindex FOR (a:context) ON (a.pos)"
             self.add_query(query)
         # Need to write first because create and structure changes can not be batched
         self.non_con_write_queue()
@@ -290,7 +307,7 @@ class neo4j_database():
             params = {"ids": ids}
 
         return_query = ''.join([
-                                   " WITH a.token_id AS idx, r.seq_id AS sequence_id ,(r.time) as year, count(DISTINCT(r.pos)) as pos_count RETURN idx, sum(pos_count) AS occurrences order by idx"])
+                                   " WITH a.token_id AS idx, sum(r.weight) AS weight RETURN idx, round(sum(weight)) as occurrences order by idx"])
 
         if isinstance(times, int):
             match_query = "UNWIND $ids AS id MATCH p=(a:word  {token_id:id})-[:onto]->(r:edge {time:$times})-[:onto]->(b:word) "
@@ -343,7 +360,7 @@ class neo4j_database():
             params = {"ids": ids, "clist": context}
 
         # return_query = ''.join([" WITH a.token_id AS idx, r.seq_id AS sequence_id ,(r.time) as year, count(DISTINCT(r.pos)) as pos_count RETURN idx, sum(pos_count) AS occurrences order by idx"])
-        return_query = " WITH s.token_id as idx, count(r.pos) as pos_count, r.seq_id as seq_id return idx, sum(pos_count) as occurrences order by idx"
+        return_query = " WITH s.token_id AS idx, sum(r.weight) AS weight RETURN idx, round(sum(weight)) as occurrences order by idx"
         if isinstance(times, int):
             match_query = "UNWIND $ids AS id MATCH p=(s:word  {token_id:id})-[:onto]->(r:edge {time:$times})-[:onto]->(v:word) "
         else:
@@ -516,7 +533,7 @@ class neo4j_database():
                 [" MATCH (a:word {token_id: $ego}) WITH a UNWIND $ties as tie MATCH (b:word {token_id: tie.alter}) ",
                  self.creation_statement,
                  " (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, seq_id:tie.seq_id,pos:tie.pos, run_index:tie.run_index ",parameter_string, "})<-[:onto]-(a) WITH r UNWIND $contexts as con MATCH (q:word {token_id: con.alter}) WITH r,q,con ",
-                 self.creation_statement,
+                 self.context_creation_statement,
                  " (r)-[:conto]->(c:context {weight:con.weight, time:con.time ", cparameter_string, "})-[:conto]->(q)"])
         else:
             logging.error("Batched edge creation with context for multiple egos not supported.")

@@ -114,7 +114,9 @@ class nw_processor():
                 gc.collect()
                 torch.cuda.empty_cache()
                 logging.info("Processing query {}".format(query))
+                start_time = time.time()
                 self.process_query(query, fname)
+                logging.info("Processing Time: %s seconds" % (time.time()-start_time))
                 if self.processing_cache is not None:
                     complete_step(processing_folder, hash)
 
@@ -179,16 +181,16 @@ class nw_processor():
         delwords = create_stopword_list(self.tokenizer)
 
         # Counter for timing
-        model_timings = []
-        process_timings = []
-        load_timings = []
-        start_time = time.time()
+        #model_timings = []
+        #process_timings = []
+        #load_timings = []
+        #start_time = time.time()
         for batch, token_ids, index_vec, seq_id_vec, runindex_vec, year_vec, p1_vec, p2_vec, p3_vec, p4_vec in tqdm.tqdm(dataloader,
                                                                                                         desc="Iteration"):
             # batch, seq_ids, token_ids
             # Data spent on loading batch
-            load_time = time.time() - start_time
-            load_timings.append(load_time)
+            #load_time = time.time() - start_time
+            #load_timings.append(load_time)
             # This seems to allow slightly higher batch sizes on my GPU
             # torch.cuda.empty_cache()
             # Run BERT and get predictions
@@ -196,8 +198,8 @@ class nw_processor():
                                                      self.tokenizer.mask_token_id, device)
 
             # compute model timings time
-            prepare_time = time.time() - start_time - load_time
-            model_timings.append(prepare_time)
+            #prepare_time = time.time() - start_time - load_time
+            #model_timings.append(prepare_time)
 
             # %% Sequence Table
             # Iterate over sequences
@@ -310,11 +312,11 @@ class nw_processor():
 
             del predictions, attn
             # compute processing time
-            process_timings.append(time.time() - start_time - prepare_time - load_time)
+            #process_timings.append(time.time() - start_time - prepare_time - load_time)
             self.neograph.db.write_queue()
             # New start time
 
-            start_time = time.time()
+            #start_time = time.time()
 
         # Write remaining
         self.neograph.db.write_queue()
@@ -326,11 +328,11 @@ class nw_processor():
             self.batch_size = original_batch_size
 
         del dataloader, dataset, batch_sampler
-        logging.debug("Average Load Time: %s seconds" % (np.mean(load_timings)))
-        logging.debug("Average Model Time: %s seconds" % (np.mean(model_timings)))
-        logging.debug("Average Processing Time: %s seconds" % (np.mean(process_timings)))
-        logging.debug(
-            "Ratio Load/Operations: %s seconds" % (np.mean(load_timings) / np.mean(process_timings + model_timings)))
+        #logging.debug("Average Load Time: %s seconds" % (np.mean(load_timings)))
+        #logging.debug("Average Model Time: %s seconds" % (np.mean(model_timings)))
+        #logging.debug("Average Processing Time: %s seconds" % (np.mean(process_timings)))
+        #logging.debug(
+        #    "Ratio Load/Operations: %s seconds" % (np.mean(load_timings) / np.mean(process_timings + model_timings)))
 
     def get_bert_tensor(self, args, bert, tokens, pad_token_id, mask_token_id, device=torch.device("cpu")):
         """
