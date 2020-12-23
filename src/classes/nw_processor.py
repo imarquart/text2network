@@ -10,7 +10,7 @@ from src.datasets.text_dataset import query_dataset, text_dataset_collate_batchs
 from src.utils.delwords import create_stopword_list
 from src.utils.rowvec_tools import simple_norm
 from src.utils.get_uniques import get_uniques
-from src.utils.load_bert import get_bert_and_tokenizer
+from src.utils.load_bert import get_bert_and_tokenizer, get_full_vocabulary
 import gc
 from src.utils.hash_file import hash_string, check_step, complete_step
 
@@ -78,10 +78,10 @@ class nw_processor():
 
         bert_folder = ''.join([self.trained_folder, '/', fname])
         tokenizer, bert = get_bert_and_tokenizer(bert_folder, True)
-        self.DICT_SIZE = len(tokenizer.vocab)
+        self.DICT_SIZE = len(tokenizer)
         return tokenizer, bert
 
-    def run_all_queries(self, clean_database=True, split_hierarchy=None, logging_level=None):
+    def run_all_queries(self, clean_database=True, split_hierarchy=None, logging_level=None, prune_database=True):
 
         # SEt up logging
         if logging_level is not None:
@@ -97,6 +97,8 @@ class nw_processor():
         if clean_database == True:
             logging.info("Cleaning Neo4j Database of all prior connections")
             self.neograph.db.clean_database()
+
+
 
         for idx,query_filename in enumerate(self.uniques['query_filename']):
             # Get File name
@@ -119,6 +121,11 @@ class nw_processor():
                 logging.info("Processing Time: %s seconds" % (time.time()-start_time))
                 if self.processing_cache is not None:
                     complete_step(processing_folder, hash)
+
+        # Prune the database
+        if prune_database == True:
+            logging.info("Cleaning Neo4j Database of all prior connections")
+            self.neograph.db.prune_database()
 
     def process_query(self, query, fname, text_db=None, logging_level=None):
         """
@@ -150,9 +157,10 @@ class nw_processor():
 
         # Setup Neo4j network
         # Setup network
-        tokens = list(self.tokenizer.vocab.keys())
+        ids, tokens=get_full_vocabulary(self.tokenizer)
+
         tokens = [x.translate(x.maketrans({"\"": '#e1#', "'": '#e2#', "\\": '#e3#'})) for x in tokens]
-        self.neograph.db.setup_neo_db(tokens, list(self.tokenizer.vocab.values()))
+        self.neograph.db.setup_neo_db(tokens, ids)
 
         # %% Initialize text dataset
         dataset = query_dataset(self.text_db, self.tokenizer, self.MAX_SEQ_LENGTH, maxn=self.maxn, query=query,

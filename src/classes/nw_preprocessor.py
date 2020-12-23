@@ -64,6 +64,7 @@ class nw_preprocessor():
         """
         # Split sentence
         sent = sent.split()
+        sent = [w.lower() for w in sent]
         # First, add current sentence as string
         current_sent = ' '.join(sent[0:self.MAX_SEQ_LENGTH])
         if current_sent[-1] not in [',', '.', ';', '.', '"', ':']:
@@ -203,6 +204,7 @@ class nw_preprocessor():
             text = text.replace("n\'t", "not")
             text = text.replace(" .", ".")
             text = text.replace(" ,", ",")
+            text = text.replace("-", " ")
             text = text.replace("...", ".")
             killchars = ['#', '<p>', '$', '%', '(', ')', '*', '/', '<', '>', '@', '\\', '{', '}', '[', ']', '+', '^',
                          '~',

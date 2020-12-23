@@ -35,7 +35,7 @@ class neo4j_database():
         self.aggregate_operator = agg_operator
         self.connector = neo_connector.Connector(self.neo4j_connection, self.neo4j_credentials)
         # Init tokens
-        self.init_tokens()
+        #self.init_tokens()
         # Init parent class
         super().__init__()
 
@@ -135,6 +135,17 @@ class neo4j_database():
         ids = [x['n.token_id'] for x in res]
         tokens = [x['n.token'] for x in res]
         return ids, tokens
+
+    def prune_database(self):
+        """
+        Deletes all disconnected nodes
+        Returns
+        -------
+
+        """
+        logging.debug("Pruning disconnected tokens in database.")
+        res = self.connector.run("MATCH (n) WHERE size((n)--())=0 DELETE (n)")
+
 
     # %% Query Functions
     def query_multiple_nodes(self, ids, times=None, weight_cutoff=None, norm_ties=True):
@@ -532,9 +543,9 @@ class neo4j_database():
             query = ''.join(
                 [" MATCH (a:word {token_id: $ego}) WITH a UNWIND $ties as tie MATCH (b:word {token_id: tie.alter}) ",
                  self.creation_statement,
-                 " (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, seq_id:tie.seq_id,pos:tie.pos, run_index:tie.run_index ",parameter_string, "})<-[:onto]-(a) WITH r UNWIND $contexts as con MATCH (q:word {token_id: con.alter}) WITH r,q,con ",
+                 " (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, seq_id:tie.seq_id,pos:tie.pos, run_index:tie.run_index ",parameter_string, "})<-[:onto]-(a) WITH r UNWIND $contexts as con MATCH (q:word {token_id: con.alter}) WITH r,q,con MERGE (c:context {weight:con.weight, time:con.time ", cparameter_string, "})-[:conto]->(q) WITH r,c ",
                  self.context_creation_statement,
-                 " (r)-[:conto]->(c:context {weight:con.weight, time:con.time ", cparameter_string, "})-[:conto]->(q)"])
+                 " (r)-[:conto]->(c)"])
         else:
             logging.error("Batched edge creation with context for multiple egos not supported.")
             raise NotImplementedError

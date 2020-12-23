@@ -384,7 +384,7 @@ def evaluate(args, model, tokenizer, prefix=""):
     return result
 
 
-def run_bert(args):
+def run_bert(args, tokenizer=None, model=None):
     #
 
     if os.path.exists(args.output_dir) and os.listdir(
@@ -426,7 +426,11 @@ def run_bert(args):
     #                                            do_lower_case=args.do_lower_case,
     #                                            cache_dir=args.cache_dir if args.cache_dir else None)
 
-    tokenizer, model = get_bert_and_tokenizer(args.model_dir,True)
+    # Load only if not provided
+    if tokenizer==None or model==None:
+        #tokenizer, model = get_bert_and_tokenizer(args.model_dir,True)
+        pass
+
     if args.block_size <= 0:
         args.block_size = tokenizer.max_len_single_sentence  # Our input block size will be the max possible for the model
     args.block_size = min(args.block_size, tokenizer.max_len_single_sentence)

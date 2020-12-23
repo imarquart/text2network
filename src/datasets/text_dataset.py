@@ -9,6 +9,9 @@ import numbers
 import logging
 import os
 import pickle
+import nltk
+
+from src.utils.load_bert import get_full_vocabulary
 
 
 class query_dataset(Dataset):
@@ -58,7 +61,7 @@ class query_dataset(Dataset):
         all_ids=[tokenizer.convert_tokens_to_ids(x) for x in all_tokens]
         all_ids=list(set(sum(all_ids,[])))
         # ID mask is 1 for tokens that do not appear in the text
-        self.id_mask=torch.ones(tokenizer.vocab_size)
+        self.id_mask=torch.ones(len(tokenizer))
         self.id_mask[all_ids]=0
         self.id_mask=np.where(self.id_mask==1)[0]
 
@@ -107,6 +110,7 @@ class query_dataset(Dataset):
         token_input_vec = []  # tensor of padded inputs with special tokens
         token_id_vec = []  # List of token ids for each sequence, later transformed to 1-dim tensor over batch
         for text in texts:
+
             indexed_tokens = self.tokenizer.encode(text, add_special_tokens=False)
             # Need fixed size, so we need to cut and pad
             indexed_tokens = indexed_tokens[:self.fixed_seq_length]
@@ -152,7 +156,7 @@ class bert_dataset(Dataset):
 
         self.tables = tables.open_file(self.database, mode="r")
         self.data = self.tables.root.textdata.table
-
+        self.where_string=where_string
         # Get text
         items = self.data.read_where(where_string)['text']
 
@@ -163,7 +167,24 @@ class bert_dataset(Dataset):
 
         self.examples = []
 
-        tokenized_text = tokenizer.convert_tokens_to_ids(tokenizer.tokenize(text))
+        # Get unique tokens
+        tokens= tokenizer.tokenize(text)
+        nltk_tokens=[w.lower() for w in tokens]
+        nltk_tokens=list(np.setdiff1d(nltk_tokens,['']))
+        ids,tokenizer_vocab=get_full_vocabulary(tokenizer)
+        #tokenizer_vocab=list(tokenizer.vocab.keys())
+        self.missing_tokens=list(np.setdiff1d(nltk_tokens, tokenizer_vocab))
+        if len(self.missing_tokens) > 0:
+            logging.warning("Missing tokens in vocabulary")
+
+        # Now use the tokenizer to correctly tokenize
+        #tokens = tokenizer.tokenize(text)
+        tokenized_text = tokenizer.convert_tokens_to_ids(tokens)
+
+        if(len(tokenized_text) < block_size):
+            asdf=tokenizer.build_inputs_with_special_tokens(tokenized_text)
+            asdf[len(asdf):block_size] = np.repeat(tokenizer.pad_token_id, block_size - len(asdf))
+            self.examples.append(asdf)
 
         for i in range(0, len(tokenized_text) - block_size + 1, block_size):  # Truncate in block of block_size
             self.examples.append(tokenizer.build_inputs_with_special_tokens(tokenized_text[i:i + block_size]))

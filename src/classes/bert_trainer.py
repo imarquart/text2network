@@ -51,8 +51,28 @@ class bert_trainer():
             assert split_hierarchy is not None
             self.uniques = self.get_uniques(split_hierarchy)
 
-        logging.info("With the current hierarchy, there are %i BERT models to train" % (len(self.uniques["query"])))
 
+
+        # Load necessary tokens
+        missing_tokens = []
+        logging.info("Pre-Loading Data and Populating tokenizers")
+        for idx, query_filename in enumerate(self.uniques["query_filename"]):
+            query = query_filename[0]
+            fname = query_filename[1]
+            bert_folder = ''.join([self.trained_folder, '/', fname])
+
+            # Prepare BERT and vocabulary
+            tokenizer, bert = get_bert_and_tokenizer(self.pretrained_folder, True)
+            dataset = bert_dataset(tokenizer, self.db_folder, query,
+                                   block_size=self.bert_config.getint('max_seq_length'),
+                                   logging_level=logging.DEBUG)
+            missing_tokens.extend(dataset.missing_tokens)
+
+        missing_tokens=list(set(missing_tokens))
+
+
+        # Train BERTS
+        logging.info("With the current hierarchy, there are %i BERT models to train" % (len(self.uniques["query"])))
         for idx, query_filename in enumerate(self.uniques["query_filename"]):
             logging.disable(self.logging_level)
             logging.info("----------------------------------------------------------------------")
@@ -60,6 +80,8 @@ class bert_trainer():
             query=query_filename[0]
             fname = query_filename[1]
             bert_folder = ''.join([self.trained_folder, '/', fname])
+
+
 
             # Set up Hash
             hash = hash_string(bert_folder, hash_factory="md5")
@@ -77,13 +99,28 @@ class bert_trainer():
                                  save_steps=self.bert_config.getint('save_steps'),
                                  eval_steps=self.bert_config.getint('eval_steps'),
                                  eval_loss_limit=self.bert_config.getfloat('eval_loss_limit'),
-                                 logging_level=logging.ERROR)
+                                 logging_level=logging.INFO)
+
+                # Prepare BERT and vocabulary
+                #tokenizer, bert = get_bert_and_tokenizer(self.pretrained_folder, True)
+                #dataset = bert_dataset(tokenizer, args.database, args.where_string, block_size=args.block_size,
+                #                       logging_level=args.logging_level)
+
+
+
+                # Add missing tokens
+                logging.info("Tokenizer vocabulary {} items.".format(len(tokenizer)))
+                logging.disable(logging.ERROR)
+                tokenizer.add_tokens(missing_tokens)
+                logging.disable(self.logging_level)
+                bert.resize_embedding_and_fc(len(tokenizer))
+                logging.info("After adding: Tokenizer vocabulary {} items.".format(len(tokenizer)))
 
                 logging.info("Training BERT on %s" % (query))
                 start_time = time.time()
                 torch.cuda.empty_cache()
-                logging.disable(logging.ERROR)
-                results = run_bert(args)
+                #logging.disable(logging.ERROR)
+                results = run_bert(args, tokenizer=tokenizer, model=bert)
                 logging.disable(self.logging_level)
                 logging.info("BERT training finished in %s seconds" % (time.time() - start_time))
                 logging.info("%s: BERT results %s" % (fname, results))
