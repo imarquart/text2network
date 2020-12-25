@@ -205,9 +205,18 @@ class nw_processor():
             predictions, attn = self.get_bert_tensor(0, self.bert, batch, self.tokenizer.pad_token_id,
                                                      self.tokenizer.mask_token_id, device)
 
-            # compute model timings time
-            #prepare_time = time.time() - start_time - load_time
-            #model_timings.append(prepare_time)
+
+            # Deal with missing tokens due to elimination of word-pieces
+            not_missing = token_ids != 100
+            token_ids=token_ids[not_missing]
+            index_vec = index_vec[not_missing]
+            seq_id_vec = seq_id_vec[not_missing]
+            runindex_vec = runindex_vec[not_missing]
+            year_vec = year_vec[not_missing]
+            p1_vec = p1_vec[not_missing]
+            p2_vec = p2_vec[not_missing]
+            p3_vec = p3_vec[not_missing]
+            p4_vec = p4_vec[not_missing]
 
             # %% Sequence Table
             # Iterate over sequences
@@ -215,6 +224,7 @@ class nw_processor():
                 # Extract only current sequence
                 sequence_mask = runindex_vec == run_index
                 sequence_size = sum(sequence_mask)
+
 
                 # Get parameters
                 seq_year = year_vec[sequence_mask]

@@ -56,6 +56,8 @@ class bert_trainer():
         # Load necessary tokens
         missing_tokens = []
         logging.info("Pre-Loading Data and Populating tokenizers")
+        import nltk
+        nltk.download('stopwords')
         for idx, query_filename in enumerate(self.uniques["query_filename"]):
             query = query_filename[0]
             fname = query_filename[1]
@@ -64,7 +66,7 @@ class bert_trainer():
             # Prepare BERT and vocabulary
             tokenizer, bert = get_bert_and_tokenizer(self.pretrained_folder, True)
             dataset = bert_dataset(tokenizer, self.db_folder, query,
-                                   block_size=self.bert_config.getint('max_seq_length'),
+                                   block_size=self.bert_config.getint('max_seq_length'),check_vocab=True,freq_cutoff=10,
                                    logging_level=logging.DEBUG)
             missing_tokens.extend(dataset.missing_tokens)
 

@@ -3,6 +3,7 @@ import numpy as np
 import torch
 import tables
 import pandas as pd
+from nltk.corpus import stopwords
 from torch.utils.data import Dataset
 from torch.nn.utils.rnn import pad_sequence
 import numbers
@@ -149,7 +150,7 @@ class query_dataset(Dataset):
 
 class bert_dataset(Dataset):
     # TODO: Padd sentences instead of joining and splitting!
-    def __init__(self, tokenizer, database, where_string, block_size=30, logging_level=logging.DEBUG):
+    def __init__(self, tokenizer, database, where_string, block_size=30, check_vocab=False, freq_cutoff=10, logging_level=logging.DEBUG):
         self.database = database
         logging.disable(logging_level)
         logging.info("Creating features from database file at %s", self.database)
@@ -167,18 +168,36 @@ class bert_dataset(Dataset):
 
         self.examples = []
 
-        # Get unique tokens
-        tokens= tokenizer.tokenize(text)
-        nltk_tokens=[w.lower() for w in tokens]
-        nltk_tokens=list(np.setdiff1d(nltk_tokens,['']))
-        ids,tokenizer_vocab=get_full_vocabulary(tokenizer)
-        #tokenizer_vocab=list(tokenizer.vocab.keys())
-        self.missing_tokens=list(np.setdiff1d(nltk_tokens, tokenizer_vocab))
-        if len(self.missing_tokens) > 0:
-            logging.warning("Missing tokens in vocabulary")
+
+        if check_vocab == True:
+            # Get unique tokens
+
+            nltk_tokens=nltk.word_tokenize(text)
+            nltk_tokens=[w.lower() for w in nltk_tokens if w.isalpha()]
+            stop_words = set(stopwords.words('english'))
+            nltk_tokens = [w for w in nltk_tokens if not w in stop_words]
+            #nltk_tokens=list(np.setdiff1d(nltk_tokens,['']))
+            ps = nltk.PorterStemmer()
+            # Get frequencies
+            freq_table = {}
+            for word in nltk_tokens:
+                #word=ps.stem(word)
+                if word in freq_table:
+                    freq_table[word] += 1
+                else:
+                    freq_table[word] = 1
+
+            freq_table = pd.DataFrame(list(freq_table.values()), index=list(freq_table.keys()))
+            freq_table = freq_table.sort_values(by=0, ascending=False)
+            freq_table = freq_table[freq_table > freq_cutoff].dropna()
+            nltk_tokens=list(freq_table.index)
+            ids,tokenizer_vocab=get_full_vocabulary(tokenizer)
+            self.missing_tokens=list(np.setdiff1d(nltk_tokens, tokenizer_vocab))
+            if len(self.missing_tokens) > 1:
+                logging.warning("Missing tokens in vocabulary")
 
         # Now use the tokenizer to correctly tokenize
-        #tokens = tokenizer.tokenize(text)
+        tokens= tokenizer.tokenize(text)
         tokenized_text = tokenizer.convert_tokens_to_ids(tokens)
 
         if(len(tokenized_text) < block_size):
