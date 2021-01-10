@@ -71,7 +71,16 @@ class bert_trainer():
             missing_tokens.extend(dataset.missing_tokens)
 
         missing_tokens=list(set(missing_tokens))
-
+        # Setting up tokenizer
+        # We do this here to keep the IDs and Tokens consistent, although the network is able to translate
+        # if necessary
+        tokenizer, _ = get_bert_and_tokenizer(self.pretrained_folder, True)
+        # Add missing tokens
+        logging.info("Tokenizer vocabulary {} items.".format(len(tokenizer)))
+        logging.disable(logging.ERROR)
+        tokenizer.add_tokens(missing_tokens)
+        logging.disable(self.logging_level)
+        logging.info("After adding missing terms: Tokenizer vocabulary {} items.".format(len(tokenizer)))
 
         # Train BERTS
         logging.info("With the current hierarchy, there are %i BERT models to train" % (len(self.uniques["query"])))
@@ -104,25 +113,22 @@ class bert_trainer():
                                  logging_level=logging.INFO)
 
                 # Prepare BERT and vocabulary
-                #tokenizer, bert = get_bert_and_tokenizer(self.pretrained_folder, True)
-                #dataset = bert_dataset(tokenizer, args.database, args.where_string, block_size=args.block_size,
-                #                       logging_level=args.logging_level)
+                logging.info("Before resizing, Tokenizer vocabulary {} items.".format(len(tokenizer)))
+                # Make sure old model is deleted!
+                del bert
 
+                _, bert = get_bert_and_tokenizer(self.pretrained_folder, True)
+                # Make a copy just to be safe
+                new_tokenizer=tokenizer.copy()
 
-
-                # Add missing tokens
-                logging.info("Tokenizer vocabulary {} items.".format(len(tokenizer)))
-                logging.disable(logging.ERROR)
-                tokenizer.add_tokens(missing_tokens)
-                logging.disable(self.logging_level)
-                bert.resize_embedding_and_fc(len(tokenizer))
-                logging.info("After adding: Tokenizer vocabulary {} items.".format(len(tokenizer)))
+                bert.resize_embedding_and_fc(len(new_tokenizer))
+                logging.info("After resizing, Tokenizer vocabulary {} items.".format(len(new_tokenizer)))
 
                 logging.info("Training BERT on %s" % (query))
                 start_time = time.time()
                 torch.cuda.empty_cache()
                 #logging.disable(logging.ERROR)
-                results = run_bert(args, tokenizer=tokenizer, model=bert)
+                results = run_bert(args, tokenizer=new_tokenizer, model=bert)
                 logging.disable(self.logging_level)
                 logging.info("BERT training finished in %s seconds" % (time.time() - start_time))
                 logging.info("%s: BERT results %s" % (fname, results))

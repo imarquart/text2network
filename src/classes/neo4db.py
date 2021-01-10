@@ -34,12 +34,56 @@ class neo4j_database():
         self.queue_size = queue_size
         self.aggregate_operator = agg_operator
         self.connector = neo_connector.Connector(self.neo4j_connection, self.neo4j_credentials)
-        # Init tokens
-        #self.init_tokens()
+        # Init tokens in the database, required since order etc. may be different
+        self.db_ids,self.db_tokens=self.init_tokens()
+        self.db_ids=np.array(self.db_ids)
+        self.db_tokens=np.array(self.db_tokens)
+        self.db_id_dict={}
         # Init parent class
         super().__init__()
 
     # %% Setup
+
+    def check_create_tokenid_dict(self,tokens,token_ids,fail_on_missing=False):
+        tokens=np.array(tokens)
+        self.db_tokens=np.array(self.db_tokens)
+        token_ids = np.array(token_ids)
+        db_ids= np.array(self.db_ids)
+        if len(self.db_ids)>0:
+            new_ids=[np.where(self.db_tokens==k)[0][0] for k in tokens if k in self.db_tokens ]
+        else:
+            new_ids=[]
+        if not len(new_ids)==len(token_ids):
+            missing_ids = np.array(list(np.setdiff1d(token_ids, token_ids[new_ids])))
+            missing_tokens=tokens[missing_ids]
+
+            msg="Token ID translation failed. {} Tokens missing in database: {}".format(len(missing_tokens),missing_tokens)
+            if fail_on_missing==True:
+                logging.error(msg)
+                raise ValueError(msg)
+
+            added_ids=list(range(len(db_ids),len(db_ids)+len(missing_tokens)))
+
+            db_id_dict = {x[0]: x[1] for x in zip(token_ids[new_ids], new_ids)}
+            db_id_dict2={x[0]: x[1] for x in zip(missing_ids, added_ids)}
+            db_id_dict.update(db_id_dict2)
+            self.db_id_dict=db_id_dict
+            return new_ids,missing_tokens,added_ids
+        else:
+            # Update
+            self.db_id_dict = {x[0]: x[1] for x in zip(token_ids, new_ids)}
+            return new_ids,[],[]
+
+    def translate_token_ids(self,ids,fail_on_missing=False):
+        try:
+            new_ids=[self.db_id_dict[x] for x in ids]
+        except:
+            msg="Could not translate {} token ids: {}".format(len(ids),ids)
+            logging.error(msg)
+            raise ValueError(msg)
+        return new_ids
+
+
     def setup_neo_db(self, tokens, token_ids):
         """
         Creates tokens and token_ids in Neo database. Does not delete existing network!
@@ -79,10 +123,15 @@ class neo4j_database():
         # Need to write first because create and structure changes can not be batched
         self.non_con_write_queue()
         # Create nodes in neo db
-        queries = [''.join(["MERGE (n:word {token_id: ", str(id), ", token: '", tok, "'})"]) for tok, id in
-                   zip(tokens, token_ids)]
-        self.add_queries(queries)
-        self.non_con_write_queue()
+        # Get rid of signs that can not be used
+        tokens = [x.translate(x.maketrans({"\"": '#e1#', "'": '#e2#', "\\": '#e3#'})) for x in tokens]
+        token_ids, missing_tokens, missing_ids=self.check_create_tokenid_dict(tokens,token_ids)
+        if len(missing_tokens)>0:
+            queries = [''.join(["MERGE (n:word {token_id: ", str(id), ", token: '", tok, "'})"]) for tok, id in
+                       zip(missing_tokens, missing_ids)]
+            self.add_queries(queries)
+            self.non_con_write_queue()
+        self.db_ids, self.db_tokens = self.init_tokens()
 
     def clean_database(self, time=None, del_limit=1000000):
         # DEBUG
@@ -469,10 +518,18 @@ class neo4j_database():
         alters = np.array([x[1] for x in ties])
         con_alters = np.array([x[1] for x in contexts])
 
+        # token translation
+        egos = np.array(self.translate_token_ids(egos))
+        alters = np.array(self.translate_token_ids(alters))
+        con_alters = np.array(self.translate_token_ids(con_alters))
+
         times = np.array([x[2] for x in ties])
         dicts = np.array([x[3] for x in ties])
         con_times = np.array([x[2] for x in contexts])
         con_dicts = np.array([x[3] for x in contexts])
+
+        # Delte just to make sure translation is taken
+        del ties, contexts
 
         unique_egos = np.unique(egos)
         if len(unique_egos) == 1:
@@ -486,9 +543,9 @@ class neo4j_database():
                                "p4": ((x[2]['p4']) if len(x[2]) > 7 else 0), }
                               for x in zip(alters.tolist(), times.tolist(), dicts.tolist())]
             contexts_formatted = [{"alter": int(x[0]), "time": int(x[1]), "weight": float(x[2]['weight']),
-                                   "seq_id": int(x[2]['seq_id'] if len(x[2]) > 1 else 0),
-                                   "pos": int(x[2]['pos'] if len(x[2]) > 2 else 0),
-                                   "run_index": int(x[2]['run_index'] if len(x[2]) > 3 else 0),
+                                   "seq_id": int(x[2]['seq_id'] if len(x[2]) > 2 else 0),
+                                   "pos": int(x[2]['pos'] if len(x[2]) > 3 else 0),
+                                   "run_index": int(x[2]['run_index'] if len(x[2]) > 1 else 0),
                                    "p1": ((x[2]['p1']) if len(x[2]) > 4 else 0),
                                    "p2": ((x[2]['p2']) if len(x[2]) > 5 else 0),
                                    "p3": ((x[2]['p3']) if len(x[2]) > 6 else 0),
@@ -502,9 +559,9 @@ class neo4j_database():
             p3 = np.array([str(x['p3']) if (len(x)>6) else "0" for x in dicts ])
             p4 = np.array([str(x['p4']) if (len(x)>7) else "0" for x in dicts ])
             # Select order of context parameters
-            cseq_id = np.array([x['seq_id'] if len(x)>1 else "0" for x in con_dicts ], dtype=np.str)
-            cpos = np.array([x['pos'] if len(x)>2 else "0" for x in con_dicts ], dtype=np.str)
-            crun_index = np.array([x['run_index'] if len(x)>3 else "0" for x in con_dicts ], dtype=np.str)
+            cseq_id = np.array([x['seq_id'] if len(x)>2 else "0" for x in con_dicts ], dtype=np.str)
+            cpos = np.array([x['pos'] if len(x)>3 else "0" for x in con_dicts ], dtype=np.str)
+            crun_index = np.array([x['run_index'] if len(x)>1 else "0" for x in con_dicts ], dtype=np.str)
             cp1 =  np.array([str(x['p1']) if (len(x)>4) else "0" for x in con_dicts ])
             cp2 =  np.array([str(x['p2']) if (len(x)>5) else "0" for x in con_dicts ])
             cp3 =  np.array([str(x['p3']) if (len(x)>6) else "0" for x in con_dicts ])
@@ -529,7 +586,7 @@ class neo4j_database():
             if not all(cpos == "0" ) and not all(cpos==''):
                 cparameter_string = cparameter_string + ", pos:con.pos"
             if not all(crun_index == "0") and not all(crun_index==''):
-                cparameter_string = cparameter_string + ", run_index:pos.run_index"
+                cparameter_string = cparameter_string + ", run_index:con.run_index"
             if not all(cp1 == "0") and not all(cp1==''):
                 cparameter_string = cparameter_string + ", p1:con.p1"
             if not all(cp2 == "0" ) and not all( cp2==''):

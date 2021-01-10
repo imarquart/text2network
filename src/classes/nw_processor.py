@@ -159,7 +159,7 @@ class nw_processor():
         # Setup network
         ids, tokens=get_full_vocabulary(self.tokenizer)
 
-        tokens = [x.translate(x.maketrans({"\"": '#e1#', "'": '#e2#', "\\": '#e3#'})) for x in tokens]
+
         self.neograph.db.setup_neo_db(tokens, ids)
 
         # %% Initialize text dataset
@@ -284,7 +284,7 @@ class nw_processor():
                         if self.prune_missing_tokens == True:
                             replacement[dataset.id_mask] = 0
                         # We norm the distributions here
-                        replacement = self.norm(replacement)
+                        replacement = self.norm(replacement, min_zero=False)
 
                         # %% Context Element
                         context = (
@@ -302,7 +302,7 @@ class nw_processor():
                         if self.prune_missing_tokens==True:
                             context[dataset.id_mask] = 0
                         # We norm the distributions here
-                        context = self.norm(context)
+                        context = self.norm(context, min_zero=False)
 
                         # Add values to network
                         # Replacement ties
@@ -512,11 +512,11 @@ class nw_processor():
             weights = self.norm(x[neighbors], min_zero=False)
             if simplify_context == False:
                 return [(int(token), int(x[0]), int(time),
-                         {'weight': float(x[1]), 'seq_id': int(seq_id), 'pos': int(pos), 'run_index': int(run_index), 'p1': str(p1), 'p2': str(p2),
+                         {'weight': float(x[1]),'run_index': int(run_index), 'seq_id': int(seq_id), 'pos': int(pos),  'p1': str(p1), 'p2': str(p2),
                           'p3': str(p3), 'p4': str(p4)}) for x in list(zip(neighbors, weights))]
             else:
                 return [(int(token), int(x[0]), int(time),
-                         {'weight': float(x[1])}) for x in list(zip(neighbors, weights))]
+                         {'weight': float(x[1]), 'run_index': int(run_index)}) for x in list(zip(neighbors, weights))]
         else:
             return None
 

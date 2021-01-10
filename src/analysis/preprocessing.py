@@ -44,10 +44,10 @@ preprocessor = nw_preprocessor(config['Paths']['database'], config['Preprocessin
                                   config['Preprocessing'].getint('number_params'), logging_level=logging_level)
 
 # Preprocess file
-preprocessor.preprocess_folders(config['Paths']['import_folder'],overwrite=True,excludelist=['checked', 'Error'])
+#preprocessor.preprocess_folders(config['Paths']['import_folder'],overwrite=True,excludelist=['checked', 'Error'])
 
 trainer=bert_trainer(config['Paths']['database'],config['Paths']['pretrained_bert'], config['Paths']['trained_berts'],config['BertTraining'],json.loads(config.get('General','split_hierarchy')),logging_level=logging_level)
-trainer.train_berts()
+#trainer.train_berts()
 
 #test = neo4j_database(neo_creds)
 neograph = neo4j_network(neo_creds)

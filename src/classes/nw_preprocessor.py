@@ -156,7 +156,7 @@ class nw_preprocessor():
             # Derive file name and year
             file_dirname = dirname(file_path)
             file_name = os.path.split(file_path)[-1]
-            logging.info("Loading file %s" % file_name)
+            logging.debug("Loading file %s" % file_name)
 
             file_name = re.split(".txt", file_name)[0]
             file_source = file_name

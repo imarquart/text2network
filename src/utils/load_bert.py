@@ -7,7 +7,36 @@ from transformers import BertForMaskedLM
 from transformers import BertConfig
 import os
 
+from transformers import BertTokenizer, WordpieceTokenizer
+from collections import OrderedDict
+
+
+class CustomVocabBertTokenizer(BertTokenizer):
+    """
+    Source: Transformers Git
+    Adds tokens to vocab thus solving performance issue.
+    """
+    def add_tokens(self, new_tokens):
+        new_tokens = [token for token in new_tokens if not (token in self.vocab or token in self.all_special_tokens)]
+
+        self.vocab = OrderedDict([
+            *self.vocab.items(),
+            *[
+                (token, i + len(self.vocab))
+                for i, token in enumerate(new_tokens)
+            ]
+        ])
+
+        self.ids_to_tokens = OrderedDict([(ids, tok) for tok, ids in self.vocab.items()])
+        self.wordpiece_tokenizer = WordpieceTokenizer(vocab=self.vocab, unk_token=self.unk_token)
+
+        return len(new_tokens)
+
 class CustomBertForMaskedLM(BertForMaskedLM):
+    """
+    Source: Transformers Git
+    Correctly changes embedding size instead of erroring out when adding custom tokens
+    """
     def __init__(self, config):
         super().__init__(config)
 
@@ -83,7 +112,9 @@ def get_bert_and_tokenizer(modelpath,load_local=False,attentions=True,hidden=Fal
     logging.disable(logging.ERROR)
     if load_local==True:
         try:
-            tokenizer = BertTokenizer.from_pretrained(modelpath, do_lower_case=True)
+            #tokenizer = BertTokenizer.from_pretrained(modelpath, do_lower_case=True)
+            tokenizer = CustomVocabBertTokenizer.from_pretrained(modelpath, do_lower_case=True)
+
 
             #bert = BertForMaskedLM.from_pretrained(modelpath, output_attentions=attentions, output_hidden_states=hidden)
             bert = CustomBertForMaskedLM.from_pretrained(modelpath, output_attentions=attentions, output_hidden_states=hidden)
@@ -92,7 +123,8 @@ def get_bert_and_tokenizer(modelpath,load_local=False,attentions=True,hidden=Fal
             output_model_file = os.path.join(modelpath, 'bert-base-uncased-pytorch_model.bin')
             output_config_file = os.path.join(modelpath, 'bert-base-uncased-config.json')
 
-            tokenizer = BertTokenizer.from_pretrained(output_vocab_file)
+            #tokenizer = BertTokenizer.from_pretrained(output_vocab_file)
+            tokenizer = CustomVocabBertTokenizer.from_pretrained(output_vocab_file)
             config = BertConfig.from_json_file(output_config_file)
             config.output_attentions = attentions
             config.output_hidden_states = hidden

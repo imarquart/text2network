@@ -22,7 +22,7 @@ def simple_norm(x, min_zero=True):
     :param min_zero: If True, the smallest non-zero value is substracted before normalization
     :return: normed np.array
     """
-    x_org=x
+    x_org=x.copy()
     x=np.array(x)
     if min_zero==True:
         x = x - np.min(x[x>0], axis=-1)
