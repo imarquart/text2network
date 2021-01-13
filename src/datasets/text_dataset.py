@@ -203,7 +203,6 @@ class bert_dataset(Dataset):
             stop_words = set(stopwords.words('english'))
             nltk_tokens = [w for w in nltk_tokens if not w in stop_words]
             #nltk_tokens=list(np.setdiff1d(nltk_tokens,['']))
-            ps = nltk.PorterStemmer()
             # Get frequencies
             freq_table = {}
             for word in nltk_tokens:

@@ -97,7 +97,7 @@ class nw_preprocessor():
 
 
 
-    def preprocess_files(self, folder, max_seq=0, overwrite=True, year=None, excludelist=[]):
+    def preprocess_files(self, folder, max_seq=0, overwrite=True, ext_year=None, excludelist=[]):
         """
         Pre-processes files from raw data into a HD5 Table
         :param folder: folder with text files
@@ -161,12 +161,14 @@ class nw_preprocessor():
             file_name = re.split(".txt", file_name)[0]
             file_source = file_name
 
-            if year == None:
+            if ext_year == None:
+                logging.info("Loading file %s" % file_name)
                 year = re.split(self.split_symbol, file_name)[-(self.number_params + 1)]
                 year = int(year[-4:])
                 offset=1
             else:
                 offset=0
+                year=ext_year
 
             # Set up params list
             params = []
@@ -178,21 +180,20 @@ class nw_preprocessor():
                 params.append(par)
 
 
-
-            try:
-                with open(file_path) as f:
-                    text = f.read()
-            except:
+            if exclude == True:
+                text="exc"
+            else:
                 try:
-                    with open(file_path, encoding="utf-8",errors='ignore') as f:
+                    with open(file_path) as f:
                         text = f.read()
                 except:
-                    logging.error("Could not load %s" % file_path)
-                    raise ImportError("Could not open file. Make sure, only .txt files in folder!")
+                    try:
+                        with open(file_path, encoding="utf-8",errors='ignore') as f:
+                            text = f.read()
+                    except:
+                        logging.error("Could not load %s" % file_path)
+                        raise ImportError("Could not open file. Make sure, only .txt files in folder!")
 
-
-            if exclude == True:
-                text="Preprocessing Error"
 
 
             text = text.replace('\n', ' ')
