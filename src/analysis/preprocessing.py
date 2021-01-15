@@ -45,7 +45,7 @@ preprocessor = nw_preprocessor(config['Paths']['database'], config['Preprocessin
 
 # Preprocess file
 #preprocessor.preprocess_folders(config['Paths']['import_folder'],overwrite=True,excludelist=['checked', 'Error'])
-#preprocessor.preprocess_files(config['Paths']['import_folder'],excludelist=['acad', 'fic'])
+preprocessor.preprocess_files(config['Paths']['import_folder'],excludelist=['acad', 'fic','spok'])
 
 trainer=bert_trainer(config['Paths']['database'],config['Paths']['pretrained_bert'], config['Paths']['trained_berts'],config['BertTraining'],json.loads(config.get('General','split_hierarchy')),logging_level=logging_level)
 trainer.train_berts()

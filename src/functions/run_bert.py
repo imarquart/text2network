@@ -258,7 +258,7 @@ def train(args, train_dataset, model, tokenizer):
                     tb_writer.add_scalar('loss', (tr_loss - logging_loss) / args.logging_steps, global_step)
                     eval_loss = results["eval_loss"]
                     logging_loss = tr_loss
-                    logger.info("Eval Step: Eval Loss at global step %i is %f compared to (eval) loss limit %f",
+                    logger.warning("Eval Step: Eval Loss at global step %i is %f compared to (eval) loss limit %f",
                                 global_step,
                                 eval_loss, args.eval_loss_limit)
 

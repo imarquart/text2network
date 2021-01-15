@@ -211,15 +211,18 @@ class bert_dataset(Dataset):
                     freq_table[word] += 1
                 else:
                     freq_table[word] = 1
-
-            freq_table = pd.DataFrame(list(freq_table.values()), index=list(freq_table.keys()))
-            freq_table = freq_table.sort_values(by=0, ascending=False)
-            freq_table = freq_table[freq_table > freq_cutoff].dropna()
-            nltk_tokens=list(freq_table.index)
-            ids,tokenizer_vocab=get_full_vocabulary(tokenizer)
-            self.missing_tokens=list(np.setdiff1d(nltk_tokens, tokenizer_vocab))
-            if len(self.missing_tokens) > 1:
-                logging.warning("Missing tokens in vocabulary")
+            if len(freq_table)>0:
+                freq_table = pd.DataFrame(list(freq_table.values()), index=list(freq_table.keys()))
+                freq_table = freq_table.sort_values(by=0, ascending=False)
+                freq_table = freq_table[freq_table > freq_cutoff].dropna()
+                nltk_tokens=list(freq_table.index)
+                ids,tokenizer_vocab=get_full_vocabulary(tokenizer)
+                self.missing_tokens=list(np.setdiff1d(nltk_tokens, tokenizer_vocab))
+                if len(self.missing_tokens) > 1:
+                    logging.warning("{} missing tokens in vocabulary".format(len(self.missing_tokens)))
+            else:
+                logging.warning("Text with query {} has no words".format(where_string))
+                self.missing_tokens=[]
             self.examples=[]
         else:
             # Now use the tokenizer to correctly tokenize

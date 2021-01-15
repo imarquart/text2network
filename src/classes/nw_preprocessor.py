@@ -181,7 +181,7 @@ class nw_preprocessor():
 
 
             if exclude == True:
-                text="exc"
+                text=""
             else:
                 try:
                     with open(file_path) as f:
@@ -211,11 +211,21 @@ class nw_preprocessor():
                          '~',
                          '"']
             for k in killchars: text = str.replace(text, k, '')
+
+
+
             text = text.strip()
             text = " ".join(re.split("\s+", text, flags=re.UNICODE))
 
+            # Strip numeric from beginning and end.
+            text = re.sub(r'^\d+|\d+$', '', text)
+            # Strip numeric words of length 5+
+            text = re.sub(r'\b\d[\d]{5, 100}\b', '', text)
+
+
             # We do not load empty lines
             if len(text) == 0:
+                logging.info("Skipping {}, excluded or no text found".format(file_path))
                 continue
 
             if (run_index - start_index >= max_seq) & (max_seq != 0):
@@ -239,8 +249,8 @@ class nw_preprocessor():
                 particle['max_length'] = self.MAX_SEQ_LENGTH
                 # Add parameters
                 for i, p in enumerate(params):
-                    idx = ''.join(['p', str(i + 1)])
-                    particle[idx] = params[i]
+                    pidx = ''.join(['p', str(i + 1)])
+                    particle[pidx] = params[i]
 
                 # If the sentence has too many tokens, we cut using nltk tokenizer
                 sent = sent.split()
@@ -268,6 +278,10 @@ class nw_preprocessor():
                 except:
                     logging.error("Saving failed.")
                     logging.info("Sentence: %s" % sent)
+
+                if idx % 100000 == 0:
+                    logging.info("Sentence at idx {}, year {}, parameters {}:".format(idx,year,params))
+                    logging.info("Sentence {}".format(sent))
 
                 particle.append()
 

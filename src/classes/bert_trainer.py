@@ -66,7 +66,7 @@ class bert_trainer():
             # Prepare BERT and vocabulary
             tokenizer, bert = get_bert_and_tokenizer(self.pretrained_folder, True)
             dataset = bert_dataset(tokenizer, self.db_folder, query,
-                                   block_size=self.bert_config.getint('max_seq_length'),check_vocab=True,freq_cutoff=50,
+                                   block_size=self.bert_config.getint('max_seq_length'),check_vocab=True,freq_cutoff=self.bert_config.getint('new_word_cutoff'),
                                    logging_level=logging.DEBUG)
             missing_tokens.extend(dataset.missing_tokens)
 
@@ -119,7 +119,7 @@ class bert_trainer():
 
                 _, bert = get_bert_and_tokenizer(self.pretrained_folder, True)
                 # Make a copy just to be safe
-                new_tokenizer=tokenizer.copy()
+                new_tokenizer=tokenizer
 
                 bert.resize_embedding_and_fc(len(new_tokenizer))
                 logging.info("After resizing, Tokenizer vocabulary {} items.".format(len(new_tokenizer)))
