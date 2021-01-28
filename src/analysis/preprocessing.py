@@ -16,22 +16,13 @@ from src.classes.neo4db import neo4j_database
 
 
 # Load Configuration file
+import configparser
 config = configparser.ConfigParser()
 config.read('D:/NLP/COCA/cocaBERT/config/config.ini')
 logging_level = config['General'].getint('logging_level')
 
 neo_creds = (config['NeoConfig']["db_uri"], (config['NeoConfig']["db_db"], config['NeoConfig']["db_pwd"]))
 
-# Set up logging
-logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
-                    datefmt='%m/%d/%Y %H:%M:%S',
-                    level=logging_level)
-
-rootLogger = logging.getLogger()
-logFormatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s -   %(message)s')
-fileHandler = logging.FileHandler("{0}/{1}.log".format(config['Paths']['log'], "preprocessing"))
-fileHandler.setFormatter(logFormatter)
-rootLogger.addHandler(fileHandler)
 
 
 
@@ -39,15 +30,15 @@ rootLogger.addHandler(fileHandler)
 
 
 # Set up preprocessor
-preprocessor = nw_preprocessor(config['Paths']['database'], config['Preprocessing'].getint('max_seq_length'),
-                                  config['Preprocessing'].getint('char_mult'), config['Preprocessing']['split_symbol'],
-                                  config['Preprocessing'].getint('number_params'), logging_level=logging_level)
+preprocessor = nw_preprocessor(config)
+# Set up logging
+preprocessor.setup_logger()
 
 # Preprocess file
 #preprocessor.preprocess_folders(config['Paths']['import_folder'],overwrite=True,excludelist=['checked', 'Error'])
-preprocessor.preprocess_files(config['Paths']['import_folder'],excludelist=['acad', 'fic','spok'])
+#preprocessor.preprocess_files(config['Paths']['import_folder'],excludelist=['acad', 'fic','spok','mag'])
 
-trainer=bert_trainer(config['Paths']['database'],config['Paths']['pretrained_bert'], config['Paths']['trained_berts'],config['BertTraining'],json.loads(config.get('General','split_hierarchy')),logging_level=logging_level)
+trainer=bert_trainer(config)
 trainer.train_berts()
 
 #test = neo4j_database(neo_creds)

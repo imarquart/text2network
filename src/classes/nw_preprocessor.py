@@ -8,35 +8,134 @@ import re
 import glob
 import nltk
 import tables
-
+import configparser
+from src.functions.file_helpers import check_create_folder
 
 class nw_preprocessor():
 
-    def __init__(self, database, MAX_SEQ_LENGTH, char_mult, split_symbol="-", number_params=4,
-                 logging_level=logging.NOTSET):
+    def __init__(self, config=None, database=None, MAX_SEQ_LENGTH=None, char_mult=None, split_symbol=None, number_params=None,
+                 logging_level=None, logging_path=None, import_folder=None):
         """
         Pre-process class
         reads text files of the format
         YYYY-p1-p2-....txt, where p1-p4 are arbitrary parameters to be included in the database (<=40 characters each)
-        :param folder: folder with text files
         :param database: HDF5 file to use with pyTables
         :param number_params: How many parameters are in the file name? Maximum 4.
         :param MAX_SEQ_LENGTH: Maximal length of sequence in # token
+        :param split_symbol: Split string for file name
         :param char_mult: Average token length; determining the maximum size of needed string arrays. String_size=MAX_SEQ_LENGTH*char_mult
+        :param logging_level: Logging level to use
         """
-        # Set logging level
-        logging.disable(logging_level)
-        # Create network
-        self.database = database
-        self.MAX_SEQ_LENGTH = MAX_SEQ_LENGTH
-        self.char_mult = char_mult
-        self.split_symbol = split_symbol
-        self.number_params = number_params
 
-        db_folder = dirname(database)
-        if not exists(db_folder):
-            logging.info("Database folder does not exist. Creating folder.")
-            mkdir(db_folder)
+        # Fill parameters from configuration file
+        if logging_level is not None:
+            self.logging_level=logging_level
+        else:
+            if config is not None:
+                self.logging_level=config['General'].getint('logging_level')
+            else:
+                msg="Please provide valid logging level."
+                logging.error(msg)
+                raise AttributeError(msg)
+        # Set logging level
+        logging.disable(self.logging_level)
+
+        if database is not None:
+            self.database=database
+        else:
+            if config is not None:
+                self.database=config['Paths']['database']
+            else:
+                msg="Please provide valid database path."
+                logging.error(msg)
+                raise AttributeError(msg)
+
+        if MAX_SEQ_LENGTH is not None:
+            self.MAX_SEQ_LENGTH = MAX_SEQ_LENGTH
+        else:
+            if config is not None:
+                self.MAX_SEQ_LENGTH = config['Preprocessing'].getint('max_seq_length')
+            else:
+                msg = "Please provide valid max sequence length."
+                logging.error(msg)
+                raise AttributeError(msg)
+
+        if char_mult is not None:
+            self.char_mult = char_mult
+        else:
+            if config is not None:
+                self.char_mult = config['Preprocessing'].getint('char_mult')
+            else:
+                msg = "Please provide valid char mult."
+                logging.error(msg)
+                raise AttributeError(msg)
+
+        if split_symbol is not None:
+            self.split_symbol = split_symbol
+        else:
+            if config is not None:
+                self.split_symbol = config['Preprocessing']['split_symbol']
+            else:
+                msg = "Please provide valid split symbol."
+                logging.error(msg)
+                raise AttributeError(msg)
+
+        if number_params is not None:
+            self.number_params = number_params
+        else:
+            if config is not None:
+                self.number_params = config['Preprocessing'].getint('number_params')
+            else:
+                msg = "Please provide valid number_params."
+                logging.error(msg)
+                raise AttributeError(msg)
+
+
+        if logging_path is not None:
+            self.logging_path = logging_path
+        else:
+            if config is not None:
+                self.logging_path = config['Paths']['log']
+            else:
+                msg = "Please provide valid logging_path."
+                logging.error(msg)
+                raise AttributeError(msg)
+
+        if import_folder is not None:
+            self.import_folder = import_folder
+        else:
+            if config is not None:
+                self.import_folder = config['Paths']['import_folder']
+            else:
+                msg = "Please provide valid logging_path."
+                logging.error(msg)
+                raise AttributeError(msg)
+        # Check and create folders
+        check_create_folder(self.database)
+        check_create_folder(self.logging_path)
+
+    def setup_logger(self):
+        """
+        Sets up logging formats and file etc.
+        Returns
+        -------
+        None
+        """
+        # Logging path
+        check_create_folder(self.logging_path)
+
+        # Set up logging
+
+
+        logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
+                            datefmt='%m/%d/%Y %H:%M:%S',
+                            level=self.logging_level)
+
+        rootLogger = logging.getLogger()
+        logFormatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s -   %(message)s')
+        fileHandler = logging.FileHandler("{0}/{1}.log".format(self.logging_path, "preprocessing"))
+        fileHandler.setFormatter(logFormatter)
+        rootLogger.addHandler(fileHandler)
 
     def resplit_sentences(self, sentences, max_tokens):
         """
@@ -80,7 +179,9 @@ class nw_preprocessor():
         # Once done, return completed list
         return text_list
 
-    def preprocess_folders(self, folder,max_seq=0, overwrite=True,excludelist=[]):
+    def preprocess_folders(self, folder=None,max_seq=0, overwrite=True,excludelist=[]):
+        if folder is None:
+            folder=self.import_folder
         folder = normpath(folder)
         folders=[''.join([folder,'/',name]) for name in os.listdir(folder)]
         if overwrite==True:
@@ -97,7 +198,7 @@ class nw_preprocessor():
 
 
 
-    def preprocess_files(self, folder, max_seq=0, overwrite=True, ext_year=None, excludelist=[]):
+    def preprocess_files(self, folder=None, max_seq=0, overwrite=True, ext_year=None, excludelist=[]):
         """
         Pre-processes files from raw data into a HD5 Table
         :param folder: folder with text files
@@ -117,6 +218,9 @@ class nw_preprocessor():
             p4 = tables.StringCol(40)
             source = tables.StringCol(40)
             max_length = tables.UInt32Col()
+
+        if folder is None:
+            folder=self.import_folder
 
         # Initiate pytable database
         if overwrite is not True:

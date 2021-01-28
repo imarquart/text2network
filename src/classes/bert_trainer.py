@@ -1,3 +1,6 @@
+import json
+
+from src.functions.file_helpers import check_create_folder
 from src.utils.hash_file import hash_string, check_step, complete_step
 from src.utils.load_bert import get_bert_and_tokenizer
 from src.utils.bert_args import bert_args
@@ -11,28 +14,77 @@ import time
 
 
 class bert_trainer():
-    def __init__(self, db_folder, pretrained_folder, trained_folder, bert_config, split_hierarchy=None,
-                 logging_level=logging.NOTSET):
+    def __init__(self, config=None,db_folder=None, pretrained_folder=None, trained_folder=None, bert_config=None, split_hierarchy=None,
+                 logging_level=None):
 
+
+        # Fill parameters from configuration file
+        if logging_level is not None:
+            self.logging_level=logging_level
+        else:
+            if config is not None:
+                self.logging_level=config['General'].getint('logging_level')
+            else:
+                msg="Please provide valid logging level."
+                logging.error(msg)
+                raise AttributeError(msg)
         # Set logging level
-        self.logging_level = logging_level
-        logging.disable(logging_level)
+        logging.disable(self.logging_level)
 
-        self.db_folder = db_folder
-        self.pretrained_folder = pretrained_folder
-        self.trained_folder = trained_folder
-        self.bert_config = bert_config
+        if db_folder is not None:
+            self.db_folder=db_folder
+        else:
+            if config is not None:
+                self.db_folder=config['Paths']['database']
+            else:
+                msg="Please provide valid database path."
+                logging.error(msg)
+                raise AttributeError(msg)
 
-        # Load Tokenizer
-        # logging.disable(logging.ERROR)
-        # logging.disable(logging_level)
+        if pretrained_folder is not None:
+            self.pretrained_folder=pretrained_folder
+        else:
+            if config is not None:
+                self.pretrained_folder=config['Paths']['pretrained_bert']
+            else:
+                msg="Please provide valid pretrained_folder."
+                logging.error(msg)
+                raise AttributeError(msg)
+
+
+        if trained_folder is not None:
+            self.trained_folder=trained_folder
+        else:
+            if config is not None:
+                self.trained_folder=config['Paths']['trained_berts']
+            else:
+                msg="Please provide valid trained_berts folder."
+                logging.error(msg)
+                raise AttributeError(msg)
+
+        if bert_config is not None:
+            self.bert_config=bert_config
+        else:
+            if config is not None:
+                self.bert_config=config['BertTraining']
+            else:
+                msg="Please provide valid bert_config."
+                logging.error(msg)
+                raise AttributeError(msg)
 
         if split_hierarchy is not None:
-            self.uniques = self.get_uniques(split_hierarchy)
-            self.split_hierarchy = split_hierarchy
+            self.split_hierarchy=split_hierarchy
+            self.uniques = self.get_uniques(self.split_hierarchy)
         else:
-            self.uniques = None
-            self.split_hierarchy = None
+            if config is not None:
+                self.split_hierarchy=json.loads(config.get('General', 'split_hierarchy'))
+                self.uniques = self.get_uniques(self.split_hierarchy)
+            else:
+                self.uniques = None
+                self.split_hierarchy = None
+
+        # Check and create folders
+        check_create_folder(self.trained_folder)
 
     def get_uniques(self, split_hierarchy):
         """
