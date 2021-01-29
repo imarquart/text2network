@@ -35,7 +35,7 @@ from torch.utils.data import DataLoader, Dataset, SequentialSampler, RandomSampl
 from torch.utils.data.distributed import DistributedSampler
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm, trange
-from transformers import (WEIGHTS_NAME, AdamW, WarmupLinearSchedule,
+from transformers import (WEIGHTS_NAME, AdamW,WarmupLinearSchedule ,
                           BertConfig, BertForMaskedLM, BertTokenizer)
 
 from src.utils.load_bert import get_bert_and_tokenizer
@@ -145,7 +145,7 @@ def train(args, train_dataset, model, tokenizer):
     ]
     optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
     scheduler = WarmupLinearSchedule(optimizer, warmup_steps=args.warmup_steps, t_total=t_total)
-
+    #scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=args.warmup_steps, num_training_steps = t_total)
     # Check if saved optimizer or scheduler states exist
     return_from_checkpoint = False
     if os.path.isfile(os.path.join(args.model_name_or_path, 'optimizer.pt')) and os.path.isfile(

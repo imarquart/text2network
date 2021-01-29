@@ -72,6 +72,12 @@ class bert_trainer():
                 logging.error(msg)
                 raise AttributeError(msg)
 
+
+        # Check and create folders
+        self.trained_folder=check_create_folder(self.trained_folder)
+        self.db_folder=check_create_folder(self.db_folder, create_folder=False)
+        self.pretrained_folder=check_create_folder(self.pretrained_folder, create_folder=False)
+
         if split_hierarchy is not None:
             self.split_hierarchy=split_hierarchy
             self.uniques = self.get_uniques(self.split_hierarchy)
@@ -83,8 +89,8 @@ class bert_trainer():
                 self.uniques = None
                 self.split_hierarchy = None
 
-        # Check and create folders
-        check_create_folder(self.trained_folder)
+
+        
 
     def get_uniques(self, split_hierarchy):
         """

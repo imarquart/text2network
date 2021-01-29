@@ -4,6 +4,8 @@ import numpy as np
 import tables
 import torch
 import tqdm
+import json
+from src.functions.file_helpers import check_create_folder
 from torch.utils.data import BatchSampler, SequentialSampler
 from src.datasets.dataloaderX import DataLoaderX
 from src.datasets.text_dataset import query_dataset, text_dataset_collate_batchsample
@@ -16,8 +18,8 @@ from src.utils.hash_file import hash_string, check_step, complete_step
 
 
 class nw_processor():
-    def __init__(self, trained_folder, neograph, MAX_SEQ_LENGTH, processing_options, text_db=None, maxn=None,
-                 nr_workers=0, split_hierarchy=None, processing_cache=None, prune_missing_tokens=True, logging_level=logging.NOTSET):
+    def __init__(self, neograph, config=None,trained_folder=None, MAX_SEQ_LENGTH=None, processing_options=None, text_db=None, maxn=None,
+                 nr_workers=0, split_hierarchy=None, processing_cache=None, prune_missing_tokens=True, logging_level=None):
         """
         Extracts pre-processed sentences, gets predictions by BERT and creates a network
 
@@ -33,25 +35,98 @@ class nw_processor():
         :param method: "attention": Weigh by BERT attention; "context_element": Sum probabilities unweighted
         :param cutoff_percent: Amount of probability mass to use to create links. Smaller values, less ties.
         """
-        # Assign parameters
-        self.trained_folder = trained_folder
-        self.tokenizer = None
-        self.bert = None
-        self.text_db = text_db
-        self.neograph = neograph
-        self.prune_missing_tokens=prune_missing_tokens
-        self.MAX_SEQ_LENGTH = MAX_SEQ_LENGTH
-        self.DICT_SIZE = 0
+        self.neograph = neograph    
+        
+        # Fill parameters from configuration file
+        if logging_level is not None:
+            self.logging_level=logging_level
+        else:
+            if config is not None:
+                self.logging_level=config['General'].getint('logging_level')
+            else:
+                msg="Please provide valid logging level."
+                logging.error(msg)
+                raise AttributeError(msg)
+        # Set logging level
+        logging.disable(self.logging_level)
+
+        if trained_folder is not None:
+            self.trained_folder = trained_folder
+        else:
+            if config is not None:
+                self.trained_folder = config['Paths']['trained_berts']
+            else:
+                msg = "Please provide valid trained_folder."
+                logging.error(msg)
+                raise AttributeError(msg)        
+        # Check and create folder
+        self.trained_folder=check_create_folder(self.trained_folder, create_folder=True)
+        
+        if processing_cache is not None:
+            self.processing_cache = processing_cache
+        else:
+            if config is not None:
+                self.processing_cache = config['Paths']['processing_cache']
+            else:
+                msg = "Please provide valid processing_cache."
+                logging.error(msg)
+                raise AttributeError(msg)        
+        # Check and create folder
+        self.processing_cache=check_create_folder(self.processing_cache, create_folder=True)
+        
+        if text_db is not None:
+            self.text_db = text_db
+        else:
+            if config is not None:
+                self.text_db = config['Paths']['database']
+            else:
+                msg = "Please provide valid databse."
+                logging.error(msg)
+                raise AttributeError(msg)        
+        # Check and create folder
+        self.text_db=check_create_folder(self.text_db, create_folder=False)
+        
+        if processing_options is not None:
+            self.processing_options = processing_options
+        else:
+            if config is not None:
+                self.processing_options = config['Processing']
+            else:
+                msg = "Please provide valid processing_options."
+                logging.error(msg)
+                raise AttributeError(msg)      
+        
         self.batch_size = int(processing_options['batch_size'])
-        self.maxn = maxn
-        self.nr_workers = nr_workers
         self.cutoff_percent = int(processing_options['cutoff_percent'])
         self.max_degree = int(processing_options['max_degree'])
         self.context_cutoff_percent = int(processing_options['context_cutoff_percent'])
         self.context_max_degree = int(processing_options['context_max_degree'])
+        self.prune_missing_tokens = bool(processing_options['prune_missing_tokens'])
+        self.maxn = int(processing_options['maxn'])
+        self.nr_workers = int(processing_options['nr_workers'])
+        
+        
+        
+        self.MAX_SEQ_LENGTH = MAX_SEQ_LENGTH
+        self.DICT_SIZE = 0
+        
+
         self.split_hierarchy = split_hierarchy
-        self.logging_level = logging_level
-        self.processing_cache=processing_cache
+
+        if split_hierarchy is not None:
+            self.split_hierarchy=split_hierarchy
+        else:
+            if config is not None:
+                self.split_hierarchy=json.loads(config.get('General', 'split_hierarchy'))
+            else:
+                msg = "Please provide valid split_hierarchy."
+                logging.error(msg)
+                raise AttributeError(msg)      
+
+
+
+        self.tokenizer = None
+        self.bert = None
 
         # Set uniques
         self.setup_uniques(self.split_hierarchy)

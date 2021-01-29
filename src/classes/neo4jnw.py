@@ -38,12 +38,34 @@ except:
 class neo4j_network(MutableSequence):
 
     # %% Initialization functions
-    def __init__(self, neo4j_creds, graph_type="networkx", agg_operator="SUM",
+    def __init__(self, config=None,neo4j_creds=None, graph_type="networkx", agg_operator="SUM",
                  write_before_query=True,
                  neo_batch_size=10000, queue_size=100000, tie_query_limit=100000, tie_creation="UNSAFE",
-                 logging_level=logging.NOTSET):
+                 logging_level=None):
+        # Fill parameters from configuration file
+        if logging_level is not None:
+            self.logging_level=logging_level
+        else:
+            if config is not None:
+                self.logging_level=config['General'].getint('logging_level')
+            else:
+                msg="Please provide valid logging level."
+                logging.error(msg)
+                raise AttributeError(msg)
         # Set logging level
-        logging.disable(logging_level)
+        logging.disable(self.logging_level)
+
+        if neo4j_creds is not None:
+            self.neo4j_creds = neo4j_creds
+        else:
+            if config is not None:
+                self.neo4j_creds = (config['NeoConfig']["db_uri"], (config['NeoConfig']["db_db"], config['NeoConfig']["db_pwd"]))
+            else:
+                msg = "Please provide valid neo4j_creds."
+                logging.error(msg)
+                raise AttributeError(msg)
+
+
 
         self.db = neo4j_database(neo4j_creds=neo4j_creds,  agg_operator=agg_operator, write_before_query=write_before_query, neo_batch_size=neo_batch_size,queue_size= queue_size,
                                  tie_query_limit=tie_query_limit, tie_creation=tie_creation, logging_level=logging_level)

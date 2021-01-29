@@ -110,9 +110,15 @@ class nw_preprocessor():
                 msg = "Please provide valid logging_path."
                 logging.error(msg)
                 raise AttributeError(msg)
+                
+                
         # Check and create folders
-        check_create_folder(self.database)
-        check_create_folder(self.logging_path)
+        self.import_folder=check_create_folder(self.import_folder, create_folder=False)
+        self.database=check_create_folder(self.database)
+        self.logging_path=check_create_folder(self.logging_path)
+        
+        # Get nltk stuff
+        nltk.download('punkt')
 
     def setup_logger(self):
         """
