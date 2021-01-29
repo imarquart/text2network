@@ -152,3 +152,7 @@ data_full/
 *.gexf
 
 runs/
+
+example/pretrained_bert/
+
+example/trained_berts/

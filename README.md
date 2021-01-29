@@ -29,8 +29,8 @@ The objects correspond to the four steps necessary to analyze a corpus:
 To run all elements correctly, the required python packages need to be installed. That is:
 
 Generally: PyTorch (1.3.1) & Numpy
-Preprocessing: tables (hdf5)
-Processing: Transformers (2.1.1)
+Preprocessing: tables (hdf5) & nltk
+Processing: Transformers (2.1.1) & tensorboard
 Analysis: networkx & python-louvain & pandas
 
 We are in the process of updating models to newer versions of PyTorch and Transformers.
@@ -44,7 +44,9 @@ conda install pytorch==1.4.0 torchvision==0.5.0 cpuonly -c pytorch
 
 conda install -c conda-forge transformers=2.1.1
 
-conda install networkx pytables pandas
+conda install networkx pytables pandas nltk
+
+conda install -c conda-forge tensorboard
 ```
 
 Finally, a Neo4j server, http accessible, version 4.02, should be running for processing. We currently use a custom http connector, which is faster than the default interface. Sadly, the connector does not work for versions above 4.02. We are in the process of upgrading to a standard Bolt connector. You can choose the version of the database in the Neo4j Desktop App.
