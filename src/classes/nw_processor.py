@@ -96,22 +96,27 @@ class nw_processor():
                 logging.error(msg)
                 raise AttributeError(msg)      
         
-        self.batch_size = int(processing_options['batch_size'])
-        self.cutoff_percent = int(processing_options['cutoff_percent'])
-        self.max_degree = int(processing_options['max_degree'])
-        self.context_cutoff_percent = int(processing_options['context_cutoff_percent'])
-        self.context_max_degree = int(processing_options['context_max_degree'])
-        self.prune_missing_tokens = bool(processing_options['prune_missing_tokens'])
-        self.maxn = int(processing_options['maxn'])
-        self.nr_workers = int(processing_options['nr_workers'])
+        self.batch_size = int(self.processing_options['batch_size'])
+        self.cutoff_percent = int(self.processing_options['cutoff_percent'])
+        self.max_degree = int(self.processing_options['max_degree'])
+        self.context_cutoff_percent = int(self.processing_options['context_cutoff_percent'])
+        self.context_max_degree = int(self.processing_options['context_max_degree'])
+        self.prune_missing_tokens = bool(self.processing_options['prune_missing_tokens'])
+        self.maxn = int(self.processing_options['maxn'])
+        self.nr_workers = int(self.processing_options['nr_workers'])
         
         
-        
-        self.MAX_SEQ_LENGTH = MAX_SEQ_LENGTH
+        if MAX_SEQ_LENGTH is not None:
+            self.MAX_SEQ_LENGTH = MAX_SEQ_LENGTH
+        else:
+            if config is not None:
+                self.MAX_SEQ_LENGTH = int(config['BertTraining']['max_seq_length'])
+            else:
+                msg = "Please provide valid MAX_SEQ_LENGTH."
+                logging.error(msg)
+                raise AttributeError(msg)
         self.DICT_SIZE = 0
         
-
-        self.split_hierarchy = split_hierarchy
 
         if split_hierarchy is not None:
             self.split_hierarchy=split_hierarchy
@@ -122,16 +127,15 @@ class nw_processor():
                 msg = "Please provide valid split_hierarchy."
                 logging.error(msg)
                 raise AttributeError(msg)      
-
+        # Set uniques
+        self.setup_uniques(self.split_hierarchy)
 
 
         self.tokenizer = None
         self.bert = None
 
-        # Set uniques
-        self.setup_uniques(self.split_hierarchy)
-        # Set logging level
-        logging.disable(logging_level)
+
+
 
     def setup_uniques(self, split_hierarchy=None):
         """
@@ -156,7 +160,7 @@ class nw_processor():
         self.DICT_SIZE = len(tokenizer)
         return tokenizer, bert
 
-    def run_all_queries(self, clean_database=True, split_hierarchy=None, logging_level=None, prune_database=True):
+    def run_all_queries(self, delete_all=False, delete_incomplete=True, split_hierarchy=None, logging_level=None, prune_database=True):
 
         # SEt up logging
         if logging_level is not None:
@@ -169,11 +173,12 @@ class nw_processor():
             self.setup_uniques(split_hierarchy)
 
         # Clean the database
-        if clean_database == True:
+        if delete_all == True:
             logging.info("Cleaning Neo4j Database of all prior connections")
             self.neograph.db.clean_database()
 
-
+        # Delete incompletes
+        #TODO
 
         for idx,query_filename in enumerate(self.uniques['query_filename']):
             # Get File name
@@ -199,7 +204,7 @@ class nw_processor():
 
         # Prune the database
         if prune_database == True:
-            logging.info("Cleaning Neo4j Database of all prior connections")
+            logging.info("Pruning Neo4j Database of all unused tokens")
             self.neograph.db.prune_database()
 
     def process_query(self, query, fname, text_db=None, logging_level=None):

@@ -10,6 +10,7 @@ import nltk
 import tables
 import configparser
 from src.functions.file_helpers import check_create_folder
+from src.utils.logging_helpers import setup_logger
 
 
 class nw_preprocessor():
@@ -130,21 +131,8 @@ class nw_preprocessor():
         None
         """
         # Logging path
-        check_create_folder(self.logging_path)
+        setup_logger(self.logging_path, self.logging_level)
 
-        # Set up logging
-
-        logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
-                            datefmt='%m/%d/%Y %H:%M:%S',
-                            level=self.logging_level)
-
-        rootLogger = logging.getLogger()
-        logFormatter = logging.Formatter(
-            '%(asctime)s - %(levelname)s - %(name)s -   %(message)s')
-        fileHandler = logging.FileHandler(
-            "{0}/{1}.log".format(self.logging_path, "preprocessing"))
-        fileHandler.setFormatter(logFormatter)
-        rootLogger.addHandler(fileHandler)
 
     def resplit_sentences(self, sentences, max_tokens):
         """

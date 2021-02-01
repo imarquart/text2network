@@ -67,7 +67,7 @@ class neo4j_network(MutableSequence):
 
 
 
-        self.db = neo4j_database(neo4j_creds=neo4j_creds,  agg_operator=agg_operator, write_before_query=write_before_query, neo_batch_size=neo_batch_size,queue_size= queue_size,
+        self.db = neo4j_database(neo4j_creds=self.neo4j_creds,  agg_operator=agg_operator, write_before_query=write_before_query, neo_batch_size=neo_batch_size,queue_size= queue_size,
                                  tie_query_limit=tie_query_limit, tie_creation=tie_creation, logging_level=logging_level)
 
         # Conditioned graph information

@@ -17,7 +17,7 @@ class neo4j_database():
                  neo_batch_size=10000, queue_size=100000, tie_query_limit=100000, tie_creation="UNSAFE",  context_tie_creation="SAFE",
                  logging_level=logging.NOTSET, connection_type="Bolt"):
         # Set logging level
-        logging.disable(logging_level)
+        #logging.disable(logging_level)
 
         self.neo4j_connection, self.neo4j_credentials = neo4j_creds
         self.write_before_query = write_before_query
@@ -25,13 +25,13 @@ class neo4j_database():
 
         # Set up Neo4j driver
         if connection_type=="Bolt" and GraphDatabase is not None:
-            self.driver = GraphDatabase(self.neo4j_connection, auth=self.neo4j_credentials)
-            self.connection_type=="Bolt"
+            self.driver = GraphDatabase.driver(self.neo4j_connection, auth=self.neo4j_credentials)
+            self.connection_type="Bolt"
             
             
         else: # Fallback custom HTTP connector for Neo4j <= 4.02
             self.driver = neo_connector.Connector(self.neo4j_connection, self.neo4j_credentials)
-            self.connection_type=="Fallback"
+            self.connection_type="Fallback"
             
 
 
@@ -109,7 +109,7 @@ class neo4j_database():
         :return: None
         """
         logging.debug("Creating indecies and nodes in Neo4j database.")
-        constr = [x['name'] for x in self.connector.run("CALL db.constraints")]
+        constr = [x['name'] for x in self.receive_query("CALL db.constraints")]
         # Create uniqueness constraints
         logging.debug("Creating constraints in Neo4j database.")
         if 'id_con' not in constr:
@@ -118,7 +118,7 @@ class neo4j_database():
         if 'tk_con' not in constr:
             query = "CREATE CONSTRAINT tk_con ON(n:word) ASSERT n.token IS UNIQUE"
             self.add_query(query)
-        constr = [x['name'] for x in self.connector.run("CALL db.indexes")]
+        constr = [x['name'] for x in self.receive_query("CALL db.indexes")]
         if 'timeindex' not in constr:
             query = "CREATE INDEX timeindex FOR (a:edge) ON (a.time)"
             self.add_query(query)
@@ -675,7 +675,7 @@ class neo4j_database():
                 with self.driver.session() as session:
                     with session.begin_transaction() as tx:
                         for statement in self.neo_queue:
-                            if statement['parameters']:
+                            if 'parameters' in statement:
                                 tx.run(statement['statement'],statement['parameters'])
                             else:
                                 tx.run(statement['statement'])
@@ -694,9 +694,9 @@ class neo4j_database():
         """
         self.write_queue()
    
-    def consume_result(tx, query, params=None):
+    def consume_result(self, tx, query, params=None):
         result = tx.run(query,params)
-        return result.values()
+        return result.data()
         
     
     def receive_query(self, query, params=None):
