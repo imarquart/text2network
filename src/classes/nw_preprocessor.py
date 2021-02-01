@@ -11,6 +11,7 @@ import tables
 import configparser
 from src.functions.file_helpers import check_create_folder
 
+
 class nw_preprocessor():
 
     def __init__(self, config=None, database=None, MAX_SEQ_LENGTH=None, char_mult=None, split_symbol=None, number_params=None,
@@ -29,24 +30,24 @@ class nw_preprocessor():
 
         # Fill parameters from configuration file
         if logging_level is not None:
-            self.logging_level=logging_level
+            self.logging_level = logging_level
         else:
             if config is not None:
-                self.logging_level=config['General'].getint('logging_level')
+                self.logging_level = config['General'].getint('logging_level')
             else:
-                msg="Please provide valid logging level."
+                msg = "Please provide valid logging level."
                 logging.error(msg)
                 raise AttributeError(msg)
         # Set logging level
         logging.disable(self.logging_level)
 
         if database is not None:
-            self.database=database
+            self.database = database
         else:
             if config is not None:
-                self.database=config['Paths']['database']
+                self.database = config['Paths']['database']
             else:
-                msg="Please provide valid database path."
+                msg = "Please provide valid database path."
                 logging.error(msg)
                 raise AttributeError(msg)
 
@@ -54,7 +55,8 @@ class nw_preprocessor():
             self.MAX_SEQ_LENGTH = MAX_SEQ_LENGTH
         else:
             if config is not None:
-                self.MAX_SEQ_LENGTH = config['Preprocessing'].getint('max_seq_length')
+                self.MAX_SEQ_LENGTH = config['Preprocessing'].getint(
+                    'max_seq_length')
             else:
                 msg = "Please provide valid max sequence length."
                 logging.error(msg)
@@ -84,12 +86,12 @@ class nw_preprocessor():
             self.number_params = number_params
         else:
             if config is not None:
-                self.number_params = config['Preprocessing'].getint('number_params')
+                self.number_params = config['Preprocessing'].getint(
+                    'number_params')
             else:
                 msg = "Please provide valid number_params."
                 logging.error(msg)
                 raise AttributeError(msg)
-
 
         if logging_path is not None:
             self.logging_path = logging_path
@@ -110,13 +112,13 @@ class nw_preprocessor():
                 msg = "Please provide valid logging_path."
                 logging.error(msg)
                 raise AttributeError(msg)
-                
-                
+
         # Check and create folders
-        self.import_folder=check_create_folder(self.import_folder, create_folder=False)
-        self.database=check_create_folder(self.database)
-        self.logging_path=check_create_folder(self.logging_path)
-        
+        self.import_folder = check_create_folder(
+            self.import_folder, create_folder=False)
+        self.database = check_create_folder(self.database)
+        self.logging_path = check_create_folder(self.logging_path)
+
         # Get nltk stuff
         nltk.download('punkt')
 
@@ -132,14 +134,15 @@ class nw_preprocessor():
 
         # Set up logging
 
-
         logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                             datefmt='%m/%d/%Y %H:%M:%S',
                             level=self.logging_level)
 
         rootLogger = logging.getLogger()
-        logFormatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s -   %(message)s')
-        fileHandler = logging.FileHandler("{0}/{1}.log".format(self.logging_path, "preprocessing"))
+        logFormatter = logging.Formatter(
+            '%(asctime)s - %(levelname)s - %(name)s -   %(message)s')
+        fileHandler = logging.FileHandler(
+            "{0}/{1}.log".format(self.logging_path, "preprocessing"))
         fileHandler.setFormatter(logFormatter)
         rootLogger.addHandler(fileHandler)
 
@@ -154,7 +157,8 @@ class nw_preprocessor():
         split_sentences = []
         # Iterate over sentences and add each, split appropriately, to list
         for sent in sentences:
-            split_sentences = self.check_split_sentence(sent, split_sentences, max_tokens)
+            split_sentences = self.check_split_sentence(
+                sent, split_sentences, max_tokens)
 
         return split_sentences
 
@@ -180,29 +184,29 @@ class nw_preprocessor():
         if len(sent) > max_tokens:
             rest_sent = ' '.join(sent[self.MAX_SEQ_LENGTH:])
             # Recurse
-            text_list = self.check_split_sentence(rest_sent, text_list, max_tokens)
+            text_list = self.check_split_sentence(
+                rest_sent, text_list, max_tokens)
 
         # Once done, return completed list
         return text_list
 
-    def preprocess_folders(self, folder=None,max_seq=0, overwrite=True,excludelist=[]):
+    def preprocess_folders(self, folder=None, max_seq=0, overwrite=True, excludelist=[]):
         if folder is None:
-            folder=self.import_folder
+            folder = self.import_folder
         folder = normpath(folder)
-        folders=[''.join([folder,'/',name]) for name in os.listdir(folder)]
-        if overwrite==True:
+        folders = [''.join([folder, '/', name]) for name in os.listdir(folder)]
+        if overwrite == True:
             try:
-                data_file = tables.open_file(self.database, mode="w", title="Sequence Data")
+                data_file = tables.open_file(
+                    self.database, mode="w", title="Sequence Data")
             except:
                 logging.error("Could not open existing database file.")
                 raise IOError("Could not open existing database file.")
             data_file.close()
         for dir in folders:
-            year =  int(os.path.split(dir)[-1])
-            if year>=1980:
-                self.preprocess_files(dir,max_seq,False,year,excludelist)
-
-
+            year = int(os.path.split(dir)[-1])
+            if year >= 1980:
+                self.preprocess_files(dir, max_seq, False, year, excludelist)
 
     def preprocess_files(self, folder=None, max_seq=0, overwrite=True, ext_year=None, excludelist=[]):
         """
@@ -226,21 +230,24 @@ class nw_preprocessor():
             max_length = tables.UInt32Col()
 
         if folder is None:
-            folder=self.import_folder
+            folder = self.import_folder
 
         # Initiate pytable database
         if overwrite is not True:
             try:
-                data_file = tables.open_file(self.database, mode="a", title="Sequence Data")
+                data_file = tables.open_file(
+                    self.database, mode="a", title="Sequence Data")
             except:
                 try:
-                    data_file = tables.open_file(self.database, mode="w", title="Sequence Data")
+                    data_file = tables.open_file(
+                        self.database, mode="w", title="Sequence Data")
                 except:
                     logging.error("Could not open existing database file.")
                     raise IOError("Could not open existing database file.")
         else:
             try:
-                data_file = tables.open_file(self.database, mode="w", title="Sequence Data")
+                data_file = tables.open_file(
+                    self.database, mode="w", title="Sequence Data")
             except:
                 logging.error("Could not open existing database file.")
                 raise IOError("Could not open existing database file.")
@@ -250,7 +257,8 @@ class nw_preprocessor():
             run_index = start_index
         except:
             group = data_file.create_group("/", 'textdata', 'Text Data')
-            data_table = data_file.create_table(group, 'table', sequence, "Sentence Table")
+            data_table = data_file.create_table(
+                group, 'table', sequence, "Sentence Table")
             start_index = -1
             run_index = start_index
 
@@ -273,38 +281,37 @@ class nw_preprocessor():
 
             if ext_year == None:
                 logging.info("Loading file %s" % file_name)
-                year = re.split(self.split_symbol, file_name)[-(self.number_params + 1)]
+                year = re.split(self.split_symbol,
+                                file_name)[-(self.number_params + 1)]
                 year = int(year[-4:])
-                offset=1
+                offset = 1
             else:
-                offset=0
-                year=ext_year
+                offset = 0
+                year = ext_year
 
             # Set up params list
             params = []
-            exclude=False
+            exclude = False
             for i in range(offset, self.number_params + offset):
-                par=re.split(self.split_symbol, file_name)[-i]
+                par = re.split(self.split_symbol, file_name)[-i]
                 if par in excludelist:
-                    exclude=True
+                    exclude = True
                 params.append(par)
 
-
             if exclude == True:
-                text=""
+                text = ""
             else:
                 try:
                     with open(file_path) as f:
                         text = f.read()
                 except:
                     try:
-                        with open(file_path, encoding="utf-8",errors='ignore') as f:
+                        with open(file_path, encoding="utf-8", errors='ignore') as f:
                             text = f.read()
                     except:
                         logging.error("Could not load %s" % file_path)
-                        raise ImportError("Could not open file. Make sure, only .txt files in folder!")
-
-
+                        raise ImportError(
+                            "Could not open file. Make sure, only .txt files in folder!")
 
             text = text.replace('\n', ' ')
 
@@ -320,9 +327,8 @@ class nw_preprocessor():
             killchars = ['#', '<p>', '$', '%', '(', ')', '*', '/', '<', '>', '@', '\\', '{', '}', '[', ']', '+', '^',
                          '~',
                          '"']
-            for k in killchars: text = str.replace(text, k, '')
-
-
+            for k in killchars:
+                text = str.replace(text, k, '')
 
             text = text.strip()
             text = " ".join(re.split("\s+", text, flags=re.UNICODE))
@@ -332,10 +338,10 @@ class nw_preprocessor():
             # Strip numeric words of length 5+
             text = re.sub(r'\b\d[\d]{5, 100}\b', '', text)
 
-
             # We do not load empty lines
             if len(text) == 0:
-                logging.info("Skipping {}, excluded or no text found".format(file_path))
+                logging.info(
+                    "Skipping {}, excluded or no text found".format(file_path))
                 continue
 
             if (run_index - start_index >= max_seq) & (max_seq != 0):
@@ -381,7 +387,8 @@ class nw_preprocessor():
                     sent = ''.join([sent, '.'])
 
                 # pyTables does not work with unicode
-                sent = unicodedata.normalize('NFKD', sent).encode('ascii', 'ignore').decode('ascii')
+                sent = unicodedata.normalize('NFKD', sent).encode(
+                    'ascii', 'ignore').decode('ascii')
 
                 try:
                     particle['text'] = sent
@@ -390,7 +397,8 @@ class nw_preprocessor():
                     logging.info("Sentence: %s" % sent)
 
                 if idx % 100000 == 0:
-                    logging.info("Sentence at idx {}, year {}, parameters {}:".format(idx,year,params))
+                    logging.info(
+                        "Sentence at idx {}, year {}, parameters {}:".format(idx, year, params))
                     logging.info("Sentence {}".format(sent))
 
                 particle.append()
