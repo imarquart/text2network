@@ -5,18 +5,35 @@ from src.utils.twowaydict import TwoWayDict
 import numpy as np
 # import neo4j
 import neo4jCon as neo_connector
+try:
+    from neo4j import GraphDatabase
+except:
+    GraphDatabase = None
 
 
 class neo4j_database():
     def __init__(self, neo4j_creds, agg_operator="SUM",
                  write_before_query=True,
                  neo_batch_size=10000, queue_size=100000, tie_query_limit=100000, tie_creation="UNSAFE",  context_tie_creation="SAFE",
-                 logging_level=logging.NOTSET):
+                 logging_level=logging.NOTSET, connection_type="Bolt"):
         # Set logging level
         logging.disable(logging_level)
 
         self.neo4j_connection, self.neo4j_credentials = neo4j_creds
         self.write_before_query = write_before_query
+
+
+        # Set up Neo4j driver
+        if connection_type=="Bolt" and GraphDatabase is not None:
+            self.driver = GraphDatabase(self.neo4j_connection, auth=self.neo4j_credentials)
+            self.connection_type=="Bolt"
+            
+            
+        else: # Fallback custom HTTP connector for Neo4j <= 4.02
+            self.driver = neo_connector.Connector(self.neo4j_connection, self.neo4j_credentials)
+            self.connection_type=="Fallback"
+            
+
 
         # Neo4J Internals
         # Pick Merge or Create. Create will double ties but Merge becomes very slow for large networks
@@ -33,7 +50,7 @@ class neo4j_database():
         self.neo_batch_size = neo_batch_size
         self.queue_size = queue_size
         self.aggregate_operator = agg_operator
-        self.connector = neo_connector.Connector(self.neo4j_connection, self.neo4j_credentials)
+        
         # Init tokens in the database, required since order etc. may be different
         self.db_ids,self.db_tokens=self.init_tokens()
         self.db_ids=np.array(self.db_ids)
@@ -135,8 +152,8 @@ class neo4j_database():
 
     def clean_database(self, time=None, del_limit=1000000):
         # DEBUG
-        nr_nodes = self.connector.run("MATCH (n:edge) RETURN count(n) AS nodes")[0]['nodes']
-        nr_context = self.connector.run("MATCH (n:context) RETURN count(*) AS nodes")[0]['nodes']
+        nr_nodes = self.receive_query("MATCH (n:edge) RETURN count(n) AS nodes")[0]['nodes']
+        nr_context = self.receive_query("MATCH (n:context) RETURN count(*) AS nodes")[0]['nodes']
         logging.info("Before cleaning: Network has %i edge-nodes and %i context-nodes" % (nr_nodes, nr_context))
 
         if time is not None:
@@ -156,18 +173,18 @@ class neo4j_database():
 
         while nr_nodes > 0:
             # Delete edge nodes
-            self.connector.run(node_query)
-            nr_nodes = self.connector.run("MATCH (n:edge) RETURN count(n) AS nodes")[0]['nodes']
+            self.add_query(node_query, run=True)
+            nr_nodes = self.receive_query("MATCH (n:edge) RETURN count(n) AS nodes")[0]['nodes']
             logging.info("Network has %i edge-nodes and %i context-nodes" % (nr_nodes, nr_context))
         while nr_context > 0:
             # Delete context nodes
-            self.connector.run(context_query)
-            nr_context = self.connector.run("MATCH (n:context) RETURN count(*) AS nodes")[0]['nodes']
+            self.add_query(context_query,run=True)
+            nr_context = self.receive_query("MATCH (n:context) RETURN count(*) AS nodes")[0]['nodes']
             logging.info("Network has %i edge-nodes and %i context-nodes" % (nr_nodes, nr_context))
 
         # DEBUG
-        nr_nodes = self.connector.run("MATCH (n:edge) RETURN count(n) AS nodes")[0]['nodes']
-        nr_context = self.connector.run("MATCH (n:context) RETURN count(*) AS nodes")[0]['nodes']
+        nr_nodes = self.receive_query("MATCH (n:edge) RETURN count(n) AS nodes")[0]['nodes']
+        nr_context = self.receive_query("MATCH (n:context) RETURN count(*) AS nodes")[0]['nodes']
         logging.info("After cleaning: Network has %i nodes and %i ties" % (nr_nodes, nr_context))
 
     # %% Initializations
@@ -179,7 +196,7 @@ class neo4j_database():
         """
         logging.debug("Querying tokens and filling data structure.")
         # Run neo query to get all nodes
-        res = self.connector.run("MATCH (n:word) RETURN n.token_id, n.token")
+        res = self.receive_query("MATCH (n:word) RETURN n.token_id, n.token")
         # Update results
         ids = [x['n.token_id'] for x in res]
         tokens = [x['n.token'] for x in res]
@@ -193,7 +210,7 @@ class neo4j_database():
 
         """
         logging.debug("Pruning disconnected tokens in database.")
-        res = self.connector.run("MATCH (n) WHERE size((n)--())=0 DELETE (n)")
+        res = self.add_query("MATCH (n) WHERE size((n)--())=0 DELETE (n)", run=True)
 
 
     # %% Query Functions
@@ -243,7 +260,7 @@ class neo4j_database():
             params = {"ids": ids}
 
         query = "".join([match_query, where_query, return_query])
-        res = self.connector.run(query, params)
+        res = self.receive_query(query, params)
 
         tie_weights = np.array([x['agg_weight'] for x in res])
         senders = [x['sender'] for x in res]
@@ -320,7 +337,7 @@ class neo4j_database():
             params = {"ids": ids, "clist": context}
 
         query = "".join([match_query, where_query, return_query])
-        res = self.connector.run(query, params)
+        res = self.receive_query(query, params)
 
         tie_weights = np.array([x['agg_weight'] for x in res])
         senders = [x['sender'] for x in res]
@@ -375,7 +392,7 @@ class neo4j_database():
             match_query = "unwind $ids AS id MATCH p=(a:word  {token_id:id})-[:onto]->(r:edge)-[:onto]->(b:word) "
 
         query = "".join([match_query, where_query, return_query])
-        res = self.connector.run(query, params)
+        res = self.receive_query(query, params)
 
         ties = [(x['idx'], x['occurrences']) for x in res]
 
@@ -428,7 +445,7 @@ class neo4j_database():
 
         query = "".join([match_query, where_query, return_query])
         logging.debug(query)
-        res = self.connector.run(query, params)
+        res = self.receive_query(query, params)
 
         ties = [(x['idx'], x['occurrences']) for x in res]
 
@@ -487,7 +504,7 @@ class neo4j_database():
             nw_time = {"s": 0, "e": 0, "m": 0}
 
         query = "".join([match_query, where_query, return_query])
-        res = self.connector.run(query, params)
+        res = self.receive_query(query, params)
         focal_tokens = np.array([x['focal_token'] for x in res])
         context_tokens = np.array([x['context_token'] for x in res])
         weights = np.array([x['agg_weight'] for x in res])
@@ -612,14 +629,20 @@ class neo4j_database():
     # %% Neo4J interaction
     # All function that interact with neo are here, dispatched as needed from above
 
-    def add_query(self, query, params=None):
+    def add_query(self, query, params=None, run=False):
         """
         Add a single query to queue
         :param query: Neo4j query
         :param params: Associates parameters
         :return:
         """
-        self.add_queries([query], [params])
+        if params is not None:
+            self.add_queries([query], [params])
+        else:
+            self.add_queries([query], None)
+        
+        if run==True:
+            self.write_queue()
 
     def add_queries(self, query, params=None):
         """
@@ -648,14 +671,42 @@ class neo4j_database():
         :return:
         """
         if len(self.neo_queue) > 0:
-            ret = self.connector.run_multiple(self.neo_queue, self.neo_batch_size)
-            logging.debug(ret)
+            if self.connection_type=="Bolt":
+                with self.driver.session() as session:
+                    with session.begin_transaction() as tx:
+                        for statement in self.neo_queue:
+                            if statement['parameters']:
+                                tx.run(statement['statement'],statement['parameters'])
+                            else:
+                                tx.run(statement['statement'])
+                        tx.commit()
+                        tx.close()
+            else:
+                ret = self.connector.run_multiple(self.neo_queue, self.neo_batch_size)
+                logging.debug(ret)
 
             self.neo_queue = []
 
     def non_con_write_queue(self):
         """
-        Utility function to write queue without concurrency (depreciated currently)
+        Utility function to write queue immediately
         :return:
         """
         self.write_queue()
+   
+    def consume_result(tx, query, params=None):
+        result = tx.run(query,params)
+        return result.values()
+        
+    
+    def receive_query(self, query, params=None):
+        if self.connection_type=="Bolt":
+            with self.driver.session() as session:
+                res = session.read_transaction(self.consume_result, query, params)
+        else:
+            res = self.connector.run(query, params)
+        
+        return res
+        
+    def close(self):
+        self.driver.close()
