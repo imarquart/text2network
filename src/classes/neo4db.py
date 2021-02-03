@@ -228,9 +228,13 @@ class neo4j_database():
             where_query = ''.join([" WHERE r.weight >=", str(weight_cutoff), " "])
             if isinstance(times, dict):
                 where_query = ''.join([where_query, " AND  $times.start <= r.time<= $times.end "])
+            elif isinstance(times,list):
+                where_query = "WHERE  r.time in $times "
         else:
             if isinstance(times, dict):
                 where_query = "WHERE  $times.start <= r.time<= $times.end "
+            elif isinstance(times,list):
+                where_query = "WHERE  r.time in $times "
             else:
                 where_query = ""
         # Create query depending on graph direction and whether time variable is queried via where or node property
@@ -254,7 +258,7 @@ class neo4j_database():
             nw_time = {"s": 0, "e": 0, "m": 0}
 
         # Create params with or without time
-        if isinstance(times, dict) or isinstance(times, int):
+        if isinstance(times, dict) or isinstance(times, int) or isinstance(times, list):
             params = {"ids": ids, "times": times}
         else:
             params = {"ids": ids}

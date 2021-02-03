@@ -210,7 +210,7 @@ def train(args, train_dataset, model, tokenizer):
                             disable=args.local_rank not in [-1, 0])
     set_seed(args)  # Added here for reproducibility (even between python 2 and 3)
     for _ in train_iterator:
-        descr="Epoch %i, Iteration" % max(1,global_step/len(train_dataloader))
+        descr="Epoch %i, Batch: " % max(1,global_step/len(train_dataloader))
         epoch_iterator = tqdm(train_dataloader, desc=descr, leave=False, position=0,disable=args.local_rank not in [-1, 0])
         for step, batch in enumerate(epoch_iterator):
 
@@ -239,6 +239,7 @@ def train(args, train_dataset, model, tokenizer):
 
             tr_loss += loss.item()
             eval_loss = tr_loss / max(global_step, 1)
+            # Gradient accumulation step
             if (step + 1) % args.gradient_accumulation_steps == 0:
                 if args.fp16:
                     torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), args.max_grad_norm)
@@ -429,7 +430,7 @@ def run_bert(args, tokenizer=None, model=None):
     # Load only if not provided
     if tokenizer==None or model==None:
         #tokenizer, model = get_bert_and_tokenizer(args.model_dir,True)
-        pass
+        raise AttributeError("This training procedure requires a pre-trained model / tokenizer.")
 
     if args.block_size <= 0:
         args.block_size = tokenizer.max_len_single_sentence  # Our input block size will be the max possible for the model
