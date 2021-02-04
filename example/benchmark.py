@@ -174,7 +174,6 @@ logging.info("nodes in network %i" % (len(semantic_network)))
 logging.info("ties in network %i" % (semantic_network.graph.number_of_edges()))
 
 del semantic_network
-del semantic_network
 semantic_network = neo4j_network(config, connection_type="bolt")
 # Condition the network
 start_time = time.time()
