@@ -4,10 +4,12 @@ Created on Fri Dec 18 17:23:33 2020
 
 @author: marquart
 """
+from typing import Union, List, Dict
+
 import pandas as pd
 
 
-def pd_format(format_list):
+def pd_format(format_list: Union[List, Dict])->List:
     """
     Formats measure outputs into pandas data frames
 

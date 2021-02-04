@@ -44,8 +44,8 @@ class neo4j_network(Sequence):
     # %% Initialization functions
     def __init__(self, config=None,neo4j_creds=None, graph_type="networkx", agg_operator="SUM",
                  write_before_query=True,
-                 neo_batch_size=10000, queue_size=100000, tie_query_limit=100000, tie_creation="UNSAFE",
-                 logging_level=None, norm_ties=False):
+                 neo_batch_size=None, queue_size=100000, tie_query_limit=100000, tie_creation="UNSAFE",
+                 logging_level=None, norm_ties=False, connection_type=None):
         # Fill parameters from configuration file
         if logging_level is not None:
             self.logging_level=logging_level
@@ -59,11 +59,34 @@ class neo4j_network(Sequence):
         # Set logging level
         logging.disable(self.logging_level)
 
+        if neo_batch_size is not None:
+            self.neo_batch_size = neo_batch_size
+        else:
+            if config is not None:
+                self.neo_batch_size = int(config['General']['neo_batch_size'])
+            else:
+                msg = "Please provide valid neo_batch_size."
+                logging.error(msg)
+                raise AttributeError(msg)
+
+        if connection_type is not None:
+            self.connection_type = connection_type
+        else:
+            if config is not None:
+                self.connection_type = config['NeoConfig']['protocol']
+            else:
+                msg = "Please provide valid protocol."
+                logging.error(msg)
+                raise AttributeError(msg)
+
         if neo4j_creds is not None:
             self.neo4j_creds = neo4j_creds
         else:
             if config is not None:
-                self.neo4j_creds = (config['NeoConfig']["db_uri"], (config['NeoConfig']["db_db"], config['NeoConfig']["db_pwd"]))
+                if self.connection_type=="http":
+                    self.neo4j_creds = (config['NeoConfig']["http_uri"], (config['NeoConfig']["db_db"], config['NeoConfig']["db_pwd"]))
+                else:
+                    self.neo4j_creds = (config['NeoConfig']["db_uri"], (config['NeoConfig']["db_db"], config['NeoConfig']["db_pwd"]))
             else:
                 msg = "Please provide valid neo4j_creds."
                 logging.error(msg)
@@ -71,8 +94,8 @@ class neo4j_network(Sequence):
 
 
 
-        self.db = neo4j_database(neo4j_creds=self.neo4j_creds,  agg_operator=agg_operator, write_before_query=write_before_query, neo_batch_size=neo_batch_size,queue_size= queue_size,
-                                 tie_query_limit=tie_query_limit, tie_creation=tie_creation, logging_level=logging_level)
+        self.db = neo4j_database(neo4j_creds=self.neo4j_creds,  agg_operator=agg_operator, write_before_query=write_before_query, neo_batch_size=self.neo_batch_size,queue_size= queue_size,
+                                 tie_query_limit=tie_query_limit, tie_creation=tie_creation, logging_level=logging_level, connection_type=self.connection_type)
 
         # Conditioned graph information
         self.graph_type = graph_type
@@ -135,7 +158,7 @@ class neo4j_network(Sequence):
             logging.info("Switched default to normalization to aggregate mode.")
 
 
-    def pd_format(self, output, ids_to_tokens=True):
+    def pd_format(self, output: Union[List,Dict], ids_to_tokens: bool = True) -> List:
 
         # Format output into pandas
         format_output=pd_format(output)
@@ -150,7 +173,7 @@ class neo4j_network(Sequence):
 
     # %% Conditoning functions
     def condition(self, years=None, tokens=None, weight_cutoff=None, depth=None, context=None, norm=None,
-                  batchsize=10000):
+                  batchsize=None):
         """
         :param years: None, integer, list of integers, or interval dict of the form {"start":YYYY,"end":YYYY}
         :param tokens: None or list of strings or integers (ids)
@@ -163,6 +186,9 @@ class neo4j_network(Sequence):
         # Get default normation behavior
         if norm==None:
             norm = self.norm_ties
+
+        if batchsize==None:
+            batchsize=self.neo_batch_size
 
         input_check(tokens=tokens)
         input_check(tokens=context)
@@ -178,7 +204,7 @@ class neo4j_network(Sequence):
         else:
             logging.debug("Conditioning dispatch: Ego")
             self.__ego_condition(years, tokens, weight_cutoff,
-                               depth, context, norm)
+                               depth, context, norm, batchsize)
 
         self.conditioned = True
 
@@ -372,7 +398,8 @@ class neo4j_network(Sequence):
 
         return cent_dict
 
-    def proximities(self, focal_tokens=None,  alter_subset=None, years=None, context=None, weight_cutoff=None, norm_ties=None):
+    def proximities(self, focal_tokens: List = None, alter_subset: List = None, years: Union[List,int, Dict] = None, context: List = None, weight_cutoff: float = None,
+                    norm_ties: bool = None) -> Dict:
         """
         Calculate proximities for given tokens.
         Conditions if network is not already conditioned.
@@ -535,7 +562,7 @@ class neo4j_network(Sequence):
 
         i = self.ensure_ids(i)
         if self.conditioned == False:
-            return self.query_nodes(i, year)
+            return self.query_nodes(i, times=year, norm_ties=self.norm_ties)
         else:
             if isinstance(i, (list, tuple, np.ndarray)):
                 returndict = []
@@ -553,12 +580,16 @@ class neo4j_network(Sequence):
     # %% Conditioning sub-functions
 
 
-    def __year_condition(self, years, weight_cutoff=None, context=None, norm=None, batchsize=10000):
+    def __year_condition(self, years, weight_cutoff=None, context=None, norm=None, batchsize=None):
         """ Condition the entire network over all years """
 
         # Get default normation behavior
         if norm==None:
             norm = self.norm_ties
+
+        # Same for batchsize
+        if batchsize==None:
+            batchsize=self.neo_batch_size
 
         if self.conditioned == False:  # This is the first conditioning
             # Preserve node and token lists
@@ -602,13 +633,16 @@ class neo4j_network(Sequence):
             nx.set_node_attributes(self.graph, att_dict)
         else:  # Remove conditioning and recondition
             self.decondition()
-            self.year_condition(years, weight_cutoff, context, norm)
+            self.__year_condition(years, weight_cutoff, context, norm)
 
-    def __ego_condition(self, years, token_ids, weight_cutoff=None, depth=None, context=None, norm=None):
+    def __ego_condition(self, years, token_ids, weight_cutoff=None, depth=None, context=None, norm=None, batchsize=None):
 
         # Get default normation behavior
         if norm==None:
             norm = self.norm_ties
+        # Same for batchsize
+        if batchsize==None:
+            batchsize=self.neo_batch_size
 
         if self.conditioned == False:  # This is the first conditioning
             # Preserve node and token lists
@@ -641,15 +675,27 @@ class neo4j_network(Sequence):
                 prev_queried_ids.extend(token_ids)
                 # Add starting nodes
                 self.graph.add_nodes_from(token_ids)
-                # Query Neo4j
-                try:
-                    self.graph.add_edges_from(
-                        self.query_nodes(token_ids, context=context, times=years, weight_cutoff=weight_cutoff,
-                                         norm_ties=norm))
-                except:
-                    logging.error("Could not condition graph by query method.")
-                    raise Exception(
-                        "Could not condition graph by query method.")
+                # # Query Neo4j
+                # try:
+                #     self.graph.add_edges_from(
+                #         self.query_nodes(token_ids, context=context, times=years, weight_cutoff=weight_cutoff,
+                #                          norm_ties=norm))
+                # except:
+                #     logging.error("Could not condition graph by query method.")
+                #     raise Exception(
+                #         "Could not condition graph by query method.")
+                for i in tqdm(range(0, len(token_ids), batchsize)):
+
+                    id_batch = token_ids[i:i + batchsize]
+                    logging.debug(
+                        "Conditioning by query batch {} of {} tokens.".format(i, len(id_batch)))
+                    # Query Neo4j
+                    try:
+                        self.graph.add_edges_from(
+                            self.query_nodes(id_batch, context=context, times=years, weight_cutoff=weight_cutoff,
+                                             norm_ties=norm))
+                    except:
+                        logging.error("Could not condition graph by query method.")
 
                 # Update IDs and Tokens to reflect conditioning
                 all_ids = list(self.graph.nodes)
@@ -802,7 +848,27 @@ class neo4j_network(Sequence):
         self.tokens = tokens
         self.update_dicts()
 
-    def query_nodes(self, ids, context=None, times=None, weight_cutoff=None, norm_ties=True):
+    def query_nodes_parallel(self, ids, context=None, times=None, weight_cutoff=None, norm_ties=None):
+
+        if norm_ties==None:
+            norm_ties=self.norm_ties
+
+        # Make sure we have a list of ids
+        ids = self.ensure_ids(ids)
+        if not isinstance(ids, (list, np.ndarray)):
+            ids = [ids]
+        # Dispatch with or without context
+        if context is not None:
+            context = self.ensure_ids(context)
+            if not isinstance(context, (list, np.ndarray)):
+                context = [context]
+            return self.db.query_multiple_nodes_in_context(ids, context, times, weight_cutoff, norm_ties)
+        else:
+            return self.db.query_multiple_nodes_parallel(ids, times, weight_cutoff)
+
+
+
+    def query_nodes(self, ids, context=None, times=None, weight_cutoff=None, norm_ties=None):
         """
         Query multiple nodes by ID and over a set of time intervals, return distinct occurrences
         If provided with context, return under the condition that elements of context are present in the context element distribution of
@@ -813,6 +879,10 @@ class neo4j_network(Sequence):
         :param weight_cutoff: float in 0,1
         :return: list of tuples (u,occurrences)
         """
+
+        if norm_ties==None:
+            norm_ties=self.norm_ties
+
         # Make sure we have a list of ids
         ids = self.ensure_ids(ids)
         if not isinstance(ids, (list, np.ndarray)):
@@ -826,17 +896,17 @@ class neo4j_network(Sequence):
         else:
             return self.db.query_multiple_nodes(ids, times, weight_cutoff, norm_ties)
 
-    def query_multiple_nodes(self, ids, times=None, weight_cutoff=None, norm_ties=True):
+    def query_multiple_nodes(self, ids, times=None, weight_cutoff=None, norm_ties=None):
         """
         Old interface
         """
         return self.query_nodes(ids, times, weight_cutoff, norm_ties)
 
-    def query_multiple_nodes_context(self, ids, context, times=None, weight_cutoff=None, norm_ties=True):
+    def query_multiple_nodes_context(self, ids, context, times=None, weight_cutoff=None, norm_ties=None):
         """
         Old interface
         """
-        return self.query_nodes(self, ids, context, times, weight_cutoff, norm_ties)
+        return self.query_nodes(ids, context, times, weight_cutoff, norm_ties)
 
     def insert_edges_context(self, ego, ties, contexts):
         return self.db.insert_edges_context(ego, ties, contexts)

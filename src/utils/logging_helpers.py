@@ -21,6 +21,6 @@ def setup_logger(logging_path, logging_level):
     logFormatter = logging.Formatter(
         '%(asctime)s - %(levelname)s - %(name)s -   %(message)s')
     fileHandler = logging.FileHandler(
-        "{0}/{1}.log".format(logging_path, "preprocessing"))
+        "{0}/{1}.log".format(logging_path, "text2network"))
     fileHandler.setFormatter(logFormatter)
     rootLogger.addHandler(fileHandler)

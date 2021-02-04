@@ -104,6 +104,7 @@ class nw_processor():
         self.prune_missing_tokens = bool(self.processing_options['prune_missing_tokens'])
         self.maxn = int(self.processing_options['maxn'])
         self.nr_workers = int(self.processing_options['nr_workers'])
+        self.cutoff_prob = int(self.processing_options['cutoff_prob'])
         
         
         if MAX_SEQ_LENGTH is not None:
@@ -391,7 +392,7 @@ class nw_processor():
                                                                                    max_degree=self.max_degree)
                         ties = self.get_weighted_edgelist(token, replacement, year, cutoff_number, cutoff_probability,
                                                           sequence_id, pos, p1=p1, p2=p2, p3=p3, p4=p4, run_index=run_index,
-                                                          max_degree=self.max_degree)
+                                                          max_degree=self.max_degree, min_probability=self.cutoff_prob)
 
                         # Context ties
                         cutoff_number, cutoff_probability = self.calculate_cutoffs(context, method="percent",
@@ -401,7 +402,7 @@ class nw_processor():
                                                                   cutoff_probability,
                                                                   sequence_id, pos, p1=p1, p2=p2, p3=p3, p4=p4,
                                                                   max_degree=self.context_max_degree,run_index=run_index,
-                                                                  simplify_context=True)
+                                                                  simplify_context=True, min_probability=self.cutoff_prob)
 
                         if (ties is not None) and (context_ties is not None):
                             self.neograph.insert_edges_context(token, ties, context_ties)
@@ -567,7 +568,7 @@ class nw_processor():
         return min(cutoff_degree, max_degree), cutoff_probability
 
     def get_weighted_edgelist(self, token, x, time, cutoff_number=100, cutoff_probability=0, seq_id=0, pos=0, p1="0",
-                              p2="0", p3="0", p4="0", run_index=0,max_degree=100, simplify_context=False):
+                              p2="0", p3="0", p4="0", run_index=0,max_degree=100, simplify_context=False, min_probability=0):
         """
         Sort probability distribution to get the most likely neighbor nodes.
         Return a networksx weighted edge list for a given focal token as node.
@@ -587,9 +588,17 @@ class nw_processor():
         # Cutoff probability (zeros)
         # 20.08.2020 Added norm
         if len(neighbors > 0):
+            # This is the cutoff probability given by the probability mass calculation
             if cutoff_probability > 0:
                 neighbors = neighbors[x[neighbors] >= cutoff_probability]
+            # We norm here, because we want to represent the distribution
             weights = self.norm(x[neighbors], min_zero=False)
+            # Now in addition, we will artificially cut off below a threshold
+            # TODO: test this
+            if min_probability > 0:
+                selector = weights >= min_probability
+                neighbors = neighbors[selector]
+                weights = weights[selector] # no renormalization now!
             if simplify_context == False:
                 return [(int(token), int(x[0]), int(time),
                          {'weight': float(x[1]),'run_index': int(run_index), 'seq_id': int(seq_id), 'pos': int(pos),  'p1': str(p1), 'p2': str(p2),
