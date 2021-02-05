@@ -22,6 +22,66 @@ semantic_network = neo4j_network(config)
 print("------------------------BENCHMARK------------------------")
 logging.info("------------------------BENCHMARK------------------------")
 
+
+context_words=["manager","leader","ceo"]
+del semantic_network
+semantic_network = neo4j_network(config, connection_type="bolt")
+# Condition the network
+start_time = time.time()
+semantic_network.condition(years=2009, context=context_words, weight_cutoff=0.1)
+print("bolt one year condition, 3 context words, 0.1 cutoff %s seconds" % (time.time() - start_time))
+logging.info("bolt one year condition, 3 context words, 0.1 cutoff %s seconds" % (time.time() - start_time))
+print("nodes in network %i" % (len(semantic_network)))
+print("ties in network %i" % (semantic_network.graph.number_of_edges()))
+logging.info("nodes in network %i" % (len(semantic_network)))
+logging.info("ties in network %i" % (semantic_network.graph.number_of_edges()))
+print("------------------------------------------------")
+logging.info("------------------------------------------------")
+
+del semantic_network
+semantic_network = neo4j_network(config, connection_type="bolt")
+# Condition the network
+start_time = time.time()
+semantic_network.condition(years=2009, context=context_words)
+print("bolt one year condition, 3 context words, NO cutoff %s seconds" % (time.time() - start_time))
+logging.info("bolt one year condition, 3 context words, NO cutoff %s seconds" % (time.time() - start_time))
+print("nodes in network %i" % (len(semantic_network)))
+print("ties in network %i" % (semantic_network.graph.number_of_edges()))
+logging.info("nodes in network %i" % (len(semantic_network)))
+logging.info("ties in network %i" % (semantic_network.graph.number_of_edges()))
+print("------------------------------------------------")
+logging.info("------------------------------------------------")
+
+context_words=["manager","leader","ceo"]
+del semantic_network
+semantic_network = neo4j_network(config, connection_type="bolt")
+# Condition the network
+start_time = time.time()
+semantic_network.condition(context=context_words, weight_cutoff=0.1)
+print("bolt ALL year condition, 3 context words, 0.1 cutoff %s seconds" % (time.time() - start_time))
+logging.info("bolt ALL year condition, 3 context words, 0.1 cutoff %s seconds" % (time.time() - start_time))
+print("nodes in network %i" % (len(semantic_network)))
+print("ties in network %i" % (semantic_network.graph.number_of_edges()))
+logging.info("nodes in network %i" % (len(semantic_network)))
+logging.info("ties in network %i" % (semantic_network.graph.number_of_edges()))
+print("------------------------------------------------")
+logging.info("------------------------------------------------")
+
+context_words=["manager","leader","ceo"]
+del semantic_network
+semantic_network = neo4j_network(config, connection_type="bolt")
+# Condition the network
+start_time = time.time()
+semantic_network.condition(context=context_words)
+print("bolt ALL year condition, 3 context words, NO cutoff %s seconds" % (time.time() - start_time))
+logging.info("bolt ALL year condition, 3 context words, NO cutoff %s seconds" % (time.time() - start_time))
+print("nodes in network %i" % (len(semantic_network)))
+print("ties in network %i" % (semantic_network.graph.number_of_edges()))
+logging.info("nodes in network %i" % (len(semantic_network)))
+logging.info("ties in network %i" % (semantic_network.graph.number_of_edges()))
+print("------------------------------------------------")
+logging.info("------------------------------------------------")
+
 # Analysis examples
 # Setup network on processed database
 start_time = time.time()
@@ -484,7 +544,7 @@ logging.info("------------------------------------------------")
 # Switch to backout measure
 del semantic_network
 semantic_network = neo4j_network(config)
-semantic_network.condition(years=2010, batchsize=100,weight_cutoff=0.1)
+semantic_network.condition(years=2010, batchsize=100000,weight_cutoff=0.1)
 start_time = time.time()
 semantic_network.to_backout()
 print("http to backout %s seconds" % (time.time() - start_time))
@@ -492,7 +552,7 @@ logging.info("http to backout %s seconds" % (time.time() - start_time))
 # Switch to backout measure
 del semantic_network
 semantic_network = neo4j_network(config, connection_type="bolt")
-semantic_network.condition(years=2010, batchsize=100,weight_cutoff=0.1)
+semantic_network.condition(years=2010, batchsize=100000,weight_cutoff=0.1)
 start_time = time.time()
 semantic_network.to_backout()
 print("bolt to backout %s seconds" % (time.time() - start_time))
@@ -522,8 +582,8 @@ logging.info("------------------------------------------------")
 del semantic_network
 semantic_network = neo4j_network(config)
 levels=2
-start_time = time.time()
 semantic_network.condition(years=2009, weight_cutoff=0.1)
+start_time = time.time()
 clusters=semantic_network.cluster(levels=levels)
 for cl in clusters:
     print("Name: {}, Level: {}, Parent: {}, Nodes: {}".format(cl['name'],cl['level'],cl['parent'],cl['graph'].nodes))
@@ -532,8 +592,8 @@ logging.info("http one year 2-lvl clustering, cutoff 0.1, %s seconds" % (time.ti
 del semantic_network
 semantic_network = neo4j_network(config, connection_type="bolt")
 levels=2
-start_time = time.time()
 semantic_network.condition(years=2009, weight_cutoff=0.1)
+start_time = time.time()
 clusters=semantic_network.cluster(levels=levels)
 for cl in clusters:
     print("Name: {}, Level: {}, Parent: {}, Nodes: {}".format(cl['name'],cl['level'],cl['parent'],cl['graph'].nodes))
