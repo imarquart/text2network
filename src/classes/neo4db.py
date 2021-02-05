@@ -330,6 +330,8 @@ class neo4j_database():
             nw_time = {"s": times, "e": times, "m": times}
         elif isinstance(times, dict):
             nw_time = {"s": times['start'], "e": times['end'], "m": int((times['end'] + times['start']) / 2)}
+        elif isinstance(times, list):
+            nw_time = {"s": times[0], "e": times[-1], "m": int((times[0] + times[-1]) / 2)}
         else:
             nw_time = {"s": 0, "e": 0, "m": 0}
 
@@ -371,24 +373,21 @@ class neo4j_database():
         :param weight_cutoff: float in 0,1
         :return: list of tuples (u,v,Time,{weight:x})
         """
-        logging.debug("Querying {} nodes in Neo4j database.".format(len(ids)))
-
+        logging.debug("Contextually querying {} nodes in Neo4j database.".format(len(ids)))
+        # New where query
+        where_query=" WHERE b.token_id in $ids"
         # Create context query
-        context_where = ' ALL(r in nodes(p) WHERE size([(r) - [: conto]->(:context) - [: conto]->(e:word) WHERE e.token_id IN $clist | e]) > 0 OR(r: word))'
+        context_where = ' AND ALL(r in nodes(p) WHERE size([(r) - [: conto]->(:context) - [: conto]->(e:word) WHERE e.token_id IN $clist | e]) > 0 OR(r: word))'
+        # Join where and context query
+        where_query = ' '.join([where_query, context_where])
 
         # Allow cutoff value of (non-aggregated) weights and set up time-interval query
         if weight_cutoff is not None:
-            where_query = ''.join([" WHERE r.weight >=", str(weight_cutoff), " AND "])
-            if isinstance(times, dict):
-                where_query = ''.join([where_query, " $times.start <= r.time<= $times.end "])
-        else:
-            if isinstance(times, dict):
-                where_query = "WHERE  $times.start <= r.time<= $times.end AND "
-            else:
-                where_query = "WHERE "
-
-        # Join where and context query
-        where_query = ' '.join([where_query, context_where])
+            where_query = ''.join([where_query," AND r.weight >=", str(weight_cutoff), " "])
+        if isinstance(times, dict):
+            where_query = ''.join([where_query, " AND  $times.start <= r.time<= $times.end "])
+        elif isinstance(times,list):
+            where_query = ''.join([where_query," AND  r.time in $times "])
 
         # Create query depending on graph direction and whether time variable is queried via where or node property
         # By default, a->b when ego->is_replaced_by->b
@@ -398,20 +397,22 @@ class neo4j_database():
                                 self.aggregate_operator, "(r.weight) AS agg_weight order by receiver"])
 
         if isinstance(times, int):
-            match_query = "UNWIND $ids AS id MATCH p=(a:word)-[:onto]->(r:edge {time:$times})-[:onto]->(b:word {token_id:id}) "
+            match_query = "MATCH p=(a:word)-[:onto]->(r:edge {time:$times})-[:onto]->(b:word) "
         else:
-            match_query = "unwind $ids AS id MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word {token_id:id}) "
+            match_query = "MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word) "
 
         # Format time to set for network
         if isinstance(times, int):
             nw_time = {"s": times, "e": times, "m": times}
         elif isinstance(times, dict):
             nw_time = {"s": times['start'], "e": times['end'], "m": int((times['end'] + times['start']) / 2)}
+        elif isinstance(times, list):
+            nw_time = {"s": times[0], "e": times[-1], "m": int((times[0] + times[-1]) / 2)}
         else:
             nw_time = {"s": 0, "e": 0, "m": 0}
 
         # Create params with or without time
-        if isinstance(times, dict) or isinstance(times, int):
+        if isinstance(times, dict) or isinstance(times, int) or isinstance(times, list):
             params = {"ids": ids, "times": times, "clist": context}
         else:
             params = {"ids": ids, "clist": context}
@@ -447,18 +448,20 @@ class neo4j_database():
         """
         logging.debug("Querying {} node occurrences for normalization".format(len(ids)))
         # Allow cutoff value of (non-aggregated) weights and set up time-interval query
-        # If times is a dict, we want an interval and hence where query
+
+        # New where query
+        where_query = " WHERE a.token_id in $ids"
+
+        # Allow cutoff value of (non-aggregated) weights and set up time-interval query
         if weight_cutoff is not None:
-            where_query = ''.join([" WHERE r.weight >=", str(weight_cutoff), " "])
-            if isinstance(times, dict):
-                where_query = ''.join([where_query, " AND  $times.start <= r.time<= $times.end "])
-        else:
-            if isinstance(times, dict):
-                where_query = "WHERE  $times.start <= r.time<= $times.end "
-            else:
-                where_query = ""
+            where_query = ''.join([where_query, " AND r.weight >=", str(weight_cutoff), " "])
+        if isinstance(times, dict):
+            where_query = ''.join([where_query, " AND  $times.start <= r.time<= $times.end "])
+        elif isinstance(times, list):
+            where_query = ''.join([where_query, " AND  r.time in $times "])
+
         # Create params with or without time
-        if isinstance(times, dict) or isinstance(times, int):
+        if isinstance(times, dict) or isinstance(times, int) or isinstance(times, list):
             params = {"ids": ids, "times": times}
         else:
             params = {"ids": ids}
@@ -467,9 +470,9 @@ class neo4j_database():
                                    " WITH a.token_id AS idx, sum(r.weight) AS weight RETURN idx, round(sum(weight)) as occurrences order by idx"])
 
         if isinstance(times, int):
-            match_query = "UNWIND $ids AS id MATCH p=(a:word  {token_id:id})-[:onto]->(r:edge {time:$times})-[:onto]->(b:word) "
+            match_query = "MATCH p=(a:word)-[:onto]->(r:edge {time:$times})-[:onto]->(b:word) "
         else:
-            match_query = "unwind $ids AS id MATCH p=(a:word  {token_id:id})-[:onto]->(r:edge)-[:onto]->(b:word) "
+            match_query = "MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word) "
 
         query = "".join([match_query, where_query, return_query])
         res = self.receive_query(query, params)
@@ -491,27 +494,24 @@ class neo4j_database():
         """
 
         logging.debug("Querying {} node occurrences for normalization".format(len(ids)))
-
+        # New where query
+        where_query = " WHERE s.token_id in $ids"
         # Create context query
-        context_where = ' ALL(r in nodes(p) WHERE size([(r) - [: conto]->(:context) - [: conto]->(e:word) WHERE e.token_id IN $clist | e]) > 0 OR(r: word))'
-
-        # Allow cutoff value of (non-aggregated) weights and set up time-interval query
-        # If times is a dict, we want an interval and hence where query
-        if weight_cutoff is not None:
-            where_query = ''.join([" WHERE r.weight >=", str(weight_cutoff), " AND "])
-            if isinstance(times, dict):
-                where_query = ''.join([where_query, " $times.start <= r.time<= $times.end AND "])
-        else:
-            if isinstance(times, dict):
-                where_query = "WHERE  $times.start <= r.time<= $times.end AND "
-            else:
-                # Always need a WHERE query for context
-                where_query = "WHERE "
+        context_where = ' AND ALL(r in nodes(p) WHERE size([(r) - [: conto]->(:context) - [: conto]->(e:word) WHERE e.token_id IN $clist | e]) > 0 OR(r: word))'
         # Join where and context query
         where_query = ' '.join([where_query, context_where])
 
+        # Allow cutoff value of (non-aggregated) weights and set up time-interval query
+        if weight_cutoff is not None:
+            where_query = ''.join([where_query, " AND r.weight >=", str(weight_cutoff), " "])
+        if isinstance(times, dict):
+            where_query = ''.join([where_query, " AND  $times.start <= r.time<= $times.end "])
+        elif isinstance(times, list):
+            where_query = ''.join([where_query, " AND  r.time in $times "])
+
+
         # Create params with or without time
-        if isinstance(times, dict) or isinstance(times, int):
+        if isinstance(times, dict) or isinstance(times, int) or isinstance(times, list):
             params = {"ids": ids, "times": times, "clist": context}
         else:
             params = {"ids": ids, "clist": context}
@@ -519,9 +519,9 @@ class neo4j_database():
         # return_query = ''.join([" WITH a.token_id AS idx, r.seq_id AS sequence_id ,(r.time) as year, count(DISTINCT(r.pos)) as pos_count RETURN idx, sum(pos_count) AS occurrences order by idx"])
         return_query = " WITH s.token_id AS idx, sum(r.weight) AS weight RETURN idx, round(sum(weight)) as occurrences order by idx"
         if isinstance(times, int):
-            match_query = "UNWIND $ids AS id MATCH p=(s:word  {token_id:id})-[:onto]->(r:edge {time:$times})-[:onto]->(v:word) "
+            match_query = "MATCH p=(s:word)-[:onto]->(r:edge {time:$times})-[:onto]->(v:word) "
         else:
-            match_query = "unwind $ids AS id MATCH p=(s:word  {token_id:id})-[:onto]->(r:edge)-[:onto]->(v:word) "
+            match_query = "MATCH p=(s:word)-[:onto]->(r:edge)-[:onto]->(v:word) "
 
         query = "".join([match_query, where_query, return_query])
         logging.debug(query)
