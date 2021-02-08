@@ -368,6 +368,8 @@ class neo4j_network(Sequence):
         input_check(tokens=context)
         input_check(years=years)
 
+        focal_tokens=self.ensure_ids(focal_tokens)
+
         if self.conditioned == False:
             was_conditioned = False
             if ego_nw_tokens == None:
@@ -385,7 +387,7 @@ class neo4j_network(Sequence):
                 logging.debug("Finished ego conditioning, {} nodes and {} edges in graph".format(
                     len(self.graph.nodes), len(self.graph.edges)))
         else:
-            logging.warning(
+            logging.debug(
                 "Network already conditioned! No reconditioning attempted, parameters unused.")
             was_conditioned = True
 
@@ -446,7 +448,7 @@ class neo4j_network(Sequence):
         was_conditioned = False
         if self.conditioned == True:
             was_conditioned = True
-            logging.warning(
+            logging.debug(
                 "Network already conditioned! No reconditioning attempted, parameters unused.")
         proximity_dict = {}
         if len(focal_tokens)>100:

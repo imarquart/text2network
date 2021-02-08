@@ -52,7 +52,6 @@ logging.info("ties in network %i" % (semantic_network.graph.number_of_edges()))
 print("------------------------------------------------")
 logging.info("------------------------------------------------")
 
-context_words=["manager","leader","ceo"]
 del semantic_network
 semantic_network = neo4j_network(config, connection_type="bolt")
 # Condition the network
@@ -67,7 +66,6 @@ logging.info("ties in network %i" % (semantic_network.graph.number_of_edges()))
 print("------------------------------------------------")
 logging.info("------------------------------------------------")
 
-context_words=["manager","leader","ceo"]
 del semantic_network
 semantic_network = neo4j_network(config, connection_type="bolt")
 # Condition the network
@@ -81,6 +79,21 @@ logging.info("nodes in network %i" % (len(semantic_network)))
 logging.info("ties in network %i" % (semantic_network.graph.number_of_edges()))
 print("------------------------------------------------")
 logging.info("------------------------------------------------")
+
+del semantic_network
+semantic_network = neo4j_network(config, connection_type="bolt")
+# Condition the network
+start_time = time.time()
+semantic_network.condition()
+print("bolt ALL years condition, 100000, no cutoff %s seconds" % (time.time() - start_time))
+logging.info("bolt ALL years condition, 100000, no cutoff %s seconds" % (time.time() - start_time))
+print("nodes in network %i" % (len(semantic_network)))
+print("ties in network %i" % (semantic_network.graph.number_of_edges()))
+logging.info("nodes in network %i" % (len(semantic_network)))
+logging.info("ties in network %i" % (semantic_network.graph.number_of_edges()))
+print("------------------------------------------------")
+logging.info("------------------------------------------------")
+
 
 # Analysis examples
 # Setup network on processed database
@@ -596,7 +609,8 @@ semantic_network.condition(years=2009, weight_cutoff=0.1)
 start_time = time.time()
 clusters=semantic_network.cluster(levels=levels)
 for cl in clusters:
-    print("Name: {}, Level: {}, Parent: {}, Nodes: {}".format(cl['name'],cl['level'],cl['parent'],cl['graph'].nodes))
+    if len(cl['graph'].nodes)>2:
+        print("Name: {}, Level: {}, Parent: {}, Nodes: {}".format(cl['name'],cl['level'],cl['parent'],cl['graph'].nodes))
 print("bolt one year 2-lvl clustering, cutoff 0.1, %s seconds" % (time.time() - start_time))
 logging.info("bolt one year 2-lvl clustering, cutoff 0.1, %s seconds" % (time.time() - start_time))
 print("------------------------------------------------")

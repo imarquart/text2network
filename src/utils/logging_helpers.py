@@ -1,7 +1,7 @@
 import logging
 from src.functions.file_helpers import check_create_folder
 
-def setup_logger(logging_path, logging_level):
+def setup_logger(logging_path, logging_level,filename="log"):
     """
     Sets up logging formats and file etc.
     Returns
@@ -21,6 +21,6 @@ def setup_logger(logging_path, logging_level):
     logFormatter = logging.Formatter(
         '%(asctime)s - %(levelname)s - %(name)s -   %(message)s')
     fileHandler = logging.FileHandler(
-        "{0}/{1}.log".format(logging_path, "text2network"))
+        "{0}/{1}.log".format(logging_path, "".join(["text2network_",filename])))
     fileHandler.setFormatter(logFormatter)
     rootLogger.addHandler(fileHandler)
