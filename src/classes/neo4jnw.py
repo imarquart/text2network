@@ -159,7 +159,30 @@ class neo4j_network(Sequence):
 
 
     def pd_format(self, output: Union[List,Dict], ids_to_tokens: bool = True) -> List:
+        """
+        Formats a list of measures, or a single measure, into pandas for output.
 
+        Accepted measures are proximity, centrality, and yearly centrality
+
+        centrality returns a nxk DataFrame, where n is the number of focal tokens, and k is the number of centrality measures
+
+        proximities are returned as a nxk DataFrame, where n is the number of focal tokens, and k is the alter subset
+        such that [nk] represents the tie from n to k in the graph.
+        Note that when calculating proximities for the whole graph, [nk] is not necessarily symmetric nor square.
+        This is so, because tokens that have no incoming ties will not show up in the column dimension, but will show
+        up in the row dimensions.
+
+        Parameters
+        ----------
+        output: list or dict
+            The output measures to format
+        ids_to_tokens: bool
+            Whether to output tokens as words rather than ids. Default is True.
+
+        Returns
+        -------
+        List of DataFrames.
+        """
         # Format output into pandas
         format_output=pd_format(output)
         # Transform ids to token names
@@ -194,6 +217,12 @@ class neo4j_network(Sequence):
         input_check(tokens=context)
         input_check(years=years)
 
+        # Check and fix up token lists
+        if tokens is not None:
+            tokens = self.ensure_ids(tokens)
+            if not isinstance(tokens,list):
+                tokens=[tokens]
+
         # Without times, we query all
         if years == None:
             years = self.get_times_list()
@@ -203,9 +232,12 @@ class neo4j_network(Sequence):
             self.__year_condition(years, weight_cutoff, context, norm, batchsize)
         else:
             logging.debug("Conditioning dispatch: Ego")
-            self.__ego_condition(years, tokens, weight_cutoff,
-                               depth, context, norm, batchsize)
-
+            if isinstance(tokens, (str,int)) or len(tokens)==1:
+                logging.debug("Conditioning dispatch: Ego, single token")
+                self.__ego_condition(years, tokens, weight_cutoff,depth, context, norm, batchsize)
+            else:
+                logging.debug("Conditioning dispatch: Ego, several token")
+                self.__ego_condition_old(years, tokens, weight_cutoff,depth+1, context, norm, batchsize)
         self.conditioned = True
 
     def decondition(self, write=False):
@@ -266,6 +298,9 @@ class neo4j_network(Sequence):
         # Check and fix up token lists
         if ego_nw_tokens is not None:
             ego_nw_tokens = self.ensure_ids(ego_nw_tokens)
+            if not isinstance(ego_nw_tokens,list):
+                ego_nw_tokens=[ego_nw_tokens]
+
         if context is not None:
             context = self.ensure_ids(context)
 
@@ -518,8 +553,8 @@ class neo4j_network(Sequence):
         ----------
         technique : string, optional
             transpose: Transpose and average adjacency matrix. Note: Loses other edge parameters!
-            min-sym: Retain minimum direction, no tie if zero / unidirectional.
-            max-sym: Retain maximum direction; tie exists even if unidirectional.
+            min-sym: Retain minimum direction, no tie if zero OR directed.
+            max-sym: Retain maximum direction; tie exists even if directed.
             avg-sym: Average ties. 
             min-sym-avg: Average ties if link is bidirectional, otherwise no tie.
             The default is "avg-sym".
@@ -640,6 +675,34 @@ class neo4j_network(Sequence):
     def __ego_condition(self, years, token_ids, weight_cutoff=None, depth=None, context=None, norm=None, batchsize=None):
 
         # Get default normation behavior
+        if norm == None:
+            norm = self.norm_ties
+        # Same for batchsize
+        if batchsize == None:
+            batchsize = self.neo_batch_size
+
+        # First, do a year conditioning
+        logging.debug("Full year conditioning before ego subsetting.")
+        self.condition(years=years,weight_cutoff=weight_cutoff, context=context, norm=norm, batchsize=batchsize)
+
+        # Create ego graph
+        self.graph = nx.generators.ego.ego_graph(self.graph, token_ids[0], radius=depth, center=True, undirected=False)
+        # Clear graph dicts
+        self.tokens = []
+        self.ids = []
+        self.update_dicts()
+        # Update IDs and Tokens to reflect conditioning
+        all_ids = list(self.graph.nodes)
+        self.tokens = [self.get_token_from_id(x) for x in all_ids]
+        self.ids = all_ids
+        self.update_dicts()
+        # Set conditioning true
+        self.conditioned = True
+
+
+    def __ego_condition_old(self, years, token_ids, weight_cutoff=None, depth=None, context=None, norm=None, batchsize=None):
+
+        # Get default normation behavior
         if norm==None:
             norm = self.norm_ties
         # Same for batchsize
@@ -657,6 +720,7 @@ class neo4j_network(Sequence):
             self.tokens = []
             self.ids = []
             self.update_dicts()
+
 
             # Depth 0 and Depth 1 really mean the same thing here
             if depth == 0 or depth == None:
@@ -698,6 +762,10 @@ class neo4j_network(Sequence):
                                              norm_ties=norm))
                     except:
                         logging.error("Could not condition graph by query method.")
+
+                # Delete disconnected nodes
+                remove = [node for node, degree in dict(self.graph.out_degree()).items() if degree <= 0]
+                self.graph.remove_nodes_from(remove)
 
                 # Update IDs and Tokens to reflect conditioning
                 all_ids = list(self.graph.nodes)

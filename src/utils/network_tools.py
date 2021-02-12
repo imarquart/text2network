@@ -15,7 +15,7 @@ def make_symmetric(graph, technique="avg-sym"):
         A directed, weighted graph.
     technique : TYPE, optional
         transpose: Transpose and average adjacency matrix. Note: Loses other edge parameters!
-        min-sym: Retain minimum direction, no tie if zero / unidirectional.
+        min-sym: Retain minimum direction i.e. no tie if zero / unidirectional.
         max-sym: Retain maximum direction; tie exists even if unidirectional.
         avg-sym: Average ties. 
         min-sym-avg: Average ties if link is bidirectional, otherwise no tie.

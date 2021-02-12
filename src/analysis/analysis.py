@@ -3,7 +3,8 @@ from src.utils.logging_helpers import setup_logger
 import logging
 import time
 import numpy as np
-
+import matplotlib.pyplot as plt
+import pandas as pd
 # Set a configuration path
 configuration_path='/config/config.ini'
 # Load Configuration file
@@ -40,8 +41,9 @@ for year in years:
     else:
         yvec=[year1,year2,year3]
 
-    #yvec=year2
-    semantic_network.condition(years=yvec,weight_cutoff=0.01)
+    yvec=year2
+    semantic_network.condition(years=yvec,weight_cutoff=0)
+    #semantic_network.to_backout()
     logging.info("Years {}".format(yvec))
     asdf=semantic_network.pd_format(semantic_network.proximities(focal_tokens=focal_words2, alter_subset=alter_subset))[0]
     asdf["normed"]=asdf.leader/np.sum(asdf.leader)
@@ -60,8 +62,7 @@ centlist1 = [x.normedPageRank for x in centlist]
 centlist_df= [x[['leader','manager']] for x in centlist1]
 centlist_df = pd.concat(centlist_df, axis=1)
 centlist_df.columns=years
-import matplotlib.pyplot as plt
-import pandas as pd
+
 plt.plot(centlist_df.T)
 plt.show()
 
@@ -73,7 +74,9 @@ proxlist_df=proxlist_df.fillna(0)
 proxlist_perc=proxlist_df.div(proxlist_df.sum(axis=1), axis=0)
 proxlist_perc=proxlist_perc.fillna(0)
 
-plt.plot(proxlist_perc)
-proxlist_df.plot()
+
+proxlist_df.plot.area()
 plt.legend(loc="lower center",ncol=6,bbox_to_anchor=(0.5, 1.05))
+
+plt.plot(proxlist_perc)
 plt.show()

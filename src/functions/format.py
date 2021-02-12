@@ -39,6 +39,9 @@ def pd_format(format_list: Union[List, Dict])->List:
                     output=pd.DataFrame(proxdict)
                     output=output.fillna(0)
                     output=output.sort_values(output.columns[0], ascending = False)
+                    # We want to transpose the data-frame, since pandas fills each dict as column
+                    # but convention dictates that rows=outgoing ties
+                    output=output.transpose()
                     result_list.append(output)
                 elif ftype =="centrality":
                     proxdict=fdict[ftype]
