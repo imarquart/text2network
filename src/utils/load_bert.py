@@ -110,7 +110,7 @@ def get_full_vocabulary(tokenizer):
 def get_bert_and_tokenizer(modelpath,load_local=False,attentions=True,hidden=False):
     priorlevel=logging.root.level
     logging.disable(logging.ERROR)
-    if load_local==True:
+    if load_local:
         try:
             #tokenizer = BertTokenizer.from_pretrained(modelpath, do_lower_case=True)
             tokenizer = CustomVocabBertTokenizer.from_pretrained(modelpath, do_lower_case=True)

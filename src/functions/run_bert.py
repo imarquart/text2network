@@ -283,7 +283,7 @@ def train(args, train_dataset, model, tokenizer):
                     torch.save(scheduler.state_dict(), os.path.join(output_dir, 'scheduler.pt'))
                     logger.info("Saving optimizer and scheduler states to %s", output_dir)
 
-            if args.max_steps > 0 and global_step > args.max_steps:
+            if 0 < args.max_steps < global_step:
                 logger.info("Epoch: Global step %i larger than max steps %i", global_step, args.max_steps)
                 epoch_iterator.close()
                 break
@@ -300,7 +300,7 @@ def train(args, train_dataset, model, tokenizer):
                 epoch_iterator.close()
                 break
 
-        if args.max_steps > 0 and global_step > args.max_steps:
+        if 0 < args.max_steps < global_step:
             logger.info("Global step %i larger than max steps %i", global_step, args.max_steps)
             train_iterator.close()
             break
@@ -481,7 +481,7 @@ def run_bert(args, tokenizer=None, model=None):
     if args.do_eval and args.local_rank in [-1, 0]:
 
         # Change: If not training, we evaluate not on output folder, but model folder model
-        if args.do_train==False:
+        if not args.do_train:
             check_dir=args.model_dir
         else:
             check_dir=args.output_dir

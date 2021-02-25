@@ -309,7 +309,7 @@ class neo4j_network_dummy(MutableSequence):
         input_check(tokens=context)
         input_check(years=years)
 
-        if self.conditioned == False:
+        if not self.conditioned:
             was_conditioned = False
             if ego_nw_tokens == None:
                 logging.debug("Conditioning year(s) {} with all tokens, measures on {}".format(
@@ -333,7 +333,7 @@ class neo4j_network_dummy(MutableSequence):
         cent_dict = centrality(
             self.graph, focal_tokens=focal_tokens,  types=types)
 
-        if was_conditioned == False:
+        if not was_conditioned:
             # Decondition
             self.decondition()
 
@@ -398,7 +398,7 @@ class neo4j_network_dummy(MutableSequence):
                 metadata_new[k].append(v)
 
 
-        if self.conditioned == False:
+        if not self.conditioned:
             was_conditioned = False
             if ego_nw_tokens == None:
                 logging.debug("Conditioning year(s) {} with all tokens".format(
@@ -437,7 +437,7 @@ class neo4j_network_dummy(MutableSequence):
         # Add last hierarchy
         cluster_list.extend(step_list)
 
-        if was_conditioned == False:
+        if not was_conditioned:
             # Decondition
             self.decondition()
 
@@ -483,12 +483,12 @@ class neo4j_network_dummy(MutableSequence):
         else:
             focal_tokens = self.ids
 
-        if self.conditioned == True:
+        if self.conditioned:
             logging.debug(
                 "Network already conditioned! No reconditioning attempted, parameters unused.")
         proximity_dict = {}
         for token in focal_tokens:
-            if self.conditioned == True:
+            if self.conditioned:
                 was_conditioned = True
             else:
                 logging.debug(
@@ -502,7 +502,7 @@ class neo4j_network_dummy(MutableSequence):
 
             proximity_dict.update({token: tie_dict})
 
-        if was_conditioned == False:
+        if not was_conditioned:
             # Decondition
             self.decondition()
 
@@ -536,7 +536,7 @@ class neo4j_network_dummy(MutableSequence):
         stopping : int, optional
             Used if method is "series". Determines the maximum order of series computation. The default is 25.
         """
-        if self.conditioned == False:
+        if not self.conditioned:
             logging.warning(
                 "Network is not conditioned. Conditioning on all data...")
             self.condition()
@@ -564,7 +564,7 @@ class neo4j_network_dummy(MutableSequence):
 
         """
 
-        if self.conditioned == False:
+        if not self.conditioned:
             logging.warning(
                 "Network is not conditioned. Conditioning on all data...")
             self.condition()

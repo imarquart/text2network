@@ -145,15 +145,15 @@ class neo4j_network(Sequence):
         """
         # If no norm is supplied, we switch
         if norm == None:
-            if self.norm_ties==True:
+            if self.norm_ties:
                 norm=False
             else:
                 norm=True
         # Set norm ties accordingly.
-        if norm==True:
+        if norm:
             self.norm_ties=True
             logging.info("Switched default to normalization to compositional mode.")
-        elif norm==False:
+        elif not norm:
             self.norm_ties=True
             logging.info("Switched default to normalization to aggregate mode.")
 
@@ -186,7 +186,7 @@ class neo4j_network(Sequence):
         # Format output into pandas
         format_output=pd_format(output)
         # Transform ids to token names
-        if ids_to_tokens == True:
+        if ids_to_tokens:
             for idx,pd_tbl in enumerate(format_output):
                 pd_tbl.index=self.ensure_tokens(list(pd_tbl.index))
                 pd_tbl.columns = self.ensure_tokens(list(pd_tbl.columns))
@@ -253,7 +253,7 @@ class neo4j_network(Sequence):
 
 
     # %% Clustering
-    def cluster(self, levels:int = 1, name:Optional[str]="base", metadata: Optional[Union[dict,defaultdict]] = None, algorithm: Optional[Callable[[nx.DiGraph], List]] = None,to_measure: Optional[List[Callable[[nx.DiGraph], Dict]]] = None, ego_nw_tokens:Optional[List]=None, depth:Optional[int]=1,years:Optional[Union[int,Dict,List]]=None, context:Optional[List]=None, weight_cutoff:float=None, norm_ties:bool=None):
+    def cluster(self, levels:int = 1, name:Optional[str]="base", interest_list:Optional[list]=None, metadata: Optional[Union[dict,defaultdict]] = None, algorithm: Optional[Callable[[nx.DiGraph], List]] = None,to_measure: Optional[List[Callable[[nx.DiGraph], Dict]]] = None, ego_nw_tokens:Optional[List]=None, depth:Optional[int]=1,years:Optional[Union[int,Dict,List]]=None, context:Optional[List]=None, weight_cutoff:float=None, norm_ties:bool=None):
         """
         Cluster the network, run measures on the clusters and return them as networkx subgraph in packaged dicts with metadata.
         Use the levels variable to determine how often to cluster hierarchically.
@@ -267,6 +267,8 @@ class neo4j_network(Sequence):
             Number of hierarchy levels to cluster
         name: str. Optional.
             Base name of the cluster. Further levels will add -i. Default is "base".
+        interest_list: list. Optional.
+            List of tokens or token_ids of interest. Clusters not including any of these terms are discarded
         metadata: dict. Optional.
             A dict of metadata that is kept for all clusters.
         algorithm: callable.  Optional.
@@ -292,6 +294,7 @@ class neo4j_network(Sequence):
         """
 
         input_check(tokens=ego_nw_tokens)
+        input_check(tokens=interest_list)
         input_check(tokens=context)
         input_check(years=years)
 
@@ -300,6 +303,11 @@ class neo4j_network(Sequence):
             ego_nw_tokens = self.ensure_ids(ego_nw_tokens)
             if not isinstance(ego_nw_tokens,list):
                 ego_nw_tokens=[ego_nw_tokens]
+
+        if interest_list is not None:
+            interest_list = self.ensure_ids(interest_list)
+            if not isinstance(interest_list,list):
+                interest_list=[interest_list]
 
         if context is not None:
             context = self.ensure_ids(context)
@@ -316,7 +324,7 @@ class neo4j_network(Sequence):
                 metadata_new[k].append(v)
 
 
-        if self.conditioned == False:
+        if not self.conditioned:
             was_conditioned = False
             if ego_nw_tokens == None:
                 logging.debug("Conditioning year(s) {} with all tokens".format(
@@ -343,19 +351,37 @@ class neo4j_network(Sequence):
         step_list = []
         base_step_list = []
         prior_list = [base_cluster]
+        # This goes as follows
+        # prior_list is a list of clusters from the prior level - starting with level 0
+        # base_step_list is a list of the same prior clusters, but modified such that each node has t+1 cluster information
+        # step_list is a list of clusters populated from current level
+        # cluster_list is a list of clusters for all levels
+
+        # Since we want the clusters of level t to have node-information of level t+1, we have to run in a specific way
+        # Start with level t, run the cluster function for each cluster
+        # Get the cluster at level t, plus all its subclusters
+        # save these in base_step_list (level t) and step_list (level t+1) respectively
+        # Now add base_step_list (level t) to the overall cluster list
+        # Set step list as new base list and run level t+1
         for t in range(0,levels):
             step_list=[]
             base_step_list=[]
             for base in prior_list:
                 base,new_list=cluster_graph(base, to_measure, algorithm)
                 base_step_list.append(base)
-                step_list.extend(new_list)
+                if interest_list is not None: # We want to proceed only on clusters of interest.
+                    for cl in new_list:
+                        cl_nodes=self.ensure_tokens(list(cl['graph'].nodes))
+                        if len(np.intersect1d(cl_nodes, interest_list)) > 0: # Cluster of interest, add
+                            step_list.append(cl)
+                else: # add all
+                    step_list.extend(new_list)
             prior_list=step_list
             cluster_list.extend(base_step_list)
         # Add last hierarchy
         cluster_list.extend(step_list)
 
-        if was_conditioned == False:
+        if not was_conditioned:
             # Decondition
             self.decondition()
 
@@ -405,7 +431,7 @@ class neo4j_network(Sequence):
 
         focal_tokens=self.ensure_ids(focal_tokens)
 
-        if self.conditioned == False:
+        if not self.conditioned:
             was_conditioned = False
             if ego_nw_tokens == None:
                 logging.debug("Conditioning year(s) {} with focus on tokens {}".format(
@@ -429,7 +455,7 @@ class neo4j_network(Sequence):
         cent_dict = centrality(
             self.graph, focal_tokens=focal_tokens,  types=types)
 
-        if was_conditioned == False:
+        if not was_conditioned:
             # Decondition
             self.decondition()
 
@@ -477,11 +503,13 @@ class neo4j_network(Sequence):
             alter_subset = self.ensure_ids(alter_subset)
         if focal_tokens is not None:
             focal_tokens = self.ensure_ids(focal_tokens)
+            if not isinstance(focal_tokens,list):
+                focal_tokens=[focal_tokens]
         else:
             focal_tokens = self.ids
 
         was_conditioned = False
-        if self.conditioned == True:
+        if self.conditioned:
             was_conditioned = True
             logging.debug(
                 "Network already conditioned! No reconditioning attempted, parameters unused.")
@@ -489,7 +517,7 @@ class neo4j_network(Sequence):
         if len(focal_tokens)>100:
             logging.info("Calculating proximities sequentially for {} tokens!".format(len(focal_tokens)))
         for token in focal_tokens:
-            if was_conditioned == False:
+            if not was_conditioned:
                 logging.debug(
                     "Conditioning year(s) {} with focus on token {}".format(years, token))
                 self.condition(years, tokens=[
@@ -501,7 +529,7 @@ class neo4j_network(Sequence):
 
             proximity_dict.update({token: tie_dict})
 
-        if was_conditioned == False:
+        if not was_conditioned:
             # Decondition
             self.decondition()
 
@@ -537,7 +565,7 @@ class neo4j_network(Sequence):
         None.
 
         """
-        if self.conditioned == False:
+        if not self.conditioned:
             logging.warning(
                 "Network is not conditioned. Conditioning on all data...")
             self.condition()
@@ -565,7 +593,7 @@ class neo4j_network(Sequence):
 
         """
 
-        if self.conditioned == False:
+        if not self.conditioned:
             logging.warning(
                 "Network is not conditioned. Conditioning on all data...")
             self.condition()
@@ -581,7 +609,7 @@ class neo4j_network(Sequence):
         :return: NetworkX compatible node format
         """
         # If so desired, induce a queue write before any query
-        if self.db.write_before_query == True:
+        if self.db.write_before_query:
             self.db.write_queue()
         # Are time formats submitted? Handle those and check inputs
         if isinstance(i, tuple):
@@ -598,7 +626,7 @@ class neo4j_network(Sequence):
             input_check(tokens=i)
 
         i = self.ensure_ids(i)
-        if self.conditioned == False:
+        if not self.conditioned:
             return self.query_nodes(i, times=year, norm_ties=self.norm_ties)
         else:
             if isinstance(i, (list, tuple, np.ndarray)):
@@ -628,7 +656,7 @@ class neo4j_network(Sequence):
         if batchsize==None:
             batchsize=self.neo_batch_size
 
-        if self.conditioned == False:  # This is the first conditioning
+        if not self.conditioned:  # This is the first conditioning
             # Preserve node and token lists
             self.neo_ids = copy.deepcopy(self.ids)
             self.neo_tokens = copy.deepcopy(self.tokens)
@@ -709,7 +737,7 @@ class neo4j_network(Sequence):
         if batchsize==None:
             batchsize=self.neo_batch_size
 
-        if self.conditioned == False:  # This is the first conditioning
+        if not self.conditioned:  # This is the first conditioning
             # Preserve node and token lists
             self.neo_ids = copy.deepcopy(self.ids)
             self.neo_tokens = copy.deepcopy(self.tokens)
@@ -784,7 +812,7 @@ class neo4j_network(Sequence):
 
                 # decrease depth
                 depth = depth - 1
-                if token_ids == []:
+                if not token_ids:
                     depth = 0
 
             # Set conditioning true
@@ -870,7 +898,7 @@ class neo4j_network(Sequence):
                 return ids
 
     def export_gefx(self, path, delete_isolates=True):
-        if self.conditioned == True:
+        if self.conditioned:
             try:
                 # Relabel nodes
                 labeldict = dict(
@@ -880,7 +908,7 @@ class neo4j_network(Sequence):
                 self.graph = nx.relabel_nodes(self.graph, labeldict)
 
                 print(len(self.graph.nodes))
-                if delete_isolates == True:
+                if delete_isolates:
                     isolates = list(nx.isolates(self.graph))
                     logging.info(
                         "Found {} isolated nodes in graph, deleting.".format(len(isolates)))

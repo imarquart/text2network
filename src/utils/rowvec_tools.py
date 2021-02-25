@@ -24,7 +24,7 @@ def simple_norm(x, min_zero=True):
     """
     x_org=x.copy()
     x=np.array(x)
-    if min_zero==True:
+    if min_zero:
         x = x - np.min(x[x>0], axis=-1)
         x[x<0]=0
     if np.sum(x, axis=-1) > 0:

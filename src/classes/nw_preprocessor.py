@@ -183,7 +183,7 @@ class nw_preprocessor():
             folder = self.import_folder
         folder = normpath(folder)
         folders = [''.join([folder, '/', name]) for name in os.listdir(folder)]
-        if overwrite == True:
+        if overwrite:
             try:
                 data_file = tables.open_file(
                     self.database, mode="w", title="Sequence Data")
@@ -286,7 +286,7 @@ class nw_preprocessor():
                     exclude = True
                 params.append(par)
 
-            if exclude == True:
+            if exclude:
                 text = ""
             else:
                 try:

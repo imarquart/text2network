@@ -174,7 +174,7 @@ class nw_processor():
             self.setup_uniques(split_hierarchy)
 
         # Clean the database
-        if delete_all == True:
+        if delete_all:
             logging.info("Cleaning Neo4j Database of all prior connections")
             self.neograph.db.clean_database()
 
@@ -204,7 +204,7 @@ class nw_processor():
                     complete_step(processing_folder, hash)
 
         # Prune the database
-        if prune_database == True:
+        if prune_database:
             logging.info("Pruning Neo4j Database of all unused tokens")
             self.neograph.db.prune_database()
 
@@ -362,7 +362,7 @@ class nw_processor():
                         # Get rid of delnorm links
                         replacement[delwords] = 0
                         # Get rid of tokens not in text
-                        if self.prune_missing_tokens == True:
+                        if self.prune_missing_tokens:
                             replacement[dataset.id_mask] = 0
                         # We norm the distributions here
                         replacement = self.norm(replacement, min_zero=False)
@@ -380,7 +380,7 @@ class nw_processor():
                         # Get rid of delnorm links
                         context[delwords] = 0
                         # Get rid of tokens not in text
-                        if self.prune_missing_tokens==True:
+                        if self.prune_missing_tokens:
                             context[dataset.id_mask] = 0
                         # We norm the distributions here
                         context = self.norm(context, min_zero=False)
@@ -599,7 +599,7 @@ class nw_processor():
                 selector = weights >= min_probability
                 neighbors = neighbors[selector]
                 weights = weights[selector] # no renormalization now!
-            if simplify_context == False:
+            if not simplify_context:
                 return [(int(token), int(x[0]), int(time),
                          {'weight': float(x[1]),'run_index': int(run_index), 'seq_id': int(seq_id), 'pos': int(pos),  'p1': str(p1), 'p2': str(p2),
                           'p3': str(p3), 'p4': str(p4)}) for x in list(zip(neighbors, weights))]

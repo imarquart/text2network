@@ -1,4 +1,5 @@
 from src.functions.file_helpers import check_create_folder
+from src.functions.measures import average_fixed_cluster_proximities
 from src.utils.logging_helpers import setup_logger
 import logging
 import time
@@ -6,10 +7,25 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 from src.functions.node_measures import proximity, centrality
+from src.functions.graph_clustering import consensus_louvain
 from src.classes.neo4jnw import neo4j_network
 
 # Set a configuration path
 configuration_path = '/config/config.ini'
+# Settings
+years = range(1980, 2020)
+focal_words = ["leader", "manager"]
+focal_token = "leader"
+alter_subset = ["boss", "coach", "consultant", "expert", "mentor", "superior"]
+levels = [12, 12, 12, 12, 12, 12]
+cutoffs = [0.1, 0.05, 0.01, 0, 0, 0]
+depths = [1, 1, 1, 2, 3, 0]
+
+##############################################################################
+
+# Random Seed
+np.random.seed(100)
+
 # Load Configuration file
 import configparser
 
@@ -24,61 +40,18 @@ semantic_network = neo4j_network(config)
 
 # years=np.array(semantic_network.get_times_list())
 # years=-np.sort(-years)
+
 logging.info("------------------------------------------------")
-years = range(1980, 2020)
-focal_words = ["leader", "manager"]
-focal_words2 = ["leader"]
-alter_subset = ["boss", "coach", "consultant", "expert", "mentor", "superior"]
 
-levels = [8]
-cutoffs = [0]
-depths = [0]
+focal_token="leader"
+interest_tokens=alter_subset
+levels=8
+cluster_cutoff=0.2
+weight_cutoff=0.2
+filename = "".join(
+    [config['Paths']['csv_outputs'], "/", str(focal_token), "_con_yearfixed_lev", str(levels), "_clcut",
+     str(cluster_cutoff),"_cut", str(weight_cutoff), "_depth", str(1),
+     ".xlsx"])
 
-for level, cutoff, depth in zip(levels, cutoffs, depths):
-    logging.info("------------------------------------------------")
-    filename = "".join(
-        [config['Paths']['csv_outputs'], "/egocluster_lev", str(level), "_cut", str(cutoff), "_depth", str(depth),
-         ".xlsx"])
-    filename_csv = "".join(
-        [config['Paths']['csv_outputs'], "/egocluster_lev", str(level), "_cut", str(cutoff), "_depth", str(depth),
-         ".csv"])
-    logging.info("Network clustering: {}".format(filename))
-    filename = check_create_folder(filename)
-    filename_csv = check_create_folder(filename_csv)
-    del semantic_network
-    semantic_network = neo4j_network(config, connection_type="bolt")
-    start_time = time.time()
-    dataframe_list = []
-    if depth > 0:
-        clusters = semantic_network.cluster(ego_nw_tokens="leader", depth=depth, levels=level, weight_cutoff=cutoff,
-                                            to_measure=[proximity])
-    else:
-        clusters = semantic_network.cluster(levels=level, weight_cutoff=cutoff, to_measure=[proximity])
-    for cl in clusters:
-        if cl['level'] == 0:
-            rev_proxim = semantic_network.pd_format(cl['measures'])[0].loc[:, 'leader']
-            proxim = semantic_network.pd_format(cl['measures'])[0].loc['leader', :]
-        if len(cl['graph'].nodes) > 2 and cl['level'] > 0:
-            nodes = semantic_network.ensure_tokens(list(cl['graph'].nodes))
-            proximate_nodes = proxim.reindex(nodes, fill_value=0)
-            proximate_nodes = proximate_nodes[proximate_nodes > 0]
-            mean_cluster_prox = np.mean(proximate_nodes)
-            top_node = proximate_nodes.idxmax()
-            if len(proximate_nodes) > 0:
-                logging.info("Name: {}, Level: {}, Parent: {}".format(cl['name'], cl['level'], cl['parent']))
-                logging.info("Nodes: {}".format(nodes))
-                logging.info(proximate_nodes)
-            for node in nodes:
-                if proxim[node] > 0:
-                    node_prox = proxim.reindex([node], fill_value=0)[0]
-                    node_rev_prox = rev_proxim.reindex([node], fill_value=0)[0]
-                    delta_prox = node_prox - node_rev_prox
-                    df_dict = {'Token': node, 'Level': cl['level'], 'Clustername': cl['name'], 'Prom_Node': top_node,
-                               'Parent': cl['parent'], 'Cluster_Avg_Prox': mean_cluster_prox, 'Proximity': node_prox,
-                               'Rev_Proximity': node_rev_prox, 'Delta_Proximity': delta_prox}
-                    dataframe_list.append(df_dict.copy())
-
-    df = pd.DataFrame(dataframe_list)
-    df.to_excel(filename)
-    df.to_csv(filename_csv)
-    del clusters
+df=average_fixed_cluster_proximities(focal_token, interest_tokens, semantic_network, levels, weight_cutoff=weight_cutoff,cluster_cutoff=cluster_cutoff, filename=filename)
+logging.info(df)

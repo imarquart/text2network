@@ -46,7 +46,7 @@ def backout_measure(graph, nodelist=None, decay=None, method="invert", stopping=
 
     """
     # Get Scipy sparse matrix
-    if nodelist == None:
+    if nodelist is None:
         G = nx.to_scipy_sparse_matrix(graph,   format="csc")
         n = len(graph.nodes)
         nodelist=np.array(graph.nodes)
@@ -54,7 +54,7 @@ def backout_measure(graph, nodelist=None, decay=None, method="invert", stopping=
         G = nx.to_scipy_sparse_matrix(graph, nodelist=nodelist,   format="csc")
         n = len(nodelist)
 
-    if decay == None:
+    if decay is None:
         eigenvalues, eigenvectors = sp.sparse.linalg.eigs(G)
         sp_rad = 1.5*np.max(np.abs(eigenvalues))
         decay = 1/sp_rad

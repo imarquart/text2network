@@ -4,6 +4,7 @@ Created on Fri Dec 18 21:16:52 2020
 
 @author: marquart
 """
+import itertools
 from _collections import defaultdict
 import logging
 from typing import Optional, Callable, Tuple, List, Dict, Union
@@ -30,6 +31,47 @@ def louvain_cluster(graph):
     clustering = best_partition(graph)
 
     return [[k for k, v in clustering.items() if v == val] for val in list(set(clustering.values()))]
+
+
+def consensus_louvain(graph, iterations=6):
+    graph = make_symmetric(graph)
+
+    new_graph_list=[]
+
+    # Run Clustering several times with different starting points
+    for i in range(0,iterations):
+        new_graph=nx.Graph()
+        new_graph.add_nodes_from(graph.nodes)
+        clustering = best_partition(graph, randomize=True)
+        clustering = [[k for k, v in clustering.items() if v == val] for val in list(set(clustering.values()))]
+        # Create ties for nodes that belong to the same cluster
+        for cluster in clustering:
+            pairs = itertools.combinations(cluster, r=2)
+            new_graph.add_edges_from(list(pairs))
+        new_graph_list.append(new_graph)
+
+    # Consensus clustering
+    consensus_graph = nx.Graph()
+    consensus_graph.add_nodes_from(graph.nodes)
+    pairs = itertools.combinations(list(consensus_graph.nodes), r=2)
+    # Iterate over all pairs and add edges
+    for u,v in pairs:
+        weight=0
+        # Add 1 for each tie in a cluster graph
+        for i, cluster_graph in enumerate(new_graph_list):
+            if cluster_graph.has_edge(u, v):
+                weight=weight+1
+        # Normalize percentage
+        weight=weight/iterations
+        # Add if majority agrees on tie
+        if weight>=0.5:
+            consensus_graph.add_edge(u,v,weight=weight)
+    del new_graph_list
+    # Now re-run clustering on consensus graph to get final clustering
+    clustering = best_partition(consensus_graph)
+    return [[k for k, v in clustering.items() if v == val] for val in list(set(clustering.values()))]
+
+
 
 
 
@@ -119,7 +161,7 @@ def create_cluster_subgraph(graph: nx.DiGraph, nodelist: list, copy=True) -> nx.
     -------
     networkx graph
     """
-    if copy == True:
+    if copy:
         cluster_subgraph = nx.subgraph(graph, nodelist).copy()
     else:
         cluster_subgraph = nx.subgraph(graph, nodelist)

@@ -34,7 +34,7 @@ def check_create_folder(folder,create_folder=True):
         db_folder=getcwd() + db_folder
 
     if not exists(db_folder):
-        if  create_folder==True:
+        if create_folder:
             try:
                 logging.info("Folder {} does not exist. Creating folder.".format(db_folder))
                 mkdir(db_folder)

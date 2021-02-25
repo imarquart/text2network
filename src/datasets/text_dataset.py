@@ -195,7 +195,7 @@ class bert_dataset(Dataset):
         self.examples = []
 
 
-        if check_vocab == True:
+        if check_vocab:
             # Get unique tokens
 
             nltk_tokens=nltk.word_tokenize(text)

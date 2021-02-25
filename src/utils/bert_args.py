@@ -30,7 +30,7 @@ class bert_args():
 
         self.loss_limit = loss_limit
         self.logging_level=logging_level
-        if do_train == True:
+        if do_train:
             self.do_train = True
             self.do_eval = True
         else:

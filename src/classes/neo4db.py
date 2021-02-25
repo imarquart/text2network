@@ -75,7 +75,7 @@ class neo4j_database():
             missing_tokens=tokens[missing_ids]
 
             msg="Token ID translation failed. {} Tokens missing in database: {}".format(len(missing_tokens),missing_tokens)
-            if fail_on_missing==True:
+            if fail_on_missing:
                 logging.error(msg)
                 raise ValueError(msg)
 
@@ -210,7 +210,7 @@ class neo4j_database():
 
         """
         logging.debug("Pruning disconnected tokens in database.")
-        res = self.add_query("MATCH (n) WHERE size((n)--())=0 DELETE (n)", run=True)
+        self.add_query("MATCH (n) WHERE size((n)--())=0 DELETE (n)", run=True)
 
 
     # %% Query Functions
@@ -350,7 +350,7 @@ class neo4j_database():
         occurrences = [x['occurrences'] for x in res]
         # Normalization
         # Ties should be normalized by the number of occurrences of the receiver
-        if norm_ties == True:
+        if norm_ties:
             norms = dict(self.query_occurrences(receivers, times, weight_cutoff))
             for i, token in enumerate(receivers):
                 tie_weights[i] = tie_weights[i] / norms[token]
@@ -426,7 +426,7 @@ class neo4j_database():
         occurrences = [x['occurrences'] for x in res]
         # Normalization
         # Ties should be normalized by the number of occurrences of the receiver
-        if norm_ties == True:
+        if norm_ties:
             norms = dict(self.query_occurrences_in_context(receivers, context, times, weight_cutoff))
             for i, token in enumerate(receivers):
                 tie_weights[i] = tie_weights[i] / norms[token]
@@ -564,7 +564,7 @@ class neo4j_database():
         return_query = ''.join(
             [" RETURN b.token_id AS context_token,a.token_id AS focal_token,count(c.time) AS occurrences,",
              self.aggregate_operator, "(c.weight) AS agg_weight order by agg_weight"])
-        if replacement_ce == False:
+        if not replacement_ce:
             if isinstance(times, int):
                 match_query = "UNWIND $ids AS id MATCH p=(a: word {token_id:id})-[: onto]->(r:edge) - [: conto]->(c:context {time:$times}) - [: conto]->(b:word)"
             else:
@@ -590,7 +590,7 @@ class neo4j_database():
         weights = np.array([x['agg_weight'] for x in res])
         occurrences = np.array([x['occurrences'] for x in res])
         # Normalize context element
-        if disable_normalization == False:
+        if not disable_normalization:
             for focal_token in np.unique(focal_tokens):
                 mask = focal_tokens == focal_token
                 weight_sum = np.sum(weights[mask])
@@ -693,7 +693,7 @@ class neo4j_database():
             if not all(cp4 == "0" ) and not all(cp4==''):
                 cparameter_string = cparameter_string + ", p4:con.p4"
 
-            if no_context==False:
+            if not no_context:
                 query = ''.join(
                     [" MATCH (a:word {token_id: $ego}) WITH a UNWIND $ties as tie MATCH (b:word {token_id: tie.alter}) ",
                      self.creation_statement,
@@ -726,7 +726,7 @@ class neo4j_database():
         else:
             self.add_queries([query], None)
         
-        if run==True:
+        if run:
             self.write_queue()
 
     def add_queries(self, query, params=None):
