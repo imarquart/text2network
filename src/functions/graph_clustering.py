@@ -27,14 +27,16 @@ except:
     GraphDict = Dict[str, Union[str,int,Dict,List,defaultdict]]
 
 def louvain_cluster(graph):
-    graph = make_symmetric(graph)
+    if graph.is_directed():
+        graph = make_symmetric(graph)
     clustering = best_partition(graph)
 
     return [[k for k, v in clustering.items() if v == val] for val in list(set(clustering.values()))]
 
 
-def consensus_louvain(graph, iterations=6):
-    graph = make_symmetric(graph)
+def consensus_louvain(graph, iterations=4):
+    if graph.is_directed():
+        graph = make_symmetric(graph)
 
     new_graph_list=[]
 
@@ -100,7 +102,7 @@ def cluster_graph(graph: GraphDict, to_measure: Optional[List[Callable[[nx.DiGra
     graph_level = graph['level']
     graph_metadata = graph['metadata']
 
-    if algorithm==None:
+    if algorithm is None:
         algorithm=louvain_cluster
 
     # Run clustering algorithm

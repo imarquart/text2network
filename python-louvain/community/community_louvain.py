@@ -271,6 +271,11 @@ def generate_dendrogram(graph,
 
     Parameters
     ----------
+    graph
+    part_init
+    resolution
+    randomize
+    random_state
     graph : networkx.Graph
         the networkx graph which will be decomposed
     part_init : dict, optional

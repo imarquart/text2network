@@ -36,7 +36,7 @@ def proximity(nw_graph, focal_tokens=None, alter_subset=None):
         focal_tokens=list(nw_graph.nodes)
     for token in focal_tokens:        
         # Get list of alter token ids, either those found in network, or those specified by user
-        if alter_subset == None:
+        if alter_subset is None:
             alter_subset = list(nw_graph.nodes)
         logging.debug("alter_subset token_ids {}".format(alter_subset))
         if isinstance(alter_subset, int):
@@ -70,8 +70,7 @@ def yearly_centrality(nw_graph, year_list, focal_tokens=None,  types=["PageRank"
 
     Parameters
     ----------
-    semantic_network : semantic network class
-        semantic network to use.
+    nw_graph
     year_list : list
         List of years for which to calculate centrality.
     focal_tokens : list, str
@@ -101,8 +100,7 @@ def centrality(nw_graph, focal_tokens=None,  types=["PageRank", "normedPageRank"
 
     Parameters
     ----------
-    semantic_network : semantic network class
-        semantic network to use.
+    nw_graph
     focal_tokens : list, str, optional
         List of tokens of interest. If not provided, centralities for all tokens will be returned.
     types : list, optional

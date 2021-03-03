@@ -1,8 +1,7 @@
-from os import listdir, mkdir,getcwd
-from os.path import isfile, join, abspath, exists, dirname, basename, split,normpath
-from pathlib import Path
 import logging
-
+from os import mkdir, getcwd
+from os.path import exists, normpath
+from pathlib import Path
 
 
 def check_create_folder(folder,create_folder=True):
@@ -11,6 +10,7 @@ def check_create_folder(folder,create_folder=True):
     If path relative, checks also from current working directory
     Parameters
     ----------
+    create_folder
     folder: String
         Folder
 

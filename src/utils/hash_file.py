@@ -19,6 +19,11 @@ def hash_file(filename, hash_factory="md5", chunk_num_blocks=128):
     :param file: file
     :param hash_factory: "md5" or "blake2"
     :return: hash: The hashed string
+
+    Parameters
+    ----------
+    filename
+    chunk_num_blocks
     """
 
     if hash_factory=="blake2":
@@ -38,6 +43,10 @@ def hash_string(text, hash_factory="md5"):
     :param file: file
     :param hash_factory: "md5" or "blake2"
     :return: hash: The hashed string
+
+    Parameters
+    ----------
+    text
     """
 
     if hash_factory=="blake2":

@@ -231,7 +231,8 @@ class neo4j_network_dummy(MutableSequence):
         self.conditioned = False
         return True
 
-    def ensure_ids(self, tokens):
+    @staticmethod
+    def ensure_ids(tokens):
         return tokens
 
     def yearly_centralities(self, year_list, focal_tokens=None,  types=["PageRank", "normedPageRank"], ego_nw_tokens=None, depth=1, context=None, weight_cutoff=None, norm_ties=True):
@@ -240,8 +241,6 @@ class neo4j_network_dummy(MutableSequence):
 
         Parameters
         ----------
-        semantic_network : semantic network class
-            semantic network to use.
         year_list : list
             List of years for which to calculate centrality.
         focal_tokens : list, str
@@ -311,7 +310,7 @@ class neo4j_network_dummy(MutableSequence):
 
         if not self.conditioned:
             was_conditioned = False
-            if ego_nw_tokens == None:
+            if ego_nw_tokens is None:
                 logging.debug("Conditioning year(s) {} with all tokens, measures on {}".format(
                     years, focal_tokens))
                 self.condition(years=years, tokens=None, weight_cutoff=weight_cutoff,
@@ -400,7 +399,7 @@ class neo4j_network_dummy(MutableSequence):
 
         if not self.conditioned:
             was_conditioned = False
-            if ego_nw_tokens == None:
+            if ego_nw_tokens is None:
                 logging.debug("Conditioning year(s) {} with all tokens".format(
                     years))
                 self.condition(years=years, tokens=None, weight_cutoff=weight_cutoff,
@@ -524,10 +523,6 @@ class neo4j_network_dummy(MutableSequence):
 
         Parameters
         ----------
-        graph : networkx graph
-            Supplied networkx graph.
-        nodelist : list, array, optional
-            List of nodes to subset graph.
         decay : float, optional
             Decay parameter determining the weight of higher order ties. The default is None.
         method : "invert" or "series", optional
@@ -571,11 +566,13 @@ class neo4j_network_dummy(MutableSequence):
 
         self.graph = make_symmetric(self.graph, technique)
 
-    def ensure_tokens(self, tokens):
+    @staticmethod
+    def ensure_tokens(tokens):
         return tokens
     # %% Graph abstractions - for now only network
 
-    def create_empty_graph(self):
+    @staticmethod
+    def create_empty_graph():
         return nx.DiGraph()
 
     def delete_graph(self):

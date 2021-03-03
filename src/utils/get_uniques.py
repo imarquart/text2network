@@ -6,6 +6,10 @@ def get_uniques(split_hierarchy,db_folder):
     Determines how many models we would like to train.
     :param split_hierarchy: List of table parameters
     :return: dict including unique values, query strings and bert folder names
+
+    Parameters
+    ----------
+    db_folder
     """
     # Create hierarchy splits
     hdf = tables.open_file(db_folder, mode="r")

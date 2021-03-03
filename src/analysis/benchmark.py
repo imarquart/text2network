@@ -28,54 +28,46 @@ config = configparser.ConfigParser()
 print(check_create_folder(configuration_path))
 config.read(check_create_folder(configuration_path))
 # Setup logging
-setup_logger(config['Paths']['log'], config['General']['logging_level'], "clustering")
+setup_logger(config['Paths']['log'], config['General']['logging_level'], "bench")
 
 # First, create an empty network
 semantic_network = neo4j_network(config)
 
-#### Cluster test
-level_list = [5,5,5,5,5,5,5,5,5,5]
-weight_list = [0,0.1,0,0.1,0,0.1,0.01,0.01,0.05,0.05]
-depth_list = [1,1,1,1,1,1,0,0,0,0]
-rs_list = [100,100,200,200,300,300,200,300,200,300]
+#### Conditioning test
+level_list = [5,5,5,5,5]
+weight_list = [0,0.1,0,0.1,0,0.1]
+depth_list = [1,1,1,1,1,1]
+rs_list = [100,200,300]
+year_list = [1981,1986,1996,2000,2010]
+focal_token = "leader"
+
+logging.info("-----------------Conditioning---------------------")
 
 logging.info("------------------------------------------------")
-for depth, level, rs,cutoff in zip(depth_list,level_list,rs_list,weight_list):
+test_name="Normed 1 Year  Conditioning"
+tokens=['leader']
+years=year_list
+weight_cutoff=0.1
+depth=1
+context=None
+norm=True
+param_string="Years: {}, Tokens: {}, Cutoff: {}, Depth: {}, Context: {}, Norm: {}".format(years,tokens,weight_cutoff,depth,context,norm)
+logging.info("------- {} -------".format(test_name))
+logging.info(param_string)
+time_list=[]
+# Random Seed
+for year in years:
+    logging.disable(logging.ERROR)
     del semantic_network
     semantic_network = neo4j_network(config)
-    filename = "".join(
-        [config['Paths']['csv_outputs'], "/", str(focal_token), "_con_egocluster_lev", str(level), "_cut",
-         str(cutoff), "_depth", str(depth),
-         ".xlsx"])
-    focal_token = "leader"
-    logging.info("Network clustering: {}".format(filename))
-    # Random Seed
-    np.random.seed(rs)
-    df = extract_all_clusters(level=level, cutoff=cutoff,focal_token=focal_token, semantic_network=semantic_network, depth= depth, interest_list=alter_subset, algorithm=louvain_cluster, filename=filename)
-    logging.info(df)
-
-#### Cluster yearly proximities
-# Random Seed
-np.random.seed(100)
-
-ma_list=[(0,0),(1,1),(2,0),(2,1),(0,0),(1,1),(2,0),(2,1),(0,0),(1,1),(2,0),(2,1),(0,0),(1,1),(2,0),(2,1),(0,0),(1,1),(2,0),(2,1)]
-level_list = [5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5]
-weight_list = [0,0,0,0,0.05,0.05,0.05,0.05,0,0,0,0,0,0,0,0,0.1,0.1,0.1,0.1]
-depth_list = [2,2,2,2,0,0,0,0,0,0,0,0]
-
+    start_time=time.time()
+    np.random.seed(100)
+    semantic_network.condition(years=year, tokens=tokens,weight_cutoff=weight_cutoff,depth=depth,context=context,norm=norm)
+    logging.disable(logging.NOTSET)
+    time_list.append(time.time() - start_time)
+logging.info("{} finished in average {} seconds".format(test_name,np.mean(time_list)))
+logging.info(param_string)
+logging.info("nodes in network %i" % (len(semantic_network)))
+logging.info("ties in network %i" % (semantic_network.graph.number_of_edges()))
 logging.info("------------------------------------------------")
-for depth, levels, moving_average,weight_cutoff in zip(depth_list,level_list,ma_list,weight_list):
-    focal_token="leader"
-    interest_tokens=alter_subset
-    #levels=5
-    #depth=1
-    #moving_average=(1,1)
-    cluster_cutoff=0.1
-    #weight_cutoff=0
-    filename = "".join(
-        [config['Paths']['csv_outputs'], "/", str(focal_token), "_con_yearfixed_lev", str(levels), "_clcut",
-         str(cluster_cutoff),"_cut", str(weight_cutoff), "_depth", str(depth),"_ma",str(moving_average),
-         ".xlsx"])
 
-    #df=average_fixed_cluster_proximities(focal_token, interest_tokens, semantic_network, levels,do_reverse=True, depth=depth,weight_cutoff=weight_cutoff,cluster_cutoff=cluster_cutoff, moving_average=moving_average,filename=filename)
-    #logging.info(df)

@@ -5,10 +5,8 @@ Created on Thu Dec 17 01:45:25 2020
 @author: marquart
 """
 import networkx as nx
-import scipy as sp
-import itertools
-import logging
 import numpy as np
+import scipy as sp
 from scipy.sparse.linalg import inv
 
 

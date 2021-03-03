@@ -30,24 +30,21 @@ def make_symmetric(graph, technique="avg-sym"):
     if technique == "transpose":
         M = nx.to_scipy_sparse_matrix(graph)
         nodes_list = list(graph.nodes)
-        M = (M + M.T)/2 - sp.sparse.diags(M.diagonal(), dtype=int)
+        M = (M + M.T) / 2 - sp.sparse.diags(M.diagonal(), dtype=int)
         graph = nx.convert_matrix.from_scipy_sparse_matrix(M)
         mapping = dict(zip(range(0, len(nodes_list)), nodes_list))
-        graph = nx.relabel_nodes(graph, mapping)
+        new_graph = nx.relabel_nodes(graph, mapping)
     elif technique == "min-sym-avg":
         new_graph = graph.to_undirected()
         nodepairs = itertools.combinations(list(graph.nodes), r=2)
         for u, v in nodepairs:
             if graph.has_edge(u, v) and graph.has_edge(v, u):
-                min_weight = min(
-                    graph.edges[u, v]['weight'], graph.edges[v, u]['weight'])
                 avg_weight = (
-                    graph.edges[u, v]['weight']+graph.edges[v, u]['weight'])/2
+                                     graph.edges[u, v]['weight'] + graph.edges[v, u]['weight']) / 2
                 new_graph[u][v]['weight'] = avg_weight
             else:
                 if graph.has_edge(u, v) or graph.has_edge(v, u):
                     new_graph.remove_edge(u, v)
-        graph = new_graph
     elif technique == "min-sym":
         new_graph = graph.to_undirected()
         nodepairs = itertools.combinations(list(graph.nodes), r=2)
@@ -59,7 +56,6 @@ def make_symmetric(graph, technique="avg-sym"):
             else:
                 if graph.has_edge(u, v) or graph.has_edge(v, u):
                     new_graph.remove_edge(u, v)
-        graph = new_graph
     elif technique == "max-sym":
         new_graph = graph.to_undirected()
         nodepairs = itertools.combinations(list(graph.nodes), r=2)
@@ -79,12 +75,12 @@ def make_symmetric(graph, technique="avg-sym"):
                 wt = 0
 
                 if graph.has_edge(u, v):
-                    wt = wt+graph.edges[u, v]['weight']
+                    wt = wt + graph.edges[u, v]['weight']
 
                 if graph.has_edge(v, u):
-                    wt = wt+graph.edges[v, u]['weight']
+                    wt = wt + graph.edges[v, u]['weight']
 
-                wt = wt/2
+                wt = wt / 2
                 new_graph[u][v]['weight'] = wt
 
     else:
@@ -94,7 +90,6 @@ def make_symmetric(graph, technique="avg-sym"):
 
 
 def merge_nodes(graph, u, v, method="sum"):
-
     new_graph = graph.copy()
     # Remove both nodes
     new_graph.remove_nodes_from([u])
@@ -108,14 +103,14 @@ def merge_nodes(graph, u, v, method="sum"):
     for (x, z) in in_u:
         if new_graph.has_edge(x, v):
             new_graph[x][v]['weight'] = z + \
-                new_graph.get_edge_data(x, v)['weight']
+                                        new_graph.get_edge_data(x, v)['weight']
         else:
             new_graph.add_edge(x, v, weight=z)
 
     for (x, z) in out_u:
         if new_graph.has_edge(v, x):
             new_graph[v][x]['weight'] = z + \
-                new_graph.get_edge_data(v, x)['weight']
+                                        new_graph.get_edge_data(v, x)['weight']
         else:
             new_graph.add_edge(v, x, weight=z)
     # Mean
@@ -129,7 +124,6 @@ def merge_nodes(graph, u, v, method="sum"):
 
 
 def plural_elimination(graph, method="sum"):
-
     candidates = [x for x in graph.nodes if x[-1] == 's']
     plurals = [x for x in candidates if x[:-1] in graph.nodes]
     pairs = [(x, x[:-1]) for x in plurals]

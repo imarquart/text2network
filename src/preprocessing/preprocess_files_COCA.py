@@ -21,6 +21,12 @@ def preprocess_files_HBR(folder, database, MAX_SEQ_LENGTH, char_mult, max_seq=0,
     :param max_seq: How many sequences to process maximally from data
     :param file_type: old / new COCA format
     :return: none
+
+    Parameters
+    ----------
+    folder
+    split_symbol
+    number_params
     """
 
     # TODO: Load Docs as Matrix or parallelize; speed optimization

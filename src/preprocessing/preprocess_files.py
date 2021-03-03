@@ -29,6 +29,10 @@ def preprocess_files_lines(folder, database, MAX_SEQ_LENGTH, char_mult, max_seq=
     :param max_seq: How many sequences to process maximally from data
     :param file_type: old / new COCA format
     :return: none
+
+    Parameters
+    ----------
+    folder
     """
 
     # TODO: Load Docs as Matrix or parallelize; speed optimization

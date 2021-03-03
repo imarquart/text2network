@@ -35,7 +35,7 @@ from torch.utils.data import DataLoader, Dataset, SequentialSampler, RandomSampl
 from torch.utils.data.distributed import DistributedSampler
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm, trange
-from transformers import (WEIGHTS_NAME, AdamW,WarmupLinearSchedule ,
+from transformers import (WEIGHTS_NAME, AdamW, WarmupLinearSchedule,
                           BertConfig, BertForMaskedLM, BertTokenizer)
 
 from src.utils.load_bert import get_bert_and_tokenizer
@@ -53,8 +53,10 @@ MODEL_CLASSES = {
     'bert': (BertConfig, BertForMaskedLM, BertTokenizer),
 }
 
+
 def load_and_cache_examples(args, tokenizer, evaluate=False):
-    dataset = bert_dataset(tokenizer, args.database, args.where_string, block_size=args.block_size, logging_level=args.logging_level)
+    dataset = bert_dataset(tokenizer, args.database, args.where_string, block_size=args.block_size,
+                           logging_level=args.logging_level)
     return dataset
 
 
@@ -145,7 +147,7 @@ def train(args, train_dataset, model, tokenizer):
     ]
     optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
     scheduler = WarmupLinearSchedule(optimizer, warmup_steps=args.warmup_steps, t_total=t_total)
-    #scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=args.warmup_steps, num_training_steps = t_total)
+    # scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=args.warmup_steps, num_training_steps = t_total)
     # Check if saved optimizer or scheduler states exist
     return_from_checkpoint = False
     if os.path.isfile(os.path.join(args.model_name_or_path, 'optimizer.pt')) and os.path.isfile(
@@ -210,8 +212,9 @@ def train(args, train_dataset, model, tokenizer):
                             disable=args.local_rank not in [-1, 0])
     set_seed(args)  # Added here for reproducibility (even between python 2 and 3)
     for _ in train_iterator:
-        descr="Epoch %i, Batch: " % max(1,global_step/len(train_dataloader))
-        epoch_iterator = tqdm(train_dataloader, desc=descr, leave=False, position=0,disable=args.local_rank not in [-1, 0])
+        descr = "Epoch %i, Batch: " % max(1, global_step / len(train_dataloader))
+        epoch_iterator = tqdm(train_dataloader, desc=descr, leave=False, position=0,
+                              disable=args.local_rank not in [-1, 0])
         for step, batch in enumerate(epoch_iterator):
 
             # Skip past any already trained steps if resuming training
@@ -260,8 +263,8 @@ def train(args, train_dataset, model, tokenizer):
                     eval_loss = results["eval_loss"]
                     logging_loss = tr_loss
                     logger.warning("Eval Step: Eval Loss at global step %i is %f compared to (eval) loss limit %f",
-                                global_step,
-                                eval_loss, args.eval_loss_limit)
+                                   global_step,
+                                   eval_loss, args.eval_loss_limit)
 
                 if args.local_rank in [-1, 0] and args.save_steps > 0 and global_step % args.save_steps == 0:
                     checkpoint_prefix = 'checkpoint'
@@ -317,7 +320,8 @@ def train(args, train_dataset, model, tokenizer):
             break
 
         if tr_loss / global_step <= args.loss_limit:
-            logger.info("Average Loss at global step %i has reached desired value with  %f <= %f", global_step, tr_loss / global_step, args.loss_limit)
+            logger.info("Average Loss at global step %i has reached desired value with  %f <= %f", global_step,
+                        tr_loss / global_step, args.loss_limit)
             train_iterator.close()
             break
 
@@ -328,7 +332,6 @@ def train(args, train_dataset, model, tokenizer):
 
 
 def evaluate(args, model, tokenizer, prefix=""):
-
     logging.disable(args.logging_level)
 
     # Loop to handle MNLI double evaluation (matched, mis-matched)
@@ -356,7 +359,7 @@ def evaluate(args, model, tokenizer, prefix=""):
     nb_eval_steps = 0
     model.eval()
 
-    for batch in tqdm(eval_dataloader, leave=False, position=0,desc="Evaluating"):
+    for batch in tqdm(eval_dataloader, leave=False, position=0, desc="Evaluating"):
         inputs, labels = mask_tokens(batch, tokenizer, args) if args.mlm else (batch, batch)
         inputs = inputs.to(args.device)
         labels = labels.to(args.device)
@@ -409,8 +412,8 @@ def run_bert(args, tokenizer=None, model=None):
     logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                         datefmt='%m/%d/%Y %H:%M:%S',
                         level=args.logging_level if args.local_rank in [-1, 0] else logging.WARN)
-    #logger.warning("Process rank: %s, device: %s, n_gpu: %s, distributed training: %s, 16-bits training: %s",
-     #              args.local_rank, device, args.n_gpu, bool(args.local_rank != -1), args.fp16)
+    # logger.warning("Process rank: %s, device: %s, n_gpu: %s, distributed training: %s, 16-bits training: %s",
+    #              args.local_rank, device, args.n_gpu, bool(args.local_rank != -1), args.fp16)
     logging.disable(args.logging_level)
     logging.getLogger("transformers.modeling_utils").setLevel(args.logging_level)
     # Set seed
@@ -428,8 +431,8 @@ def run_bert(args, tokenizer=None, model=None):
     #                                            cache_dir=args.cache_dir if args.cache_dir else None)
 
     # Load only if not provided
-    if tokenizer==None or model==None:
-        #tokenizer, model = get_bert_and_tokenizer(args.model_dir,True)
+    if tokenizer is None or model is None:
+        # tokenizer, model = get_bert_and_tokenizer(args.model_dir,True)
         raise AttributeError("This training procedure requires a pre-trained model / tokenizer.")
 
     if args.block_size <= 0:
@@ -439,7 +442,6 @@ def run_bert(args, tokenizer=None, model=None):
 
     if args.local_rank == 0:
         torch.distributed.barrier()  # End of barrier to make sure only the first process in distributed training download model & vocab
-
 
     # Training
     if args.do_train:
@@ -482,9 +484,9 @@ def run_bert(args, tokenizer=None, model=None):
 
         # Change: If not training, we evaluate not on output folder, but model folder model
         if not args.do_train:
-            check_dir=args.model_dir
+            check_dir = args.model_dir
         else:
-            check_dir=args.output_dir
+            check_dir = args.output_dir
 
         # Continue base script
         checkpoints = [check_dir]

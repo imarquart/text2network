@@ -1,10 +1,10 @@
-import copy
 import logging
-from collections.abc import MutableSequence
-from src.utils.twowaydict import TwoWayDict
+
 import numpy as np
+
 # import neo4j
 import neo4jCon as neo_connector
+
 try:
     from neo4j import GraphDatabase
 except:
@@ -14,26 +14,24 @@ except:
 class neo4j_database():
     def __init__(self, neo4j_creds, agg_operator="SUM",
                  write_before_query=True,
-                 neo_batch_size=10000, queue_size=100000, tie_query_limit=100000, tie_creation="UNSAFE",  context_tie_creation="SAFE",
+                 neo_batch_size=10000, queue_size=100000, tie_query_limit=100000, tie_creation="UNSAFE",
+                 context_tie_creation="SAFE",
                  logging_level=logging.NOTSET, connection_type="bolt"):
         # Set logging level
-        #logging.disable(logging_level)
+        # logging.disable(logging_level)
 
         self.neo4j_connection, self.neo4j_credentials = neo4j_creds
         self.write_before_query = write_before_query
 
-
         # Set up Neo4j driver
-        if connection_type=="bolt" and GraphDatabase is not None:
+        if connection_type == "bolt" and GraphDatabase is not None:
             self.driver = GraphDatabase.driver(self.neo4j_connection, auth=self.neo4j_credentials)
-            self.connection_type="bolt"
-            
-            
-        else: # Fallback custom HTTP connector for Neo4j <= 4.02
-            self.driver = neo_connector.Connector(self.neo4j_connection, self.neo4j_credentials)
-            self.connection_type="http"
-            
+            self.connection_type = "bolt"
 
+
+        else:  # Fallback custom HTTP connector for Neo4j <= 4.02
+            self.driver = neo_connector.Connector(self.neo4j_connection, self.neo4j_credentials)
+            self.connection_type = "http"
 
         # Neo4J Internals
         # Pick Merge or Create. Create will double ties but Merge becomes very slow for large networks
@@ -50,56 +48,56 @@ class neo4j_database():
         self.neo_batch_size = neo_batch_size
         self.queue_size = queue_size
         self.aggregate_operator = agg_operator
-        
+
         # Init tokens in the database, required since order etc. may be different
-        self.db_ids,self.db_tokens=self.init_tokens()
-        self.db_ids=np.array(self.db_ids)
-        self.db_tokens=np.array(self.db_tokens)
-        self.db_id_dict={}
+        self.db_ids, self.db_tokens = self.init_tokens()
+        self.db_ids = np.array(self.db_ids)
+        self.db_tokens = np.array(self.db_tokens)
+        self.db_id_dict = {}
         # Init parent class
         super().__init__()
 
     # %% Setup
 
-    def check_create_tokenid_dict(self,tokens,token_ids,fail_on_missing=False):
-        tokens=np.array(tokens)
-        self.db_tokens=np.array(self.db_tokens)
+    def check_create_tokenid_dict(self, tokens, token_ids, fail_on_missing=False):
+        tokens = np.array(tokens)
+        self.db_tokens = np.array(self.db_tokens)
         token_ids = np.array(token_ids)
-        db_ids= np.array(self.db_ids)
-        if len(self.db_ids)>0:
-            new_ids=[np.where(self.db_tokens==k)[0][0] for k in tokens if k in self.db_tokens ]
+        db_ids = np.array(self.db_ids)
+        if len(self.db_ids) > 0:
+            new_ids = [np.where(self.db_tokens == k)[0][0] for k in tokens if k in self.db_tokens]
         else:
-            new_ids=[]
-        if not len(new_ids)==len(token_ids):
+            new_ids = []
+        if not len(new_ids) == len(token_ids):
             missing_ids = np.array(list(np.setdiff1d(token_ids, token_ids[new_ids])))
-            missing_tokens=tokens[missing_ids]
+            missing_tokens = tokens[missing_ids]
 
-            msg="Token ID translation failed. {} Tokens missing in database: {}".format(len(missing_tokens),missing_tokens)
+            msg = "Token ID translation failed. {} Tokens missing in database: {}".format(len(missing_tokens),
+                                                                                          missing_tokens)
             if fail_on_missing:
                 logging.error(msg)
                 raise ValueError(msg)
 
-            added_ids=list(range(len(db_ids),len(db_ids)+len(missing_tokens)))
+            added_ids = list(range(len(db_ids), len(db_ids) + len(missing_tokens)))
 
             db_id_dict = {x[0]: x[1] for x in zip(token_ids[new_ids], new_ids)}
-            db_id_dict2={x[0]: x[1] for x in zip(missing_ids, added_ids)}
+            db_id_dict2 = {x[0]: x[1] for x in zip(missing_ids, added_ids)}
             db_id_dict.update(db_id_dict2)
-            self.db_id_dict=db_id_dict
-            return new_ids,missing_tokens,added_ids
+            self.db_id_dict = db_id_dict
+            return new_ids, missing_tokens, added_ids
         else:
             # Update
             self.db_id_dict = {x[0]: x[1] for x in zip(token_ids, new_ids)}
-            return new_ids,[],[]
+            return new_ids, [], []
 
-    def translate_token_ids(self,ids,fail_on_missing=False):
+    def translate_token_ids(self, ids):
         try:
-            new_ids=[self.db_id_dict[x] for x in ids]
+            new_ids = [self.db_id_dict[x] for x in ids]
         except:
-            msg="Could not translate {} token ids: {}".format(len(ids),ids)
+            msg = "Could not translate {} token ids: {}".format(len(ids), ids)
             logging.error(msg)
             raise ValueError(msg)
         return new_ids
-
 
     def setup_neo_db(self, tokens, token_ids):
         """
@@ -142,8 +140,8 @@ class neo4j_database():
         # Create nodes in neo db
         # Get rid of signs that can not be used
         tokens = [x.translate(x.maketrans({"\"": '#e1#', "'": '#e2#', "\\": '#e3#'})) for x in tokens]
-        token_ids, missing_tokens, missing_ids=self.check_create_tokenid_dict(tokens,token_ids)
-        if len(missing_tokens)>0:
+        token_ids, missing_tokens, missing_ids = self.check_create_tokenid_dict(tokens, token_ids)
+        if len(missing_tokens) > 0:
             queries = [''.join(["MERGE (n:word {token_id: ", str(id), ", token: '", tok, "'})"]) for tok, id in
                        zip(missing_tokens, missing_ids)]
             self.add_queries(queries)
@@ -178,7 +176,7 @@ class neo4j_database():
             logging.info("Network has %i edge-nodes and %i context-nodes" % (nr_nodes, nr_context))
         while nr_context > 0:
             # Delete context nodes
-            self.add_query(context_query,run=True)
+            self.add_query(context_query, run=True)
             nr_context = self.receive_query("MATCH (n:context) RETURN count(*) AS nodes")[0]['nodes']
             logging.info("Network has %i edge-nodes and %i context-nodes" % (nr_nodes, nr_context))
 
@@ -212,7 +210,6 @@ class neo4j_database():
         logging.debug("Pruning disconnected tokens in database.")
         self.add_query("MATCH (n) WHERE size((n)--())=0 DELETE (n)", run=True)
 
-
     # %% Query Functions
     def query_multiple_nodes_parallel(self, ids, times=None, weight_cutoff=None):
         """
@@ -227,13 +224,14 @@ class neo4j_database():
         if weight_cutoff is not None:
             where_query = ''.join([" WHERE r.weight >=", str(weight_cutoff), " "])
             if isinstance(times, dict):
-                where_query = ''.join([where_query, " AND  ", str(times['start']), " <= r.time<= ", str(times['end'])," "])
-            #elif isinstance(times,list):
+                where_query = ''.join(
+                    [where_query, " AND  ", str(times['start']), " <= r.time<= ", str(times['end']), " "])
+            # elif isinstance(times,list):
             #    where_query = "WHERE  r.time in $times "
         else:
             if isinstance(times, dict):
-                where_query = ''.join(["WHERE ", str(times['start']), " <= r.time<= ", str(times['end'])," "])
-            #elif isinstance(times,list):
+                where_query = ''.join(["WHERE ", str(times['start']), " <= r.time<= ", str(times['end']), " "])
+            # elif isinstance(times,list):
             #    where_query = "WHERE  r.time in $times "
             else:
                 where_query = ""
@@ -245,11 +243,10 @@ class neo4j_database():
                                 self.aggregate_operator, "(r.weight) AS agg_weight order by receiver"])
 
         if isinstance(times, int):
-            match_query = ''.join(["MATCH p=(a:word)-[:onto]->(r:edge {time:", str(times), "})-[:onto]->(b:word {token_id:id}) "])
+            match_query = ''.join(
+                ["MATCH p=(a:word)-[:onto]->(r:edge {time:", str(times), "})-[:onto]->(b:word {token_id:id}) "])
         else:
             match_query = "MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word {token_id:id}) "
-
-
 
         # Format time to set for network
         if isinstance(times, int):
@@ -266,7 +263,8 @@ class neo4j_database():
             params = {"ids": ids}
 
         inside_query = ''.join([match_query, where_query, return_query])
-        apoc_query=''.join(['PROFILE CALL apoc.cypher.mapParallel2("', inside_query, '", {parallel:True, batchSize:10, concurrency:16}, $ids,  0) yield value return value.receiver as receiver, value.sender as sender, value.agg_weight as agg_weight order by receiver '])
+        apoc_query = ''.join(['PROFILE CALL apoc.cypher.mapParallel2("', inside_query,
+                              '", {parallel:True, batchSize:10, concurrency:16}, $ids,  0) yield value return value.receiver as receiver, value.sender as sender, value.agg_weight as agg_weight order by receiver '])
 
         res = self.receive_query(apoc_query, params)
 
@@ -284,7 +282,6 @@ class neo4j_database():
 
         return ties
 
-
     def query_multiple_nodes(self, ids, times=None, weight_cutoff=None, norm_ties=False):
         """
         Query multiple nodes by ID and over a set of time intervals
@@ -292,18 +289,22 @@ class neo4j_database():
         :param times: either a number format YYYYMMDD, or an interval dict {"start":YYYYMMDD,"end":YYYYMMDD}
         :param weight_cutoff: float in 0,1
         :return: list of tuples (u,v,Time,{weight:x})
+
+        Parameters
+        ----------
+        norm_ties
         """
         logging.debug("Querying {} nodes in Neo4j database.".format(len(ids)))
         # New where query
-        where_query=" WHERE b.token_id in $ids"
+        where_query = " WHERE b.token_id in $ids"
 
         # Allow cutoff value of (non-aggregated) weights and set up time-interval query
         if weight_cutoff is not None:
-            where_query = ''.join([where_query," AND r.weight >=", str(weight_cutoff), " "])
+            where_query = ''.join([where_query, " AND r.weight >=", str(weight_cutoff), " "])
         if isinstance(times, dict):
             where_query = ''.join([where_query, " AND  $times.start <= r.time<= $times.end "])
-        elif isinstance(times,list):
-            where_query = ''.join([where_query," AND  r.time in $times "])
+        elif isinstance(times, list):
+            where_query = ''.join([where_query, " AND  r.time in $times "])
 
         # else:
         #     if isinstance(times, dict):
@@ -317,11 +318,13 @@ class neo4j_database():
         # By default, a->b when ego->is_replaced_by->b
         # Given an id, we query b:id(sender)<-a(receiver)
         # This gives all ties where b -predicts-> a
-        return_query = ''.join([" RETURN b.token_id AS sender,a.token_id AS receiver,count(r.pos) AS occurrences,",
+        # Enable this for occurrences
+        #return_query = ''.join([" RETURN b.token_id AS sender,a.token_id AS receiver,count(r.pos) AS occurrences,",
+        #                        self.aggregate_operator, "(r.weight) AS agg_weight order by receiver"])
+        return_query = ''.join([" RETURN b.token_id AS sender,a.token_id AS receiver, ",
                                 self.aggregate_operator, "(r.weight) AS agg_weight order by receiver"])
-
         if isinstance(times, int):
-            match_query = "MATCH p=(a:word)-[:onto]->(r:edge {time:$times})-[:onto]->(b:word) "
+            match_query = "".join(["MATCH p=(a:word)-[:onto]->(r:edge {time:",str(times),"})-[:onto]->(b:word) "])
         else:
             match_query = "MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word) "
 
@@ -331,7 +334,8 @@ class neo4j_database():
         elif isinstance(times, dict):
             nw_time = {"s": times['start'], "e": times['end'], "m": int((times['end'] + times['start']) / 2)}
         elif isinstance(times, list):
-            nw_time = {"s": times[0], "e": times[-1], "m": int((times[0] + times[-1]) / 2)}
+            sort_times=np.sort(times)
+            nw_time = {"s": sort_times[0], "e": sort_times[-1], "m": int((sort_times[0] + sort_times[-1]) / 2)}
         else:
             nw_time = {"s": 0, "e": 0, "m": 0}
 
@@ -347,7 +351,7 @@ class neo4j_database():
         tie_weights = np.array([x['agg_weight'] for x in res])
         senders = [x['sender'] for x in res]
         receivers = [x['receiver'] for x in res]
-        occurrences = [x['occurrences'] for x in res]
+        #occurrences = [x['occurrences'] for x in res]
         # Normalization
         # Ties should be normalized by the number of occurrences of the receiver
         if norm_ties:
@@ -357,8 +361,8 @@ class neo4j_database():
 
         ties = [
             (x[0], x[1],
-             {'weight': x[2], 'time': nw_time['m'], 'start': nw_time['s'], 'end': nw_time['e'], 'occurrences': x[3]})
-            for x in zip(senders, receivers, tie_weights, occurrences)]
+             {'weight': x[2], 'time': nw_time['m'], 'start': nw_time['s'], 'end': nw_time['e']})
+            for x in zip(senders, receivers, tie_weights)]
 
         return ties
 
@@ -372,10 +376,14 @@ class neo4j_database():
         :param times: either a number format YYYYMMDD, or an interval dict {"start":YYYYMMDD,"end":YYYYMMDD}
         :param weight_cutoff: float in 0,1
         :return: list of tuples (u,v,Time,{weight:x})
+
+        Parameters
+        ----------
+        norm_ties
         """
         logging.debug("Contextually querying {} nodes in Neo4j database.".format(len(ids)))
         # New where query
-        where_query=" WHERE b.token_id in $ids"
+        where_query = " WHERE b.token_id in $ids"
         # Create context query
         context_where = ' AND ALL(r in nodes(p) WHERE size([(r) - [: conto]->(:context) - [: conto]->(e:word) WHERE e.token_id IN $clist | e]) > 0 OR(r: word))'
         # Join where and context query
@@ -383,11 +391,11 @@ class neo4j_database():
 
         # Allow cutoff value of (non-aggregated) weights and set up time-interval query
         if weight_cutoff is not None:
-            where_query = ''.join([where_query," AND r.weight >=", str(weight_cutoff), " "])
+            where_query = ''.join([where_query, " AND r.weight >=", str(weight_cutoff), " "])
         if isinstance(times, dict):
             where_query = ''.join([where_query, " AND  $times.start <= r.time<= $times.end "])
-        elif isinstance(times,list):
-            where_query = ''.join([where_query," AND  r.time in $times "])
+        elif isinstance(times, list):
+            where_query = ''.join([where_query, " AND  r.time in $times "])
 
         # Create query depending on graph direction and whether time variable is queried via where or node property
         # By default, a->b when ego->is_replaced_by->b
@@ -397,7 +405,7 @@ class neo4j_database():
                                 self.aggregate_operator, "(r.weight) AS agg_weight order by receiver"])
 
         if isinstance(times, int):
-            match_query = "MATCH p=(a:word)-[:onto]->(r:edge {time:$times})-[:onto]->(b:word) "
+            match_query = "".join(["MATCH p=(a:word)-[:onto]->(r:edge {time:",str(times),"})-[:onto]->(b:word) "])
         else:
             match_query = "MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word) "
 
@@ -467,7 +475,7 @@ class neo4j_database():
             params = {"ids": ids}
 
         return_query = ''.join([
-                                   " WITH a.token_id AS idx, sum(r.weight) AS weight RETURN idx, round(sum(weight)) as occurrences order by idx"])
+            " WITH a.token_id AS idx, sum(r.weight) AS weight RETURN idx, round(sum(weight)) as occurrences order by idx"])
 
         if isinstance(times, int):
             match_query = "MATCH p=(a:word)-[:onto]->(r:edge {time:$times})-[:onto]->(b:word) "
@@ -508,7 +516,6 @@ class neo4j_database():
             where_query = ''.join([where_query, " AND  $times.start <= r.time<= $times.end "])
         elif isinstance(times, list):
             where_query = ''.join([where_query, " AND  r.time in $times "])
-
 
         # Create params with or without time
         if isinstance(times, dict) or isinstance(times, int) or isinstance(times, list):
@@ -651,60 +658,64 @@ class neo4j_database():
             params = {"ego": int(egos[0]), "ties": ties_formatted, "contexts": contexts_formatted}
 
             # Select order of parameters
-            p1 = np.array([str(x['p1']) if (len(x)>4) else "0" for x in dicts ])
-            p2 = np.array([str(x['p2']) if (len(x)>5) else "0" for x in dicts ])
-            p3 = np.array([str(x['p3']) if (len(x)>6) else "0" for x in dicts ])
-            p4 = np.array([str(x['p4']) if (len(x)>7) else "0" for x in dicts ])
+            p1 = np.array([str(x['p1']) if (len(x) > 4) else "0" for x in dicts])
+            p2 = np.array([str(x['p2']) if (len(x) > 5) else "0" for x in dicts])
+            p3 = np.array([str(x['p3']) if (len(x) > 6) else "0" for x in dicts])
+            p4 = np.array([str(x['p4']) if (len(x) > 7) else "0" for x in dicts])
             # Select order of context parameters
-            cseq_id = np.array([x['seq_id'] if len(x)>2 else "0" for x in con_dicts ], dtype=np.str)
-            cpos = np.array([x['pos'] if len(x)>3 else "0" for x in con_dicts ], dtype=np.str)
-            crun_index = np.array([x['run_index'] if len(x)>1 else "0" for x in con_dicts ], dtype=np.str)
-            cp1 =  np.array([str(x['p1']) if (len(x)>4) else "0" for x in con_dicts ])
-            cp2 =  np.array([str(x['p2']) if (len(x)>5) else "0" for x in con_dicts ])
-            cp3 =  np.array([str(x['p3']) if (len(x)>6) else "0" for x in con_dicts ])
-            cp4 = np.array([str(x['p4'] )if (len(x)>7) else "0" for x in con_dicts ])
-
+            cseq_id = np.array([x['seq_id'] if len(x) > 2 else "0" for x in con_dicts], dtype=np.str)
+            cpos = np.array([x['pos'] if len(x) > 3 else "0" for x in con_dicts], dtype=np.str)
+            crun_index = np.array([x['run_index'] if len(x) > 1 else "0" for x in con_dicts], dtype=np.str)
+            cp1 = np.array([str(x['p1']) if (len(x) > 4) else "0" for x in con_dicts])
+            cp2 = np.array([str(x['p2']) if (len(x) > 5) else "0" for x in con_dicts])
+            cp3 = np.array([str(x['p3']) if (len(x) > 6) else "0" for x in con_dicts])
+            cp4 = np.array([str(x['p4']) if (len(x) > 7) else "0" for x in con_dicts])
 
             # Build parameter string
-            parameter_string=""
-            if not all(p1 == "0") and not all(p1==''):
-                parameter_string=parameter_string+", p1:tie.p1"
-            if not all(p2 == "0") and not all( p2==''):
-                parameter_string=parameter_string+", p2:tie.p2"
-            if not all(p3 == "0") and not all(p3==''):
-                parameter_string=parameter_string+", p3:tie.p3"
-            if not all(p4 == "0") and not all( p4==''):
-                parameter_string=parameter_string+", p4:tie.p4 "
-
+            parameter_string = ""
+            if not all(p1 == "0") and not all(p1 == ''):
+                parameter_string = parameter_string + ", p1:tie.p1"
+            if not all(p2 == "0") and not all(p2 == ''):
+                parameter_string = parameter_string + ", p2:tie.p2"
+            if not all(p3 == "0") and not all(p3 == ''):
+                parameter_string = parameter_string + ", p3:tie.p3"
+            if not all(p4 == "0") and not all(p4 == ''):
+                parameter_string = parameter_string + ", p4:tie.p4 "
 
             cparameter_string = ""
-            if not all(cseq_id == "0") and not all(cseq_id==''):
+            if not all(cseq_id == "0") and not all(cseq_id == ''):
                 cparameter_string = cparameter_string + ", seq_id:con.seq_id"
-            if not all(cpos == "0" ) and not all(cpos==''):
+            if not all(cpos == "0") and not all(cpos == ''):
                 cparameter_string = cparameter_string + ", pos:con.pos"
-            if not all(crun_index == "0") and not all(crun_index==''):
+            if not all(crun_index == "0") and not all(crun_index == ''):
                 cparameter_string = cparameter_string + ", run_index:con.run_index"
-            if not all(cp1 == "0") and not all(cp1==''):
+            if not all(cp1 == "0") and not all(cp1 == ''):
                 cparameter_string = cparameter_string + ", p1:con.p1"
-            if not all(cp2 == "0" ) and not all( cp2==''):
+            if not all(cp2 == "0") and not all(cp2 == ''):
                 cparameter_string = cparameter_string + ", p2:con.p2"
-            if not all(cp3 == "0" ) and not all(cp3==''):
+            if not all(cp3 == "0") and not all(cp3 == ''):
                 cparameter_string = cparameter_string + ", p3:con.p3"
-            if not all(cp4 == "0" ) and not all(cp4==''):
+            if not all(cp4 == "0") and not all(cp4 == ''):
                 cparameter_string = cparameter_string + ", p4:con.p4"
 
             if not no_context:
                 query = ''.join(
-                    [" MATCH (a:word {token_id: $ego}) WITH a UNWIND $ties as tie MATCH (b:word {token_id: tie.alter}) ",
-                     self.creation_statement,
-                     " (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, seq_id:tie.seq_id,pos:tie.pos, run_index:tie.run_index ",parameter_string, "})<-[:onto]-(a) WITH r UNWIND $contexts as con MATCH (q:word {token_id: con.alter}) WITH r,q,con MERGE (c:context {weight:con.weight, time:con.time ", cparameter_string, "})-[:conto]->(q) WITH r,c ",
-                     self.context_creation_statement,
-                     " (r)-[:conto]->(c)"])
+                    [
+                        " MATCH (a:word {token_id: $ego}) WITH a UNWIND $ties as tie MATCH (b:word {token_id: tie.alter}) ",
+                        self.creation_statement,
+                        " (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, seq_id:tie.seq_id,pos:tie.pos, run_index:tie.run_index ",
+                        parameter_string,
+                        "})<-[:onto]-(a) WITH r UNWIND $contexts as con MATCH (q:word {token_id: con.alter}) WITH r,q,con MERGE (c:context {weight:con.weight, time:con.time ",
+                        cparameter_string, "})-[:conto]->(q) WITH r,c ",
+                        self.context_creation_statement,
+                        " (r)-[:conto]->(c)"])
             else:
                 query = ''.join(
-                    [" MATCH (a:word {token_id: $ego}) WITH a UNWIND $ties as tie MATCH (b:word {token_id: tie.alter}) ",
-                     self.creation_statement,
-                     " (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, seq_id:tie.seq_id,pos:tie.pos, run_index:tie.run_index ",parameter_string, "})<-[:onto]-(a)"])
+                    [
+                        " MATCH (a:word {token_id: $ego}) WITH a UNWIND $ties as tie MATCH (b:word {token_id: tie.alter}) ",
+                        self.creation_statement,
+                        " (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, seq_id:tie.seq_id,pos:tie.pos, run_index:tie.run_index ",
+                        parameter_string, "})<-[:onto]-(a)"])
         else:
             logging.error("Batched edge creation with context for multiple egos not supported.")
             raise NotImplementedError
@@ -720,12 +731,16 @@ class neo4j_database():
         :param query: Neo4j query
         :param params: Associates parameters
         :return:
+
+        Parameters
+        ----------
+        run
         """
         if params is not None:
             self.add_queries([query], [params])
         else:
             self.add_queries([query], None)
-        
+
         if run:
             self.write_queue()
 
@@ -756,12 +771,12 @@ class neo4j_database():
         :return:
         """
         if len(self.neo_queue) > 0:
-            if self.connection_type=="bolt":
+            if self.connection_type == "bolt":
                 with self.driver.session() as session:
                     with session.begin_transaction() as tx:
                         for statement in self.neo_queue:
                             if 'parameters' in statement:
-                                tx.run(statement['statement'],statement['parameters'])
+                                tx.run(statement['statement'], statement['parameters'])
                             else:
                                 tx.run(statement['statement'])
                         tx.commit()
@@ -778,14 +793,14 @@ class neo4j_database():
         :return:
         """
         self.write_queue()
-   
-    def consume_result(self, tx, query, params=None):
-        result = tx.run(query,params)
+
+    @staticmethod
+    def consume_result(tx, query, params=None):
+        result = tx.run(query, params)
         return result.data()
-        
-    
+
     def receive_query(self, query, params=None):
-        if self.connection_type=="bolt":
+        if self.connection_type == "bolt":
             with self.driver.session() as session:
                 res = session.read_transaction(self.consume_result, query, params)
         else:
@@ -793,9 +808,9 @@ class neo4j_database():
                 res = self.driver.run(query, params)
             else:
                 res = self.driver.run(query)
-        
+
         return res
-        
+
     def close(self):
         if self.connection_type == "bolt":
             self.driver.close()

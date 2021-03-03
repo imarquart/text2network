@@ -549,8 +549,7 @@ print("bolt NORMED 1 year condition, batch 100000, 0.1 cutoff %s seconds" % (tim
 logging.info("bolt NORMED 1 year condition, batch 100000, 0.1 cutoff %s seconds" % (time.time() - start_time))
 print("nodes in network %i" % (len(semantic_network)))
 print("ties in network %i" % (semantic_network.graph.number_of_edges()))
-logging.info("nodes in network %i" % (len(semantic_network)))
-logging.info("ties in network %i" % (semantic_network.graph.number_of_edges()))
+
 print("------------------------------------------------")
 logging.info("------------------------------------------------")
 

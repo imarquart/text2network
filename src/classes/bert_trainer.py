@@ -1,20 +1,21 @@
 import json
-
-from src.functions.file_helpers import check_create_folder
-from src.utils.hash_file import hash_string, check_step, complete_step
-from src.utils.load_bert import get_bert_and_tokenizer
-from src.utils.bert_args import bert_args
-from src.datasets.text_dataset import bert_dataset
-from src.functions.run_bert import run_bert
-from src.utils.get_uniques import get_uniques
-import tables
-import torch
 import logging
 import time
 
+import torch
+
+from src.datasets.text_dataset import bert_dataset
+from src.functions.file_helpers import check_create_folder
+from src.functions.run_bert import run_bert
+from src.utils.bert_args import bert_args
+from src.utils.get_uniques import get_uniques
+from src.utils.hash_file import hash_string, check_step, complete_step
+from src.utils.load_bert import get_bert_and_tokenizer
+
 
 class bert_trainer():
-    def __init__(self, config=None, db_folder=None, pretrained_folder=None, trained_folder=None, bert_config=None, split_hierarchy=None,
+    def __init__(self, config=None, db_folder=None, pretrained_folder=None, trained_folder=None, bert_config=None,
+                 split_hierarchy=None,
                  logging_level=None):
 
         # Fill parameters from configuration file
@@ -102,7 +103,7 @@ class bert_trainer():
     def train_berts(self, split_hierarchy=None):
 
         # If uniques are not defined, create them according to provided split_hierarchy
-        if self.uniques == None or split_hierarchy is not None:
+        if self.uniques is None or split_hierarchy is not None:
             assert split_hierarchy is not None
             self.uniques = self.get_uniques(split_hierarchy)
 
@@ -114,13 +115,13 @@ class bert_trainer():
         for idx, query_filename in enumerate(self.uniques["query_filename"]):
             query = query_filename[0]
             fname = query_filename[1]
-            bert_folder = ''.join([self.trained_folder, '/', fname])
 
             # Prepare BERT and vocabulary
             tokenizer, bert = get_bert_and_tokenizer(
                 self.pretrained_folder, True)
             dataset = bert_dataset(tokenizer, self.db_folder, query,
-                                   block_size=self.bert_config.getint('max_seq_length'), check_vocab=True, freq_cutoff=self.bert_config.getint('new_word_cutoff'),
+                                   block_size=self.bert_config.getint('max_seq_length'), check_vocab=True,
+                                   freq_cutoff=self.bert_config.getint('new_word_cutoff'),
                                    logging_level=logging.DEBUG)
             missing_tokens.extend(dataset.missing_tokens)
 

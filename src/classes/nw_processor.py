@@ -217,6 +217,12 @@ class nw_processor():
         Each sentence is added via parallel ties in a multigraph
 
         :param query: Based on parameters in the database, process this particular query
+
+        Parameters
+        ----------
+        fname
+        text_db
+        logging_level
         """
         tables.set_blosc_max_threads(15)
 
@@ -229,7 +235,7 @@ class nw_processor():
         # Check if text database has changed
         if text_db is not None:
             self.text_db = text_db
-        elif self.text_db == None:
+        elif self.text_db is None:
             logging.error("No text database provided!")
             raise ConnectionError("No text database provided!")
 
@@ -543,6 +549,12 @@ class nw_processor():
         :param x: Contextual/Replacement vector
         :param method: mean: Only accept entries above the mean; percent: Take the k biggest elements that explain X% of mass.
         :return: cutoff_degree and probability
+
+        Parameters
+        ----------
+        percent
+        max_degree
+        min_cut
         """
         if method == "mean":
             cutoff_probability = max(np.mean(x), min_cut)
@@ -578,6 +590,20 @@ class nw_processor():
         :param cutoff_number: Number of neighbor token to consider. Not used if 0.
         :param cutoff_probability: Lowest probability to consider. Not used if 0.
         :return: List of tuples compatible with networkx
+
+        Parameters
+        ----------
+        time
+        seq_id
+        pos
+        p1
+        p2
+        p3
+        p4
+        run_index
+        max_degree
+        simplify_context
+        min_probability
         """
         # Get the most pertinent words
         if cutoff_number > 0:

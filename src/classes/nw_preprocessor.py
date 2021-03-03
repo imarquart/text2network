@@ -15,7 +15,8 @@ from src.utils.logging_helpers import setup_logger
 
 class nw_preprocessor():
 
-    def __init__(self, config=None, database=None, MAX_SEQ_LENGTH=None, char_mult=None, split_symbol=None, number_params=None,
+    def __init__(self, config=None, database=None, MAX_SEQ_LENGTH=None, char_mult=None, split_symbol=None,
+                 number_params=None,
                  logging_level=None, logging_path=None, import_folder=None):
         """
         Pre-process class
@@ -133,7 +134,6 @@ class nw_preprocessor():
         # Logging path
         setup_logger(self.logging_path, self.logging_level)
 
-
     def resplit_sentences(self, sentences, max_tokens):
         """
         Functions takes a list of tokenized sentences and returns a new list, where
@@ -141,6 +141,10 @@ class nw_preprocessor():
         :param sentences: List of strings
         :param max_length: maximum length in words / tokens
         :return: List of strings conforming to maximum length
+
+        Parameters
+        ----------
+        max_tokens
         """
         split_sentences = []
         # Iterate over sentences and add each, split appropriately, to list
@@ -158,6 +162,10 @@ class nw_preprocessor():
         :param text_list: List to append to
         :param max_length: Maximum sentence length
         :return: split tokenized sentence list
+
+        Parameters
+        ----------
+        max_tokens
         """
         # Split sentence
         sent = sent.split()
@@ -202,6 +210,12 @@ class nw_preprocessor():
         :param folder: folder with text files
         :param max_seq: How many sequences to process maximally from data
         :return: none
+
+        Parameters
+        ----------
+        overwrite
+        ext_year
+        excludelist
         """
 
         # Define particle for pytable
@@ -267,7 +281,7 @@ class nw_preprocessor():
             file_name = re.split(".txt", file_name)[0]
             file_source = file_name
 
-            if ext_year == None:
+            if ext_year is None:
                 logging.info("Loading file %s" % file_name)
                 year = re.split(self.split_symbol,
                                 file_name)[-(self.number_params + 1)]
