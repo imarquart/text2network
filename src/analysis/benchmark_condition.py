@@ -588,7 +588,7 @@ logging.info("------------------------------------------------")
 
 logging.info("------------------------------------------------")
 test_name="All Year Context Conditioning"
-tokens=[None]
+tokens=None
 years=[None]
 weight_cutoff=0.1
 depth=None

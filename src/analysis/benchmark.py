@@ -38,16 +38,44 @@ level_list = [5,5,5,5,5]
 weight_list = [0,0.1,0,0.1,0,0.1]
 depth_list = [1,1,1,1,1,1]
 rs_list = [100,200,300]
-year_list = [1981,1986,1996,2000,2010]
+year_list = [2000,2010]
 focal_token = "leader"
 
 logging.info("-----------------Conditioning---------------------")
+logging.info("------------------------------------------------")
+test_name="Non-Normed 1 Year  Conditioning"
+tokens=['leader']
+years=year_list
+weight_cutoff=None
+depth=1
+context=None
+norm=False
+param_string="Years: {}, Tokens: {}, Cutoff: {}, Depth: {}, Context: {}, Norm: {}".format(years,tokens,weight_cutoff,depth,context,norm)
+logging.info("------- {} -------".format(test_name))
+logging.info(param_string)
+time_list=[]
+# Random Seed
+for year in years:
+    logging.disable(logging.ERROR)
+    del semantic_network
+    semantic_network = neo4j_network(config)
+    start_time=time.time()
+    np.random.seed(100)
+    semantic_network.condition(years=year, tokens=tokens,weight_cutoff=weight_cutoff,depth=depth,context=context,norm=norm)
+    logging.disable(logging.NOTSET)
+    time_list.append(time.time() - start_time)
+logging.info("{} finished in average {} seconds".format(test_name,np.mean(time_list)))
+logging.info(param_string)
+logging.info("nodes in network %i" % (len(semantic_network)))
+logging.info("ties in network %i" % (semantic_network.graph.number_of_edges()))
+logging.info("------------------------------------------------")
+
 
 logging.info("------------------------------------------------")
 test_name="Normed 1 Year  Conditioning"
 tokens=['leader']
 years=year_list
-weight_cutoff=0.1
+weight_cutoff=None
 depth=1
 context=None
 norm=True
@@ -70,4 +98,3 @@ logging.info(param_string)
 logging.info("nodes in network %i" % (len(semantic_network)))
 logging.info("ties in network %i" % (semantic_network.graph.number_of_edges()))
 logging.info("------------------------------------------------")
-

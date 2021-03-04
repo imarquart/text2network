@@ -457,6 +457,12 @@ class neo4j_database():
         logging.debug("Querying {} node occurrences for normalization".format(len(ids)))
         # Allow cutoff value of (non-aggregated) weights and set up time-interval query
 
+        # Optimization for time
+        if isinstance(times, list):
+            if len(times)==1:
+                times=int(times[0])
+
+
         # New where query
         where_query = " WHERE a.token_id in $ids"
 
@@ -475,12 +481,12 @@ class neo4j_database():
             params = {"ids": ids}
 
         return_query = ''.join([
-            " WITH a.token_id AS idx, sum(r.weight) AS weight RETURN idx, round(sum(weight)) as occurrences order by idx"])
+            "RETURN a.token_id AS idx, round(sum(r.weight)) as occurrences order by idx"])
 
         if isinstance(times, int):
-            match_query = "MATCH p=(a:word)-[:onto]->(r:edge {time:$times})-[:onto]->(b:word) "
+            match_query = "MATCH p=(a:word)-[:onto]->(r:edge {time:$times})"
         else:
-            match_query = "MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word) "
+            match_query = "MATCH p=(a:word)-[:onto]->(r:edge)"
 
         query = "".join([match_query, where_query, return_query])
         res = self.receive_query(query, params)
@@ -524,7 +530,7 @@ class neo4j_database():
             params = {"ids": ids, "clist": context}
 
         # return_query = ''.join([" WITH a.token_id AS idx, r.seq_id AS sequence_id ,(r.time) as year, count(DISTINCT(r.pos)) as pos_count RETURN idx, sum(pos_count) AS occurrences order by idx"])
-        return_query = " WITH s.token_id AS idx, sum(r.weight) AS weight RETURN idx, round(sum(weight)) as occurrences order by idx"
+        return_query = "RETURN s.token_id AS idx, round(sum(r.weight)) as occurrences order by idx"
         if isinstance(times, int):
             match_query = "MATCH p=(s:word)-[:onto]->(r:edge {time:$times})-[:onto]->(v:word) "
         else:
