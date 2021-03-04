@@ -1,4 +1,5 @@
 import logging
+from typing import Union
 
 import numpy as np
 
@@ -16,7 +17,7 @@ class neo4j_database():
                  write_before_query=True,
                  neo_batch_size=10000, queue_size=100000, tie_query_limit=100000, tie_creation="UNSAFE",
                  context_tie_creation="SAFE",
-                 logging_level=logging.NOTSET, connection_type="bolt"):
+                 logging_level=logging.NOTSET, connection_type="bolt", cache_yearly_occurrences=True):
         # Set logging level
         # logging.disable(logging_level)
 
@@ -54,6 +55,10 @@ class neo4j_database():
         self.db_ids = np.array(self.db_ids)
         self.db_tokens = np.array(self.db_tokens)
         self.db_id_dict = {}
+
+        # Occurrence Cache
+        self.cache_yearly_occurrences=cache_yearly_occurrences
+        self.occ_cache={}
         # Init parent class
         super().__init__()
 
@@ -346,6 +351,7 @@ class neo4j_database():
             params = {"ids": ids}
 
         query = "".join([match_query, where_query, return_query])
+        logging.info("Tie Query: {}".format(query))
         res = self.receive_query(query, params)
 
         tie_weights = np.array([x['agg_weight'] for x in res])
@@ -446,7 +452,7 @@ class neo4j_database():
 
         return ties
 
-    def query_occurrences(self, ids, times=None, weight_cutoff=None):
+    def query_occurrences(self, ids, times=None, weight_cutoff=None, query_all=True):
         """
         Query multiple nodes by ID and over a set of time intervals, return distinct occurrences
         :param ids: list of id's
@@ -455,43 +461,61 @@ class neo4j_database():
         :return: list of tuples (u,occurrences)
         """
         logging.debug("Querying {} node occurrences for normalization".format(len(ids)))
-        # Allow cutoff value of (non-aggregated) weights and set up time-interval query
 
         # Optimization for time
         if isinstance(times, list):
             if len(times)==1:
                 times=int(times[0])
 
+        # Check if occurrences are cached
+        if self.cache_yearly_occurrences and isinstance(times, int):
+            res = self.get_year_cache(times)
+            if not res:
+                # New where query
+                if query_all is False:
+                    where_query = " WHERE a.token_id in $ids"
+                else:
+                    where_query =" WHERE TRUE"
 
-        # New where query
-        where_query = " WHERE a.token_id in $ids"
+                # Allow cutoff value of (non-aggregated) weights and set up time-interval query
+                if weight_cutoff is not None:
+                    where_query = ''.join([where_query, " AND r.weight >=", str(weight_cutoff), " "])
+                if isinstance(times, dict):
+                    where_query = ''.join([where_query, " AND  $times.start <= r.time<= $times.end "])
+                elif isinstance(times, list):
+                    where_query = ''.join([where_query, " AND  r.time in $times "])
 
-        # Allow cutoff value of (non-aggregated) weights and set up time-interval query
-        if weight_cutoff is not None:
-            where_query = ''.join([where_query, " AND r.weight >=", str(weight_cutoff), " "])
-        if isinstance(times, dict):
-            where_query = ''.join([where_query, " AND  $times.start <= r.time<= $times.end "])
-        elif isinstance(times, list):
-            where_query = ''.join([where_query, " AND  r.time in $times "])
+                # Create params with or without time
+                if isinstance(times, dict) or isinstance(times, int) or isinstance(times, list):
+                    params = {"ids": ids, "times": times}
+                else:
+                    params = {"ids": ids}
 
-        # Create params with or without time
-        if isinstance(times, dict) or isinstance(times, int) or isinstance(times, list):
-            params = {"ids": ids, "times": times}
-        else:
-            params = {"ids": ids}
+                return_query = ''.join([
+                    "RETURN a.token_id AS idx, round(sum(r.weight)) as occurrences order by idx"])
 
-        return_query = ''.join([
-            "RETURN a.token_id AS idx, round(sum(r.weight)) as occurrences order by idx"])
+                if isinstance(times, int):
+                    match_query = "MATCH p=(a:word)-[:onto]->(r:edge {time:$times})"
+                else:
+                    match_query = "MATCH p=(a:word)-[:onto]->(r:edge)"
 
-        if isinstance(times, int):
-            match_query = "MATCH p=(a:word)-[:onto]->(r:edge {time:$times})"
-        else:
-            match_query = "MATCH p=(a:word)-[:onto]->(r:edge)"
+                query = "".join([match_query, where_query, return_query])
 
-        query = "".join([match_query, where_query, return_query])
-        res = self.receive_query(query, params)
+                logging.info("Occurrence Query: {}".format(query))
+                res = self.receive_query(query, params)
 
-        ties = [(x['idx'], x['occurrences']) for x in res]
+                if query_all is False:
+                    ties = [(x['idx'], x['occurrences']) for x in res]
+                else:
+                    ties = [(x['idx'], x['occurrences']) for x in res if x['idx'] in ids]
+                    # Update yearly cache:
+                    if isinstance(times, int):
+                        if self.cache_yearly_occurrences:
+                            self.add_year_cache(times, res)
+
+            else:
+                logging.info("Cached Occurrences found for {}".format(times))
+                ties = [(x['idx'], x['occurrences']) for x in res if x['idx'] in ids]
 
         return ties
 
@@ -727,6 +751,50 @@ class neo4j_database():
             raise NotImplementedError
 
         self.add_query(query, params)
+
+
+    # %% Cache
+
+    def get_year_cache(self, year:int)->Union[list, bool]:
+        """
+        If there are occurrences cached for a given year, get those
+
+        Parameters
+        ----------
+        year: int
+            The year
+
+        Returns
+        -------
+            list of dicts of form {idx:x, occurrences:y}
+            if not existing, return False
+        """
+
+        if self.cache_yearly_occurrences:
+            if year in list(self.occ_cache.keys()):
+                return self.occ_cache[year]
+            else:
+                return False
+        else:
+            return False
+
+
+    def add_year_cache(self, year:int, res:list):
+        """
+        Update year cache of occurrences
+
+        Parameters
+        ----------
+        year: int
+        res : list
+            List of dicts of form: {idx: , occurrences: }
+
+        Returns
+        -------
+
+        """
+        if self.cache_yearly_occurrences:
+            self.occ_cache[year]=res
 
     # %% Neo4J interaction
     # All function that interact with neo are here, dispatched as needed from above
