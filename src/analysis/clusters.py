@@ -13,7 +13,7 @@ configuration_path = '/config/config.ini'
 # Settings
 years = range(1980, 2020)
 focal_words = ["leader", "manager"]
-focal_token = "entrepreneur"
+focal_token = "founder"
 alter_subset = ["boss"]
 alter_subset = ["ceo", "kid", "manager", "head", "sadhu", "boss", "collector", "arbitrator", "offender", "partner",
                 "person", "catcher", "player", "founder", "musician", "volunteer", "golfer", "commander", "employee",
@@ -100,7 +100,7 @@ semantic_network = neo4j_network(config)
 
 level_list = [5]
 weight_list = [0.1, 0.01, None]
-depth_list = [1,2]
+depth_list = [2]
 rs_list = [100]
 rev_ties_list=[True,False]
 comp_ties_list=[True,False]
@@ -115,9 +115,9 @@ for depth, level, rs, cutoff, rev, comp in param_list:
     logging.info("Network clustering: {}".format(filename))
     # Random Seed
     np.random.seed(rs)
-    df = extract_all_clusters(level=level, cutoff=cutoff, focal_token=focal_token, semantic_network=semantic_network,
-                              depth=depth, algorithm=consensus_louvain, filename=filename,
-                              compositional=comp, reverse_ties=rev)
+    #df = extract_all_clusters(level=level, cutoff=cutoff, focal_token=focal_token, semantic_network=semantic_network,
+     #                         depth=depth, algorithm=consensus_louvain, filename=filename,
+     #                         compositional=comp, reverse_ties=rev)
 
 #### Cluster yearly proximities
 # Random Seed

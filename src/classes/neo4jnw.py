@@ -474,6 +474,35 @@ class neo4j_network(Sequence):
         return proximities(self, kwargs)
 
 
+    def get_node_context(self, tokens:Union[list,int,str], years:Union[int,list,dict]=None, weight_cutoff:Optional[float]=None, occurrence:Optional[bool]=False):
+
+        if years is None:
+            years=self.get_times_list()
+
+        input_check(tokens=tokens)
+        input_check(years=years)
+
+        if isinstance(tokens,(str,int)):
+            tokens=[tokens]
+
+        tokens=self.ensure_ids(tokens)
+
+        res=self.db.query_context_of_node(tokens,times=years,weight_cutoff=weight_cutoff, occurrence=occurrence)
+
+        tokens=np.array([x[0] for x in res])
+        alters=np.array([x[1] for x in res])
+        weights=np.array([x[2]['weight'] for x in res])
+
+        pd_dict={}
+        for token in np.unique(tokens):
+            mask=tokens==token
+            cidx=list(alters[mask])
+            cweights=list(weights[mask])
+            contexts=dict(zip(cidx,cweights))
+            pd_dict.update({int(token): contexts})
+
+        return {'proximity': pd_dict}
+
     def get_dyad_context(self, dyads:Optional[Union[list,tuple]]=None, occurrence:Optional[Union[list,str,int]]=None, replacement:Optional[Union[list,str,int]]=None, years:Union[int,list,dict]=None, weight_cutoff:Optional[float]=None):
         """
         Specify a dyad and get the distribution of contextual words.

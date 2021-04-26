@@ -190,7 +190,7 @@ def proximities(snw, focal_tokens: Optional[List] = None, alter_subset: Optional
 
 
 def yearly_centralities(nw, year_list, focal_tokens=None, types=["PageRank", "normedPageRank"], ego_nw_tokens=None,
-                        depth=1, context=None, weight_cutoff=None, norm_ties=None):
+                        depth=None, context=None, weight_cutoff=None, norm_ties=None):
     """
     Compute directly year-by-year centralities for provided list.
 
@@ -206,7 +206,7 @@ def yearly_centralities(nw, year_list, focal_tokens=None, types=["PageRank", "no
     ego_nw_tokens : list, optional - used when conditioning
          List of tokens for an ego-network if desired. Only used if no graph is supplied. The default is None.
     depth : TYPE, optional - used when conditioning
-        Maximal path length for ego network. Only used if no graph is supplied. The default is 1.
+        Maximal path length for ego network. Only used if no graph is supplied. The default is None.
     context : list, optional - used when conditioning
         List of tokens that need to appear in the context distribution of a tie. The default is None.
     weight_cutoff : float, optional - used when conditioning
