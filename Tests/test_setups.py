@@ -1,15 +1,5 @@
-from itertools import product
-
 from src.functions.file_helpers import check_create_folder
-from src.functions.measures import average_fixed_cluster_proximities, extract_all_clusters
 from src.utils.logging_helpers import setup_logger
-import logging
-import time
-import numpy as np
-import matplotlib.pyplot as plt
-import pandas as pd
-from src.functions.node_measures import proximity, centrality
-from src.functions.graph_clustering import consensus_louvain, louvain_cluster
 from src.classes.neo4jnw import neo4j_network
 
 

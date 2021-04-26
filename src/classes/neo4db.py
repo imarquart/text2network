@@ -288,18 +288,95 @@ class neo4j_database():
 
         return idx,weights
 
+    def query_context_of_node(self, ids, times=None,weight_cutoff=None):
+        """
+        Query multiple nodes by ID and return distributions of their context
+
+        Parameters
+        :param ids: list of id's
+        :param times: either a number format YYYYMMDD, or an interval dict {"start":YYYYMMDD,"end":YYYYMMDD}
+        :param weight_cutoff: float in 0,1
+
+        Returns
+        -------
+        list of tuples (u,v,Time,{weight:x})
+        """
+        logging.debug("Querying {} nodes in Neo4j database.".format(len(ids)))
+        # New where query
+        where_query = " WHERE v.token_id in $ids"
+
+        # Optimization for time
+        if isinstance(times, list):
+            if len(times)==1:
+                times=int(times[0])
+
+        # Allow cutoff value of (non-aggregated) weights and set up time-interval query
+        if weight_cutoff is not None:
+            where_query = ''.join([where_query, " AND r.weight >=", str(weight_cutoff), " "])
+        if isinstance(times, dict):
+            where_query = ''.join([where_query, " AND  $times.start <= r.time<= $times.end "])
+        elif isinstance(times, list):
+            where_query = ''.join([where_query, " AND  r.time in $times "])
+        elif isinstance(times, int):
+            where_query = ''.join([where_query, " AND  r.time = $times "])
+
+        match_query_1="Match p=(r:edge)-[:onto]->(v:word) "
+        match_query_2="WITH r,v.token_id as ego MATCH (t: word) < -[: onto]-(q:edge {run_index:r.run_index}) < -[: onto]-(x:word) "
+        where_query_2="WHERE q.pos <> r.pos "
+        if weight_cutoff is not None:
+            where_query_2 = ''.join([where_query_2, " AND q.weight >=", str(weight_cutoff), " "])
+
+        with_query="WITH t.token_id as idx, q.weight as qweight, r.weight as rweight, ego "
+        return_query="Return ego, DISTINCT(idx) as alter, sum(qweight) * sum(rweight) as weight order by ego"
+
+        # Format time to set for network
+        if isinstance(times, int):
+            nw_time = {"s": times, "e": times, "m": times}
+        elif isinstance(times, dict):
+            nw_time = {"s": times['start'], "e": times['end'], "m": int((times['end'] + times['start']) / 2)}
+        elif isinstance(times, list):
+            sort_times=np.sort(times)
+            nw_time = {"s": sort_times[0], "e": sort_times[-1], "m": int((sort_times[0] + sort_times[-1]) / 2)}
+        else:
+            nw_time = {"s": 0, "e": 0, "m": 0}
+
+        # Create params with or without time
+        if isinstance(times, dict) or isinstance(times, int) or isinstance(times, list):
+            params = {"ids": ids, "times": times}
+        else:
+            params = {"ids": ids}
+
+        query = "".join([match_query_1, where_query, match_query_2, where_query_2, with_query, return_query])
+        logging.debug("Tie Query: {}".format(query))
+        res = self.receive_query(query, params)
+
+        tie_weights = np.array([x['weight'] for x in res], dtype=float)
+        egos = np.array([x['ego'] for x in res])
+        alters = np.array([x['alter'] for x in res])
+
+        unique_egos=np.unique(egos)
+        # Normalize
+        for ego in unique_egos:
+            mask=egos==ego
+            sum_weights=np.sum(tie_weights[mask])
+            tie_weights[mask]=tie_weights[mask]/sum_weights
+
+        ties=[(x[0],x[1],{'weight':x[2],  'time': nw_time['m'], 'start': nw_time['s'], 'end': nw_time['e']}) for x in zip(egos,alters,tie_weights)]
+
+        return ties
 
     def query_multiple_nodes(self, ids, times=None, weight_cutoff=None, norm_ties=False):
         """
         Query multiple nodes by ID and over a set of time intervals
-        :param ids: list of id's
-        :param times: either a number format YYYYMMDD, or an interval dict {"start":YYYYMMDD,"end":YYYYMMDD}
-        :param weight_cutoff: float in 0,1
-        :return: list of tuples (u,v,Time,{weight:x})
+
 
         Parameters
         ----------
-        norm_ties
+        :param ids: list of id's
+        :param times: either a number format YYYYMMDD, or an interval dict {"start":YYYYMMDD,"end":YYYYMMDD}
+        :param weight_cutoff: float in 0,1
+        :param norm_ties: Compositional mode
+        :return: list of tuples (u,v,Time,{weight:x})
         """
         logging.debug("Querying {} nodes in Neo4j database.".format(len(ids)))
         # New where query

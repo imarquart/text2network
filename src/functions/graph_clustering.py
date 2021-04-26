@@ -78,7 +78,7 @@ def consensus_louvain(graph, iterations=4):
 
 
 def cluster_graph(graph: GraphDict, to_measure: Optional[List[Callable[[nx.DiGraph], Dict]]] = None,
-                  algorithm: Optional[Callable[[nx.DiGraph], List]] = None) -> Tuple[GraphDict, List[GraphDict]]:
+                  algorithm: Optional[Callable[[nx.DiGraph], List]] = None) -> Tuple[GraphDict, List[GraphDict], dict]:
     """
     Cluster a graph in a GraphDict into its subgraphs and create measures
 
@@ -93,7 +93,7 @@ def cluster_graph(graph: GraphDict, to_measure: Optional[List[Callable[[nx.DiGra
 
     Returns
     -------
-    Modified original graph, list of subgraphs
+    Modified original graph, list of subgraphs, node assignment dictionaries
     """
 
     subgraph_list = []
@@ -143,7 +143,7 @@ def cluster_graph(graph: GraphDict, to_measure: Optional[List[Callable[[nx.DiGra
         cluster = return_cluster(cluster_subgraph, name, graph_name, level, measure_list, graph_metadata)
         subgraph_list.append(cluster)
 
-    return graph, subgraph_list
+    return graph, subgraph_list, cluster_node_dict
 
 
 def create_cluster_subgraph(graph: nx.DiGraph, nodelist: list, copy=True) -> nx.DiGraph:

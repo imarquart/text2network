@@ -16,7 +16,6 @@ setup_logger(config['Paths']['log'],config['General']['logging_level'] )
 
 
 # Preprocessing
-from src.classes.nw_preprocessor import nw_preprocessor
 # Set up preprocessor
 #preprocessor = nw_preprocessor(config)
 # Option 1: Process several folders separated by time variable
@@ -25,7 +24,6 @@ from src.classes.nw_preprocessor import nw_preprocessor
 #preprocessor.preprocess_files(overwrite=True,excludelist=['checked', 'Error'])
 
 # Training
-from src.classes.bert_trainer import bert_trainer
 # Create a trainer for BERT
 #trainer=bert_trainer(config)
 # Train according to hierarchy defined in configuration
@@ -39,7 +37,6 @@ from src.classes.neo4jnw import neo4j_network
 semantic_network = neo4j_network(config)
 
 # Next, create a processor
-from src.classes.nw_processor import nw_processor
 #processor = nw_processor(semantic_network,config)
 # Run the processor on our data
 #processor.run_all_queries(delete_incomplete=True, delete_all=True)
@@ -293,7 +290,7 @@ print(semantic_network.pd_format(semantic_network.centralities(ego_nw_tokens="pr
 
 
 # Get a list of yearly centralities
-from src.functions.measures import yearly_centralities
+from src.measures.measures import yearly_centralities
 years=semantic_network.get_times_list()
 print(yearly_centralities(semantic_network, years))
 

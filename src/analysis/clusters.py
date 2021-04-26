@@ -1,15 +1,11 @@
 from itertools import product
 
 from src.functions.file_helpers import check_create_folder
-from src.functions.measures import average_fixed_cluster_proximities, extract_all_clusters
+from src.measures.measures import average_fixed_cluster_proximities, extract_all_clusters
 from src.utils.logging_helpers import setup_logger
 import logging
-import time
 import numpy as np
-import matplotlib.pyplot as plt
-import pandas as pd
-from src.functions.node_measures import proximity, centrality
-from src.functions.graph_clustering import consensus_louvain, louvain_cluster
+from src.functions.graph_clustering import consensus_louvain
 from src.classes.neo4jnw import neo4j_network
 
 # Set a configuration path
@@ -17,7 +13,7 @@ configuration_path = '/config/config.ini'
 # Settings
 years = range(1980, 2020)
 focal_words = ["leader", "manager"]
-focal_token = "ceo"
+focal_token = "entrepreneur"
 alter_subset = ["boss"]
 alter_subset = ["ceo", "kid", "manager", "head", "sadhu", "boss", "collector", "arbitrator", "offender", "partner",
                 "person", "catcher", "player", "founder", "musician", "volunteer", "golfer", "commander", "employee",
@@ -96,15 +92,15 @@ config = configparser.ConfigParser()
 print(check_create_folder(configuration_path))
 config.read(check_create_folder(configuration_path))
 # Setup logging
-setup_logger(config['Paths']['log'], config['General']['logging_level'], "clusteringB")
+setup_logger(config['Paths']['log'], config['General']['logging_level'], "clusteringFounder")
 
 # First, create an empty network
 semantic_network = neo4j_network(config)
 
 
-level_list = [10]
-weight_list = [ 0.01]
-depth_list = [1]
+level_list = [5]
+weight_list = [0.1, 0.01, None]
+depth_list = [1,2]
 rs_list = [100]
 rev_ties_list=[True,False]
 comp_ties_list=[True,False]
@@ -115,8 +111,7 @@ for depth, level, rs, cutoff, rev, comp in param_list:
     semantic_network = neo4j_network(config)
     filename = "".join(
         [config['Paths']['csv_outputs'], "/", str(focal_token), "_all_rev",str(rev),"_norm",str(comp),"_egocluster_lev", str(level), "_cut",
-         str(cutoff), "_depth", str(depth),"_rs",str(rs),
-         ".xlsx"])
+         str(cutoff), "_depth", str(depth),"_rs",str(rs)])
     logging.info("Network clustering: {}".format(filename))
     # Random Seed
     np.random.seed(rs)
@@ -124,38 +119,14 @@ for depth, level, rs, cutoff, rev, comp in param_list:
                               depth=depth, algorithm=consensus_louvain, filename=filename,
                               compositional=comp, reverse_ties=rev)
 
-level_list = [10]
-weight_list = [ 0.01, 0.1]
-depth_list = [1]
-rs_list = [100]
-rev_ties_list=[True,False]
-comp_ties_list=[True,False]
-param_list=product(depth_list, level_list,rs_list,weight_list,rev_ties_list,comp_ties_list)
-logging.info("------------------------------------------------")
-for depth, level, rs, cutoff, rev, comp in param_list:
-    del semantic_network
-    semantic_network = neo4j_network(config)
-    filename = "".join(
-        [config['Paths']['csv_outputs'], "/", str(focal_token), "_IList_rev",str(rev),"_norm",str(comp),"_egocluster_lev", str(level), "_cut",
-         str(cutoff), "_depth", str(depth),"_rs",str(rs),
-         ".xlsx"])
-    logging.info("Network clustering: {}".format(filename))
-    # Random Seed
-    np.random.seed(rs)
-    df = extract_all_clusters(level=level, cutoff=cutoff, focal_token=focal_token, semantic_network=semantic_network,
-                              depth=depth, interest_list=alter_subset, algorithm=consensus_louvain, filename=filename,
-                              compositional=comp, reverse_ties=rev)
-
-
-
 #### Cluster yearly proximities
 # Random Seed
 np.random.seed(100)
 
 ma_list = [(0, 0), (2, 0), (1, 1)]
-level_list = [5,6,8]
+level_list = [5]
 weight_list = [0.1,0.01]
-depth_list = [1]
+depth_list = [1,2]
 rev_ties_list=[True,False]
 comp_ties_list=[True,False]
 param_list=product(depth_list, level_list, ma_list, weight_list, rev_ties_list,comp_ties_list)
@@ -166,8 +137,7 @@ for depth, levels, moving_average, weight_cutoff, rev, comp in param_list:
     # weight_cutoff=0
     filename = "".join(
         [config['Paths']['csv_outputs'], "/", str(focal_token), "_rev",str(rev),"_norm",str(comp),"_yearfixed_lev", str(levels), "_clcut",
-         str(cluster_cutoff), "_cut", str(weight_cutoff), "_depth", str(depth), "_ma", str(moving_average),
-         ".xlsx"])
+         str(cluster_cutoff), "_cut", str(weight_cutoff), "_depth", str(depth), "_ma", str(moving_average)])
 
     df = average_fixed_cluster_proximities(focal_token, interest_tokens, semantic_network, levels, do_reverse=True,
                                            depth=depth, weight_cutoff=weight_cutoff, cluster_cutoff=cluster_cutoff,

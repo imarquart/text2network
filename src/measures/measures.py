@@ -1,15 +1,192 @@
 import configparser
 import logging
-from typing import Optional, Callable, Union
+from typing import Optional, Callable, Union, List, Dict
 
 import numpy as np
 import pandas as pd
 
-from src.classes import neo4jnw
-from src.classes.neo4jnw import neo4j_network
+#from src.classes import neo4jnw
+#from src.classes.neo4jnw import neo4j_network
 from src.functions.file_helpers import check_create_folder
 from src.functions.graph_clustering import consensus_louvain
 from src.functions.node_measures import proximity, centrality
+#from src.classes import neo4jnw
+from src.utils.input_check import input_check
+
+
+def centralities(snw, focal_tokens=None, types=["PageRank", "normedPageRank"], years=None, ego_nw_tokens=None,
+                 depth=1, context=None, weight_cutoff=None, norm_ties=None, reverse_ties: Optional[bool] = False):
+    """
+    Calculate centralities for given tokens over an aggregate of given years.
+    If not conditioned, the semantic network will be conditioned according to the parameters given.
+
+    Parameters
+    ----------
+    snw : semantic network
+        semantic network class
+    focal_tokens : list, str, optional
+        List of tokens of interest. If not provided, centralities for all tokens will be returned.
+    types : list, optional
+        Types of centrality to calculate. The default is ["PageRank", "normedPageRank"].
+    years : dict, int, optional - used when conditioning
+        Given year, or an interval dict {"start":YYYYMMDD,"end":YYYYMMDD}. The default is None.
+    ego_nw_tokens : list, optional - used when conditioning
+         List of tokens for an ego-network if desired. Only used if no graph is supplied. The default is None.
+    depth : TYPE, optional - used when conditioning
+        Maximal path length for ego network. Only used if no graph is supplied. The default is 1.
+    context : list, optional - used when conditioning
+        List of tokens that need to appear in the context distribution of a tie. The default is None.
+    weight_cutoff : float, optional - used when conditioning
+        Only links of higher weight are considered in conditioning.. The default is None.
+    norm_ties : bool, optional - used when conditioning
+        Please see semantic network class. The default is None.
+    reverse_ties : bool, optional
+        Reverse all ties. The default is False.
+
+    Returns
+    -------
+    dict
+        Dict of centralities for focal tokens.
+
+    """
+
+    # Get default normation behavior
+    if norm_ties is None:
+        norm_ties = snw.norm_ties
+
+    input_check(tokens=focal_tokens)
+    input_check(tokens=ego_nw_tokens)
+    input_check(tokens=context)
+    input_check(years=years)
+
+    focal_tokens = snw.ensure_ids(focal_tokens)
+
+    if not snw.conditioned:
+        was_conditioned = False
+        if ego_nw_tokens is None:
+            logging.debug("Conditioning year(s) {} with focus on tokens {}".format(
+                years, focal_tokens))
+            snw.condition(years=years, tokens=None, weight_cutoff=weight_cutoff,
+                           depth=depth, context=context, norm=norm_ties)
+            logging.debug("Finished conditioning, {} nodes and {} edges in graph".format(
+                len(snw.graph.nodes), len(snw.graph.edges)))
+        else:
+            logging.debug(
+                "Conditioning ego-network for {} tokens with depth {}, for year(s) {} with focus on tokens {}".format(
+                    len(ego_nw_tokens), depth, years, focal_tokens))
+            snw.condition(years=years, tokens=ego_nw_tokens, weight_cutoff=weight_cutoff,
+                           depth=depth, context=context, norm=norm_ties)
+            logging.debug("Finished ego conditioning, {} nodes and {} edges in graph".format(
+                len(snw.graph.nodes), len(snw.graph.edges)))
+    else:
+        logging.debug(
+            "Network already conditioned! No reconditioning attempted, parameters unused.")
+        was_conditioned = True
+
+    # Reverse ties if requested
+    if reverse_ties:
+        snw.to_reverse()
+
+
+    cent_dict = centrality(
+        snw.graph, focal_tokens=focal_tokens, types=types)
+
+    if not was_conditioned:
+        # Decondition
+        snw.decondition()
+
+    return cent_dict
+
+
+def proximities(snw, focal_tokens: Optional[List] = None, alter_subset: Optional[List] = None,
+                years: Optional[Union[List, int, Dict]] = None,
+                context: Optional[List] = None, weight_cutoff: Optional[float] = None,
+                compositional: Optional[bool] = None, reverse_ties: Optional[bool] = False) -> Dict:
+    """
+    Calculate proximities for given tokens.
+    Conditions if network is not already conditioned.
+
+    Parameters
+    ----------
+    snw : semantic network
+        semantic network class
+    focal_tokens : list, str, optional
+        List of tokens of interest. If not provided, centralities for all tokens will be returned.
+    alter_subset : list, str optional
+        List of alters to show. Others are hidden. The default is None.
+    years : dict, int, optional - used when conditioning
+        Given year, or an interval dict {"start":YYYYMMDD,"end":YYYYMMDD}. The default is None.
+    context : list, optional - used when conditioning
+        List of tokens that need to appear in the context distribution of a tie. The default is None.
+    weight_cutoff : float, optional - used when conditioning
+        Only ties of higher weight are considered. The default is None.
+    compositional : bool, optional - used when conditioning
+        Norm ties to compositional. The default is None.
+    reverse_ties : bool, optional
+        Reverse all ties. The default is False.
+
+    Returns
+    -------
+    proximity_dict : dict
+        Dictionary of form {token_id:{alter_id: proximity}}.
+
+    """
+
+    # Get default normation behavior
+    if compositional is None:
+        compositional = snw.norm_ties
+
+    input_check(tokens=focal_tokens)
+    input_check(tokens=alter_subset)
+    input_check(tokens=context)
+    input_check(years=years)
+
+    if alter_subset is not None:
+        alter_subset = snw.ensure_ids(alter_subset)
+    if focal_tokens is not None:
+        focal_tokens = snw.ensure_ids(focal_tokens)
+        if not isinstance(focal_tokens, list):
+            focal_tokens = [focal_tokens]
+    else:
+        focal_tokens = snw.ids
+
+    was_conditioned = False
+    if snw.conditioned:
+        was_conditioned = True
+        logging.debug(
+            "Network already conditioned! No reconditioning attempted, parameters unused.")
+
+    proximity_dict = {}
+    # Condition
+    if not was_conditioned:
+        logging.info(
+            "Conditioning year(s) {}".format(years))
+        if len(focal_tokens) > 5:  # Condition on full network
+            logging.info("Calculating proximities for {} tokens!".format(len(focal_tokens)))
+
+            snw.condition(years=years, weight_cutoff=weight_cutoff, context=context, norm=compositional)
+        else:  # Shortcut method
+            snw.graph = snw.create_empty_graph()
+            ties = snw.query_nodes(focal_tokens, times=years, norm_ties=compositional, context=context,
+                                    weight_cutoff=weight_cutoff)
+            snw.graph.add_edges_from(ties)
+            snw.__complete_conditioning()
+
+    # Reverse ties if requested
+    if reverse_ties:
+        snw.to_reverse()
+
+    # Get proximities from conditioned network
+    for token in focal_tokens:
+        tie_dict = proximity(snw.graph, focal_tokens=[token], alter_subset=alter_subset)[
+            'proximity'][token]
+        proximity_dict.update({token: tie_dict})
+
+    if not was_conditioned:
+        # Decondition
+        snw.decondition()
+
+    return {"proximity": proximity_dict}
 
 
 def yearly_centralities(nw, year_list, focal_tokens=None, types=["PageRank", "normedPageRank"], ego_nw_tokens=None,
@@ -59,7 +236,7 @@ def yearly_centralities(nw, year_list, focal_tokens=None, types=["PageRank", "no
     return {'yearly_centrality': cent_year}
 
 
-def average_fixed_cluster_centralities(focal_token: str, interest_list: list, nw: neo4jnw.neo4j_network, levels: int,
+def average_fixed_cluster_centralities(focal_token: str, interest_list: list, nw, levels: int,
                                        depth: Optional[int] = 1, context: Optional[list] = None,
                                        weight_cutoff: Optional[float] = None, norm_ties: Optional[bool] = None,
                                        cluster_cutoff: Optional[float] = 0, do_reverse: Optional[bool] = False,
@@ -173,7 +350,7 @@ def average_fixed_cluster_centralities(focal_token: str, interest_list: list, nw
     return df
 
 
-def average_fixed_cluster_proximities(focal_token: str, interest_list: list, nw: neo4jnw.neo4j_network, levels: int,
+def average_fixed_cluster_proximities(focal_token: str, interest_list: list, nw, levels: int,
                                       depth: Optional[int] = 1, context: Optional[list] = None,
                                       weight_cutoff: Optional[float] = None,
                                       cluster_cutoff: Optional[float] = 0, do_reverse: Optional[bool] = False,
@@ -320,12 +497,12 @@ def average_fixed_cluster_proximities(focal_token: str, interest_list: list, nw:
     if filename is not None:
         filename = check_create_folder(filename)
         df.to_excel(filename)
-
+        #nw.export_gefx(filename=filename)
     return df
 
 
 def extract_all_clusters(level: int, cutoff: float, focal_token: str,
-                         semantic_network: neo4j_network, depth: Optional[int] = 0,
+                         semantic_network, depth: Optional[int] = 0,
                          interest_list: Optional[list] = None, algorithm: Optional[Callable] = None,
                          filename: Optional[str] = None, compositional: Optional[bool] = False, reverse_ties: Optional[bool] = False) -> pd.DataFrame:
     """
@@ -417,8 +594,8 @@ def extract_all_clusters(level: int, cutoff: float, focal_token: str,
     df = pd.DataFrame(dataframe_list)
 
     if filename is not None:
-        filename = check_create_folder(filename)
-        df.to_excel(filename)
+        df.to_excel(check_create_folder(filename+".xlsx"))
+        semantic_network.export_gefx(filename=check_create_folder(filename+".gexf"))
 
     return df
 
