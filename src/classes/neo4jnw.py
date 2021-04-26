@@ -460,13 +460,14 @@ class neo4j_network(Sequence):
 
     # %% Measures
 
-    def centralities(self,*kwargs):
+    def centralities(self, focal_tokens=None, types=["PageRank", "normedPageRank"], years=None, ego_nw_tokens=None,
+                 depth=1, context=None, weight_cutoff=None, norm_ties=None, reverse_ties: Optional[bool] = False):
         """
         See measures.centralities
         """
-        return centralities(self, kwargs)
+        return centralities(self, focal_tokens=focal_tokens, types=types,years=years,ego_nw_tokens=ego_nw_tokens,depth=depth,context=context,weight_cutoff=weight_cutoff,norm_ties=norm_ties, reverse_ties=reverse_ties)
 
-    def proximities(self,*kwargs) -> Dict:
+    def proximities(self,**kwargs) -> Dict:
         """
         See measures.proximities
         """

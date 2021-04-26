@@ -13,7 +13,7 @@ configuration_path = '/config/config.ini'
 # Settings
 years = range(1980, 2020)
 focal_words = ["leader", "manager"]
-focal_token = "founder"
+focal_token = "leader"
 alter_subset = ["boss"]
 alter_subset = ["ceo", "kid", "manager", "head", "sadhu", "boss", "collector", "arbitrator", "offender", "partner",
                 "person", "catcher", "player", "founder", "musician", "volunteer", "golfer", "commander", "employee",
@@ -92,18 +92,18 @@ config = configparser.ConfigParser()
 print(check_create_folder(configuration_path))
 config.read(check_create_folder(configuration_path))
 # Setup logging
-setup_logger(config['Paths']['log'], config['General']['logging_level'], "clusteringFounder")
+setup_logger(config['Paths']['log'], config['General']['logging_level'], "clusteringleader")
 
 # First, create an empty network
 semantic_network = neo4j_network(config)
 
 
-level_list = [5]
-weight_list = [0.1, 0.01, None]
-depth_list = [2]
+level_list = [6]
+weight_list = [0.01, None]
+depth_list = [1]
 rs_list = [100]
-rev_ties_list=[True,False]
-comp_ties_list=[True,False]
+rev_ties_list=[False]
+comp_ties_list=[False]
 param_list=product(depth_list, level_list,rs_list,weight_list,rev_ties_list,comp_ties_list)
 logging.info("------------------------------------------------")
 for depth, level, rs, cutoff, rev, comp in param_list:
@@ -115,20 +115,20 @@ for depth, level, rs, cutoff, rev, comp in param_list:
     logging.info("Network clustering: {}".format(filename))
     # Random Seed
     np.random.seed(rs)
-    #df = extract_all_clusters(level=level, cutoff=cutoff, focal_token=focal_token, semantic_network=semantic_network,
-     #                         depth=depth, algorithm=consensus_louvain, filename=filename,
-     #                         compositional=comp, reverse_ties=rev)
+    df = extract_all_clusters(level=level, cutoff=cutoff, focal_token=focal_token, interest_list=alter_subset, semantic_network=semantic_network,
+                              depth=depth, algorithm=consensus_louvain, filename=filename,
+                              compositional=comp, reverse_ties=rev)
 
 #### Cluster yearly proximities
 # Random Seed
 np.random.seed(100)
 
-ma_list = [(0, 0), (2, 0), (1, 1)]
+ma_list = [(1, 1)]
 level_list = [5]
-weight_list = [0.1,0.01]
-depth_list = [1,2]
-rev_ties_list=[True,False]
-comp_ties_list=[True,False]
+weight_list = [0.01, None]
+depth_list = [1]
+rev_ties_list=[False]
+comp_ties_list=[False]
 param_list=product(depth_list, level_list, ma_list, weight_list, rev_ties_list,comp_ties_list)
 logging.info("------------------------------------------------")
 for depth, levels, moving_average, weight_cutoff, rev, comp in param_list:

@@ -21,7 +21,7 @@ setup_logger(config['Paths']['log'], config['General']['logging_level'], "yearly
 # First, create an empty network
 semantic_network = neo4j_network(config)
 
-cent=yearly_centralities(semantic_network, focal_tokens=["leader","manager"],years=semantic_network.get_times_list(), norm_ties=False)
+cent=yearly_centralities(semantic_network, semantic_network.get_times_list(),focal_tokens=["leader","manager"], norm_ties=False)
 cent=semantic_network.pd_format(cent)
 
 
