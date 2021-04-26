@@ -236,118 +236,6 @@ def yearly_centralities(nw, year_list, focal_tokens=None, types=["PageRank", "no
     return {'yearly_centrality': cent_year}
 
 
-def average_fixed_cluster_centralities(focal_token: str, interest_list: list, nw, levels: int,
-                                       depth: Optional[int] = 1, context: Optional[list] = None,
-                                       weight_cutoff: Optional[float] = None, norm_ties: Optional[bool] = None,
-                                       cluster_cutoff: Optional[float] = 0, do_reverse: Optional[bool] = False,
-                                       moving_average: Optional[tuple] = False,
-                                       filename: Optional[str] = None) -> pd.DataFrame:
-    """
-    First, derives clusters from overall network (across all years), then creates year-by-year average proximities for these clusters
-
-    Parameters
-    ----------
-    focal_token: str
-        Token to which proximities are calculated
-    interest_list: list
-        List of tokens of relevance. Only clusters that contain these tokens are considered.
-    nw: neo4jnw
-        Semantic Network
-    levels: int
-        How many levels to cluster?
-    depth: int
-        Depth of the ego network of focal_token to consider. If 0, consider whole semantic network.
-    context: list
-        Contextual tokens
-    weight_cutoff: float
-        Cutoff when querying the network
-    norm_ties: bool
-        Whether to norm ties (compositional mode)
-    do_reverse: bool
-        Calculate reverse proximities, note this needs to query the entire graph for each year
-    moving_average: tuple
-        Consider a moving_average window for years, given as tuple where (nr_prior,nr_past)
-        So for example, a length 3 window around the focal year would be given by (1,1).
-        A length 3 window behind the focal year would be (2,0)
-    cluster_cutoff: float
-        After clusters are derived, throw away proximities of less than this value
-    filename: str
-        If given, will save the resulting dataframe to this file as xlsx
-
-    Returns
-    -------
-    pd.DataFrame
-        Resulting average proximities of cluster year-by-year. year=-100 is overall cluster across all years.
-    """
-    # First, derive clusters
-    if depth > 0:
-        clusters = nw.cluster(ego_nw_tokens=focal_token, interest_list=interest_list, depth=depth, levels=levels,
-                              weight_cutoff=weight_cutoff,
-                              to_measure=[centrality], algorithm=consensus_louvain)
-    else:
-        clusters = nw.cluster(levels=levels, interest_list=interest_list, weight_cutoff=weight_cutoff,
-                              to_measure=[centrality],
-                              algorithm=consensus_louvain)
-    filename = check_create_folder(filename)
-    cluster_dict = {}
-    cluster_dataframe = []
-    logging.info("Extracting relevant clusters at level {} across all years ".format(levels))
-    for cl in clusters:
-        if cl['level'] == 0:  # Use zero cluster, where all tokens are present, to get proximities
-            cent = nw.pd_format(cl['measures'])[0]
-        if len(cl['graph'].nodes) > 2 and cl['level'] == levels:  # Consider only the last level
-            # Get List of tokens
-            nodes = nw.ensure_tokens(list(cl['graph'].nodes))
-            # Check if this is a cluster of interest
-            if len(np.intersect1d(nodes, interest_list)) > 0:
-                proximate_nodes = cent.reindex(nodes, fill_value=0)
-                # We only care about proximate nodes
-                proximate_nodes = proximate_nodes[proximate_nodes > cluster_cutoff]
-                if len(proximate_nodes) > 0:
-                    mean_cluster_prox = np.mean(proximate_nodes)
-                    top_node = proximate_nodes.idxmax()
-                    # Default cluster entry
-                    year = -100
-                    name = "-".join(list(proximate_nodes.nlargest(5).index))
-                    df_dict = {'Year': year, 'Level': cl['level'], 'Clustername': name, 'Prom_Node': top_node,
-                               'Parent': cl['parent'], 'Cluster_Avg_Cent': mean_cluster_prox,
-                               'Nr_ProxNodes': len(proximate_nodes),
-                               'NrNodes': len(nodes)}
-                    cluster_dict.update({name: cl})
-                    cluster_dataframe.append(df_dict.copy())
-
-    logging.info("Getting years.")
-    years = np.array(nw.get_times_list())
-    years = np.sort(years)
-
-    for year in years:
-        nw.decondition()
-        logging.info("Calculating Centralities for fixed relevant clusters for year {}".format(year))
-        year_cent = nw.centralities(years=year, context=context, weight_cutoff=weight_cutoff,
-                                    norm_ties=norm_ties)
-        cent = nw.pd_format(year_cent)[0]
-        for cl_name in cluster_dict:
-            cl = cluster_dict[cl_name]
-            nodes = nw.ensure_tokens(list(cl['graph'].nodes))
-            proximate_nodes = cent.reindex(nodes, fill_value=0)
-            proximate_nodes = proximate_nodes[proximate_nodes > cluster_cutoff]
-            mean_cluster_prox = np.mean(proximate_nodes)
-            if len(proximate_nodes) > 0:
-                top_node = proximate_nodes.idxmax()
-            else:
-                top_node = "empty"
-            df_dict = {'Year': year, 'Level': cl['level'], 'Clustername': cl_name, 'Prom_Node': top_node,
-                       'Parent': cl['parent'], 'Cluster_Avg_Prox': mean_cluster_prox,
-                       'Nr_ProxNodes': len(proximate_nodes),
-                       'NrNodes': len(nodes)}
-            cluster_dataframe.append(df_dict.copy())
-
-    df = pd.DataFrame(cluster_dataframe)
-
-    if filename is not None:
-        df.to_excel(filename)
-
-    return df
 
 
 def average_fixed_cluster_proximities(focal_token: str, interest_list: list, nw, levels: int,
@@ -496,7 +384,7 @@ def average_fixed_cluster_proximities(focal_token: str, interest_list: list, nw,
 
     if filename is not None:
         filename = check_create_folder(filename)
-        df.to_excel(filename)
+        df.to_excel(filename+".xlsx")
         #nw.export_gefx(filename=filename)
     return df
 

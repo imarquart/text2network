@@ -99,7 +99,7 @@ semantic_network = neo4j_network(config)
 
 
 level_list = [6]
-weight_list = [0.01, None]
+weight_list = [0.1]
 depth_list = [1]
 rs_list = [100]
 rev_ties_list=[False]
@@ -115,9 +115,9 @@ for depth, level, rs, cutoff, rev, comp in param_list:
     logging.info("Network clustering: {}".format(filename))
     # Random Seed
     np.random.seed(rs)
-    df = extract_all_clusters(level=level, cutoff=cutoff, focal_token=focal_token, interest_list=alter_subset, semantic_network=semantic_network,
-                              depth=depth, algorithm=consensus_louvain, filename=filename,
-                              compositional=comp, reverse_ties=rev)
+    #df = extract_all_clusters(level=level, cutoff=cutoff, focal_token=focal_token, interest_list=alter_subset, semantic_network=semantic_network,
+    #                          depth=depth, algorithm=consensus_louvain, filename=filename,
+    #                          compositional=comp, reverse_ties=rev)
 
 #### Cluster yearly proximities
 # Random Seed
@@ -125,7 +125,7 @@ np.random.seed(100)
 
 ma_list = [(1, 1)]
 level_list = [5]
-weight_list = [0.01, None]
+weight_list = [0.01, 0.1]
 depth_list = [1]
 rev_ties_list=[False]
 comp_ties_list=[False]

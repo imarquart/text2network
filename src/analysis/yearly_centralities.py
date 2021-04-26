@@ -22,11 +22,11 @@ setup_logger(config['Paths']['log'], config['General']['logging_level'], "yearly
 semantic_network = neo4j_network(config)
 
 cent=yearly_centralities(semantic_network, semantic_network.get_times_list(),focal_tokens=["leader","manager"], norm_ties=False)
-cent=semantic_network.pd_format(cent)
+cent=semantic_network.pd_format(cent)[0]
 
 
 filename="/ycent_manager-leader.xlsx"
 path = config['Paths']['csv_outputs']+filename
 path = check_create_folder(path)
 
-cent.to_excel(path)
+cent.to_excel(path,merge_cells=False)

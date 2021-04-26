@@ -193,16 +193,27 @@ class neo4j_network(Sequence):
         # Format output into pandas
         format_output = pd_format(output)
         # Transform ids to token names
+        if not isinstance(format_output,list):
+            format_output=[format_output]
         if ids_to_tokens:
             for idx, pd_tbl in enumerate(format_output):
 
                 if isinstance(pd_tbl.index, pd.core.indexes.multi.MultiIndex):
                     cvals = pd_tbl.index.values
+                    cvals2 = pd_tbl.index.values
                     for i, col in enumerate(cvals):
                         col = list(col)
                         for j,c in enumerate(col):
-                            col[j]=self.ensure_tokens(c)
-                        cvals[i]=tuple(col)
+                            try:
+                                col[j]=self.ensure_tokens(c)
+                            except:
+                                col[j]=c
+                                for k, cold in enumerate(cvals):
+                                    cold = list(cold)
+                                    cold_mix = list(cvals2[k])
+                                    cold_mix[j]=cold[j]
+                                    cvals2[k] = tuple(cold_mix)
+                        cvals2[i]=tuple(col)
                     pd_tbl.index = pd.MultiIndex.from_tuples(cvals.tolist())
                 else:
                     pd_tbl.index = self.ensure_tokens(list(pd_tbl.index))
@@ -467,12 +478,14 @@ class neo4j_network(Sequence):
         """
         return centralities(self, focal_tokens=focal_tokens, types=types,years=years,ego_nw_tokens=ego_nw_tokens,depth=depth,context=context,weight_cutoff=weight_cutoff,norm_ties=norm_ties, reverse_ties=reverse_ties)
 
-    def proximities(self,**kwargs) -> Dict:
+    def proximities(self,focal_tokens: Optional[List] = None, alter_subset: Optional[List] = None,
+                years: Optional[Union[List, int, Dict]] = None,
+                context: Optional[List] = None, weight_cutoff: Optional[float] = None,
+                compositional: Optional[bool] = None, reverse_ties: Optional[bool] = False) -> Dict:
         """
         See measures.proximities
         """
-
-        return proximities(self, kwargs)
+        return proximities(self, focal_tokens=focal_tokens, alter_subset=alter_subset, years=years, context=context, weight_cutoff=weight_cutoff,compositional=compositional, reverse_ties=reverse_ties)
 
 
     def get_node_context(self, tokens:Union[list,int,str], years:Union[int,list,dict]=None, weight_cutoff:Optional[float]=None, occurrence:Optional[bool]=False):
