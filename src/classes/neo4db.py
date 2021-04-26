@@ -17,7 +17,7 @@ class neo4j_database():
                  write_before_query=True,
                  neo_batch_size=10000, queue_size=100000, tie_query_limit=100000, tie_creation="UNSAFE",
                  context_tie_creation="SAFE",
-                 logging_level=logging.NOTSET, connection_type="bolt", cache_yearly_occurrences=True):
+                 logging_level=logging.NOTSET, connection_type="bolt", cache_yearly_occurrences=False, consume_type=None):
         # Set logging level
         # logging.disable(logging_level)
 
@@ -50,6 +50,8 @@ class neo4j_database():
         self.queue_size = queue_size
         self.aggregate_operator = agg_operator
 
+        self.consume_type = consume_type
+
         # Init tokens in the database, required since order etc. may be different
         self.db_ids, self.db_tokens = self.init_tokens()
         self.db_ids = np.array(self.db_ids)
@@ -75,7 +77,8 @@ class neo4j_database():
             new_ids = []
         if not len(new_ids) == len(token_ids):
             missing_ids = np.array(list(np.setdiff1d(token_ids, token_ids[new_ids])))
-            missing_tokens = tokens[missing_ids]
+            missing_positions = np.where(token_ids==missing_ids)[0]
+            missing_tokens = tokens[missing_positions]
 
             msg = "Token ID translation failed. {} Tokens missing in database: {}".format(len(missing_tokens),
                                                                                           missing_tokens)
@@ -94,6 +97,15 @@ class neo4j_database():
             # Update
             self.db_id_dict = {x[0]: x[1] for x in zip(token_ids, new_ids)}
             return new_ids, [], []
+
+    def reset_dictionary(self):
+        """
+        Usually, external token_ids differ from database ids. If the class is initialized with a dictionary,
+        a translation is kept.
+
+        This function resets this translation such that token ids correspond to the database.
+        """
+        self.db_id_dict = {x[0]: x[1] for x in zip(self.db_ids, self.db_ids)}
 
     def translate_token_ids(self, ids):
         try:
@@ -197,7 +209,7 @@ class neo4j_database():
         and sets up two-way dicts
         :return: ids,tokens
         """
-        logging.debug("Querying tokens and filling data structure.")
+        logging.debug("Init tokens: Querying tokens and filling data structure.")
         # Run neo query to get all nodes
         res = self.receive_query("MATCH (n:word) RETURN n.token_id, n.token")
         # Update results
@@ -216,76 +228,66 @@ class neo4j_database():
         self.add_query("MATCH (n) WHERE size((n)--())=0 DELETE (n)", run=True)
 
     # %% Query Functions
-    def query_multiple_nodes_parallel(self, ids, times=None, weight_cutoff=None):
-        """
-        Query multiple nodes by ID and over a set of time intervals
-        :param ids: list of id's
-        :param times: either a number format YYYYMMDD, or an interval dict {"start":YYYYMMDD,"end":YYYYMMDD}
-        :param weight_cutoff: float in 0,1
-        :return: list of tuples (u,v,Time,{weight:x})
-        """
-        logging.debug("Querying {} nodes in Neo4j database.".format(len(ids)))
-        # Allow cutoff value of (non-aggregated) weights and set up time-interval query
-        if weight_cutoff is not None:
-            where_query = ''.join([" WHERE r.weight >=", str(weight_cutoff), " "])
-            if isinstance(times, dict):
-                where_query = ''.join(
-                    [where_query, " AND  ", str(times['start']), " <= r.time<= ", str(times['end']), " "])
-            # elif isinstance(times,list):
-            #    where_query = "WHERE  r.time in $times "
-        else:
-            if isinstance(times, dict):
-                where_query = ''.join(["WHERE ", str(times['start']), " <= r.time<= ", str(times['end']), " "])
-            # elif isinstance(times,list):
-            #    where_query = "WHERE  r.time in $times "
-            else:
-                where_query = ""
-        # Create query depending on graph direction and whether time variable is queried via where or node property
-        # By default, a->b when ego->is_replaced_by->b
-        # Given an id, we query b:id(sender)<-a(receiver)
-        # This gives all ties where b -predicts-> a
-        return_query = ''.join([" RETURN b.token_id AS sender,a.token_id AS receiver,count(r.pos) AS occurrences,",
-                                self.aggregate_operator, "(r.weight) AS agg_weight order by receiver"])
 
-        if isinstance(times, int):
-            match_query = ''.join(
-                ["MATCH p=(a:word)-[:onto]->(r:edge {time:", str(times), "})-[:onto]->(b:word {token_id:id}) "])
-        else:
-            match_query = "MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word {token_id:id}) "
+    def query_tie_context(self, occurring, replacing, times=None, weight_cutoff=None):
+
+        logging.debug("Querying tie between {}->replacing->{}.".format(replacing, occurring))
+
+        # Optimization for time
+        if isinstance(times, list):
+            if len(times)==1:
+                times=int(times[0])
 
         # Format time to set for network
         if isinstance(times, int):
             nw_time = {"s": times, "e": times, "m": times}
         elif isinstance(times, dict):
             nw_time = {"s": times['start'], "e": times['end'], "m": int((times['end'] + times['start']) / 2)}
+        elif isinstance(times, list):
+            sort_times=np.sort(times)
+            nw_time = {"s": sort_times[0], "e": sort_times[-1], "m": int((sort_times[0] + sort_times[-1]) / 2)}
         else:
             nw_time = {"s": 0, "e": 0, "m": 0}
 
         # Create params with or without time
         if isinstance(times, dict) or isinstance(times, int) or isinstance(times, list):
-            params = {"ids": ids}
+            params = {"occurring": occurring, "replacing": replacing, "times": times}
         else:
-            params = {"ids": ids}
+            params = {"occurring": occurring, "replacing": replacing,}
 
-        inside_query = ''.join([match_query, where_query, return_query])
-        apoc_query = ''.join(['PROFILE CALL apoc.cypher.mapParallel2("', inside_query,
-                              '", {parallel:True, batchSize:10, concurrency:16}, $ids,  0) yield value return value.receiver as receiver, value.sender as sender, value.agg_weight as agg_weight order by receiver '])
+        where_query_1= "WHERE TRUE "
+        # Allow cutoff value of (non-aggregated) weights and set up time-interval query
+        if weight_cutoff is not None:
+            where_query_1 = ''.join([where_query_1, " AND r.weight >=", str(weight_cutoff), " "])
+        if isinstance(times, dict):
+            where_query_1 = ''.join([where_query_1, " AND  $times.start <= r.time<= $times.end "])
+        elif isinstance(times, list):
+            where_query_1 = ''.join([where_query_1, " AND  r.time in $times "])
 
-        res = self.receive_query(apoc_query, params)
+        where_query_2 =" WHERE Not x.token_id  in [$occurring,$replacing] AND Not t.token_id  in [$occurring,$replacing] "
+        # Allow cutoff value of (non-aggregated) weights
+        if weight_cutoff is not None:
+            where_query_2 = ''.join([where_query_2, " AND q.weight >=", str(weight_cutoff), " "])
 
-        tie_weights = np.array([x['agg_weight'] for x in res])
-        senders = [x['sender'] for x in res]
-        receivers = [x['receiver'] for x in res]
-        occurrences = [x['occurrences'] for x in res]
-        # Normalization
-        # Ties should be normalized by the number of occurrences of the receiver
+        if isinstance(times, int):
+            match_query="".join(["Match p=(s:word {token_id:$occurring})-[:onto]->(r:edge {time:",str(times), "})-[:onto]->(v:word {token_id:$replacing})  "])
+        else:
+            match_query = "Match p=(s:word {token_id:$occurring})-[:onto]->(r:edge)-[:onto]->(v:word {token_id:$replacing}) "
 
-        ties = [
-            (x[0], x[1],
-             {'weight': x[2], 'time': nw_time['m'], 'start': nw_time['s'], 'end': nw_time['e'], 'occurrences': x[3]})
-            for x in zip(senders, receivers, tie_weights, occurrences)]
+        match_query_2 = "WITH r MATCH (t:word)<-[:onto]-(q:edge {run_index:r.run_index})<-[:onto]-(x:word) "
 
-        return ties
+        return_query = "WITH t.token_id as idx, q.weight as weight, r.weight as rweight  Return DISTINCT(idx) as idx, sum(weight)*sum(rweight) as weight order by idx"
+
+        query = "".join([match_query, where_query_1, match_query_2, where_query_2, return_query])
+        logging.debug("Tie Query: {}".format(query))
+        res = self.receive_query(query, params)
+
+        weights = np.array([x['weight'] for x in res])
+        idx = np.array([x['idx'] for x in res])
+        weights = weights/np.sum(weights)
+
+        return idx,weights
+
 
     def query_multiple_nodes(self, ids, times=None, weight_cutoff=None, norm_ties=False):
         """
@@ -302,6 +304,13 @@ class neo4j_database():
         logging.debug("Querying {} nodes in Neo4j database.".format(len(ids)))
         # New where query
         where_query = " WHERE b.token_id in $ids"
+
+        # Optimization for time
+        if isinstance(times, list):
+            if len(times)==1:
+                times=int(times[0])
+
+
 
         # Allow cutoff value of (non-aggregated) weights and set up time-interval query
         if weight_cutoff is not None:
@@ -351,24 +360,33 @@ class neo4j_database():
             params = {"ids": ids}
 
         query = "".join([match_query, where_query, return_query])
-        logging.info("Tie Query: {}".format(query))
+        logging.debug("Tie Query: {}".format(query))
         res = self.receive_query(query, params)
 
-        tie_weights = np.array([x['agg_weight'] for x in res])
-        senders = [x['sender'] for x in res]
-        receivers = [x['receiver'] for x in res]
+        #tie_weights = np.array([x['agg_weight'] for x in res])
+        #senders = [x['sender'] for x in res]
+        #receivers = [x['receiver'] for x in res]
         #occurrences = [x['occurrences'] for x in res]
         # Normalization
         # Ties should be normalized by the number of occurrences of the receiver
         if norm_ties:
-            norms = dict(self.query_occurrences(receivers, times, weight_cutoff))
-            for i, token in enumerate(receivers):
-                tie_weights[i] = tie_weights[i] / norms[token]
+            #unique_receivers = list(set(receivers))
+            unique_receivers = [int(x) for x in np.unique([y['receiver'] for y in res])]
+            norms = dict(self.query_occurrences(unique_receivers, times, weight_cutoff))
+            ties = [(x['sender'], x['receiver'],
+                     {'weight': np.float((100*x['agg_weight'] / norms[x['receiver']]) if norms[x['receiver']] else 0), 'time': nw_time['m'], 'start': nw_time['s'], 'end': nw_time['e']}) for
+                    x in res]
+        else:
+            ties = [(x['sender'], x['receiver'],
+                     {'weight': np.float(x['agg_weight']), 'time': nw_time['m'], 'start': nw_time['s'], 'end': nw_time['e']}) for
+                    x in res]
+            #for i, token in enumerate(receivers):
+            #    tie_weights[i] = tie_weights[i] / norms[token]
 
-        ties = [
-            (x[0], x[1],
-             {'weight': x[2], 'time': nw_time['m'], 'start': nw_time['s'], 'end': nw_time['e']})
-            for x in zip(senders, receivers, tie_weights)]
+        #ties = [
+        #    (x[0], x[1],
+        #     {'weight': x[2], 'time': nw_time['m'], 'start': nw_time['s'], 'end': nw_time['e']})
+        #    for x in zip(senders, receivers, tie_weights)]
 
         return ties
 
@@ -452,7 +470,7 @@ class neo4j_database():
 
         return ties
 
-    def query_occurrences(self, ids, times=None, weight_cutoff=None, query_all=True):
+    def query_occurrences(self, ids, times=None, weight_cutoff=None):
         """
         Query multiple nodes by ID and over a set of time intervals, return distinct occurrences
         :param ids: list of id's
@@ -467,55 +485,59 @@ class neo4j_database():
             if len(times)==1:
                 times=int(times[0])
 
-        # Check if occurrences are cached
+        # Check if occurrences are cached for this year
         if self.cache_yearly_occurrences and isinstance(times, int):
             res = self.get_year_cache(times)
-            if not res:
-                # New where query
-                if query_all is False:
-                    where_query = " WHERE a.token_id in $ids"
-                else:
-                    where_query =" WHERE TRUE"
+        else:
+            res = False
 
-                # Allow cutoff value of (non-aggregated) weights and set up time-interval query
-                if weight_cutoff is not None:
-                    where_query = ''.join([where_query, " AND r.weight >=", str(weight_cutoff), " "])
-                if isinstance(times, dict):
-                    where_query = ''.join([where_query, " AND  $times.start <= r.time<= $times.end "])
-                elif isinstance(times, list):
-                    where_query = ''.join([where_query, " AND  r.time in $times "])
-
-                # Create params with or without time
-                if isinstance(times, dict) or isinstance(times, int) or isinstance(times, list):
-                    params = {"ids": ids, "times": times}
-                else:
-                    params = {"ids": ids}
-
-                return_query = ''.join([
-                    "RETURN a.token_id AS idx, round(sum(r.weight)) as occurrences order by idx"])
-
-                if isinstance(times, int):
-                    match_query = "MATCH p=(a:word)-[:onto]->(r:edge {time:$times})"
-                else:
-                    match_query = "MATCH p=(a:word)-[:onto]->(r:edge)"
-
-                query = "".join([match_query, where_query, return_query])
-
-                logging.info("Occurrence Query: {}".format(query))
-                res = self.receive_query(query, params)
-
-                if query_all is False:
-                    ties = [(x['idx'], x['occurrences']) for x in res]
-                else:
-                    ties = [(x['idx'], x['occurrences']) for x in res if x['idx'] in ids]
-                    # Update yearly cache:
-                    if isinstance(times, int):
-                        if self.cache_yearly_occurrences:
-                            self.add_year_cache(times, res)
-
+        if not res:
+            # Check if we want to cache yearly occurrences, in which case we query all
+            if self.cache_yearly_occurrences and isinstance(times, int):
+                logging.debug("Yearly occurrences requested, cache will be filled.")
+                where_query = " WHERE TRUE "
             else:
-                logging.info("Cached Occurrences found for {}".format(times))
+                where_query = " WHERE a.token_id in $ids "
+
+            # Allow cutoff value of (non-aggregated) weights and set up time-interval query
+            if weight_cutoff is not None:
+                where_query = ''.join([where_query, " AND r.weight >=", str(weight_cutoff), " "])
+            if isinstance(times, dict):
+                where_query = ''.join([where_query, " AND  $times.start <= r.time<= $times.end "])
+            elif isinstance(times, list):
+                where_query = ''.join([where_query, " AND  r.time in $times "])
+
+            # Create params with or without time
+            if isinstance(times, dict) or isinstance(times, int) or isinstance(times, list):
+                params = {"ids": ids, "times": times}
+            else:
+                params = {"ids": ids}
+
+            return_query = ''.join([
+                "RETURN a.token_id AS idx, round(sum(r.weight)) as occurrences order by idx"])
+
+            if isinstance(times, int):
+                match_query = "MATCH p=(a:word)-[:onto]->(r:edge {time:$times})"
+            else:
+                match_query = "MATCH p=(a:word)-[:onto]->(r:edge)"
+
+            query = "".join([match_query, where_query, return_query])
+
+            logging.debug("Occurrence Query: {}".format(query))
+            res = self.receive_query(query, params)
+
+            if self.cache_yearly_occurrences is False:
+                ties = [(x['idx'], x['occurrences']) for x in res]
+            else:
                 ties = [(x['idx'], x['occurrences']) for x in res if x['idx'] in ids]
+                # Update yearly cache:
+                if isinstance(times, int):
+                    if self.cache_yearly_occurrences:
+                        self.add_year_cache(times, res)
+
+        else:
+            logging.debug("Cached Occurrences found for {}".format(times))
+            ties = [(x['idx'], x['occurrences']) for x in res if x['idx'] in ids]
 
         return ties
 
@@ -869,14 +891,17 @@ class neo4j_database():
         self.write_queue()
 
     @staticmethod
-    def consume_result(tx, query, params=None):
+    def consume_result(tx, query, params=None, consume_type=None):
         result = tx.run(query, params)
-        return result.data()
+        if consume_type == "data":
+            return result.data()
+        else:
+            return [dict(x) for x in result]
 
     def receive_query(self, query, params=None):
         if self.connection_type == "bolt":
             with self.driver.session() as session:
-                res = session.read_transaction(self.consume_result, query, params)
+                res = session.read_transaction(self.consume_result, query, params, self.consume_type)
         else:
             if params is not None:
                 res = self.driver.run(query, params)

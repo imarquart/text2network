@@ -5,6 +5,27 @@ import networkx as nx
 import scipy as sp
 
 
+def make_reverse(graph):
+    """
+    Reverses a networkx graph
+
+    Parameters
+    ----------
+    graph : networkx graph
+        A directed, weighted graph.
+
+    Returns
+    -------
+    graph : networkx graph
+        graph with modified edges.
+
+    """
+
+    if nx.to_directed(graph):
+        return graph.reverse()
+    else:
+        return graph
+
 def make_symmetric(graph, technique="avg-sym"):
     """
     Make a networkx graph symmetric

@@ -1,5 +1,5 @@
 import unittest
-from src.classes.neo4j_processor import neo4j_processor
+from src.classes.nw_processor import nw_processor
 import glob
 import logging
 import os
@@ -8,33 +8,19 @@ import configparser
 import json
 from src.classes.neo4jnw import neo4j_network
 from src.classes.neo4db import neo4j_database
+from Tests.test_setups import test_setup, test_cleanup
 import numpy as np
 
 
 class Processor_Test(unittest.TestCase):
 
-    def setUp(self):
-        # Load Configuration file
-        config = configparser.ConfigParser()
-        config.read('D:/NLP/InSpeech/BERTNLP/config/config.ini')
-        logging_level = config['General'].getint('logging_level')
+    def tearDownModule(self):
+        test_cleanup(self.neograph)
 
-        # Set up logging
-        logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
-                            datefmt='%m/%d/%Y %H:%M:%S',
-                            level=logging_level)
 
-        db_uri = "http://localhost:7474"
-        db_pwd = ('neo4j', 'nlp')
-        neo_creds = (db_uri, db_pwd)
-
-        test = neo4j_database(neo_creds)
-        self.neograph = neo4j_network(neo_creds)
-
-        self.processor = neo4j_processor(config['Paths']['trained_berts'], self.neograph,
-                                    config['Preprocessing'].getint('max_seq_length'), config['Processing'],
-                                    text_db=config['Paths']['database'],
-                                    split_hierarchy=json.loads(config.get('General', 'split_hierarchy')))
+    def setUpModule(self):
+        self.neograph, config = test_setup()
+        self.processor = nw_processor(self.neograph, config=config)
 
     def test_norm(self):
 

@@ -38,32 +38,40 @@ level_list = [5,5,5,5,5]
 weight_list = [0,0.1,0,0.1,0,0.1]
 depth_list = [1,1,1,1,1,1]
 rs_list = [100,200,300]
-year_list = [2000,2010]
+year_list = [2000,2010,2010,1980,1986]
 focal_token = "leader"
 
 logging.info("-----------------Conditioning---------------------")
+logger = logging.getLogger('neo4j')
+logger.setLevel(level=logging.ERROR)
+
 logging.info("------------------------------------------------")
-test_name="Non-Normed 1 Year  Conditioning"
+test_name="Normed 1 Year  Conditioning"
 tokens=['leader']
 years=year_list
-weight_cutoff=None
+weight_cutoff=0.1
 depth=1
 context=None
-norm=False
+norm=True
 param_string="Years: {}, Tokens: {}, Cutoff: {}, Depth: {}, Context: {}, Norm: {}".format(years,tokens,weight_cutoff,depth,context,norm)
 logging.info("------- {} -------".format(test_name))
-logging.info(param_string)
 time_list=[]
+semantic_network = neo4j_network(config)
 # Random Seed
 for year in years:
-    logging.disable(logging.ERROR)
-    del semantic_network
-    semantic_network = neo4j_network(config)
     start_time=time.time()
     np.random.seed(100)
+    logging.disable(logging.ERROR)
+    semantic_network.decondition()
     semantic_network.condition(years=year, tokens=tokens,weight_cutoff=weight_cutoff,depth=depth,context=context,norm=norm)
-    logging.disable(logging.NOTSET)
-    time_list.append(time.time() - start_time)
+
+    elapsed_time=time.time() - start_time
+    time_list.append(elapsed_time)
+    #logging.info("{} finished in {} seconds".format(year, elapsed_time))
+    #logging.info("nodes in network %i" % (len(semantic_network)))
+    #logging.info("ties in network %i" % (semantic_network.graph.number_of_edges()))
+logging.disable(logging.NOTSET)
+logging.info("------------------------------------------------")
 logging.info("{} finished in average {} seconds".format(test_name,np.mean(time_list)))
 logging.info(param_string)
 logging.info("nodes in network %i" % (len(semantic_network)))
@@ -72,27 +80,100 @@ logging.info("------------------------------------------------")
 
 
 logging.info("------------------------------------------------")
-test_name="Normed 1 Year  Conditioning"
+test_name="List Normed 1 Year  Conditioning"
 tokens=['leader']
 years=year_list
-weight_cutoff=None
-depth=1
+#weight_cutoff=0.3
+#depth=1
 context=None
 norm=True
-param_string="Years: {}, Tokens: {}, Cutoff: {}, Depth: {}, Context: {}, Norm: {}".format(years,tokens,weight_cutoff,depth,context,norm)
+param_string="(List) Years: {}, Tokens: {}, Cutoff: {}, Depth: {}, Context: {}, Norm: {}".format(years,tokens,weight_cutoff,depth,context,norm)
 logging.info("------- {} -------".format(test_name))
-logging.info(param_string)
 time_list=[]
+semantic_network = neo4j_network(config, consume_type="list")
 # Random Seed
 for year in years:
-    logging.disable(logging.ERROR)
-    del semantic_network
-    semantic_network = neo4j_network(config)
     start_time=time.time()
     np.random.seed(100)
+    logging.disable(logging.ERROR)
+    semantic_network.decondition()
     semantic_network.condition(years=year, tokens=tokens,weight_cutoff=weight_cutoff,depth=depth,context=context,norm=norm)
     logging.disable(logging.NOTSET)
-    time_list.append(time.time() - start_time)
+    elapsed_time=time.time() - start_time
+    time_list.append(elapsed_time)
+    #logging.info("{} finished in {} seconds".format(year, elapsed_time))
+    #logging.info("nodes in network %i" % (len(semantic_network)))
+    #logging.info("ties in network %i" % (semantic_network.graph.number_of_edges()))
+logging.disable(logging.NOTSET)
+logging.info("------------------------------------------------")
+logging.info("{} finished in average {} seconds".format(test_name,np.mean(time_list)))
+logging.info(param_string)
+logging.info("nodes in network %i" % (len(semantic_network)))
+logging.info("ties in network %i" % (semantic_network.graph.number_of_edges()))
+logging.info("------------------------------------------------")
+
+
+
+logging.info("------------------------------------------------")
+test_name=" 1 Year  Conditioning"
+tokens=['leader']
+years=year_list
+#weight_cutoff=0.3
+#depth=1
+context=None
+norm=False
+param_string="Years: {}, Tokens: {}, Cutoff: {}, Depth: {}, Context: {}, Norm: {}".format(years,tokens,weight_cutoff,depth,context,norm)
+logging.info("------- {} -------".format(test_name))
+time_list=[]
+semantic_network = neo4j_network(config)
+# Random Seed
+for year in years:
+    start_time=time.time()
+    np.random.seed(100)
+    logging.disable(logging.ERROR)
+    semantic_network.decondition()
+    semantic_network.condition(years=year, tokens=tokens,weight_cutoff=weight_cutoff,depth=depth,context=context,norm=norm)
+    elapsed_time=time.time() - start_time
+    time_list.append(elapsed_time)
+    #logging.info("{} finished in {} seconds".format(year, elapsed_time))
+    #logging.info("nodes in network %i" % (len(semantic_network)))
+    #logging.info("ties in network %i" % (semantic_network.graph.number_of_edges()))
+logging.disable(logging.NOTSET)
+logging.info("------------------------------------------------")
+logging.info("{} finished in average {} seconds".format(test_name,np.mean(time_list)))
+logging.info(param_string)
+logging.info("nodes in network %i" % (len(semantic_network)))
+logging.info("ties in network %i" % (semantic_network.graph.number_of_edges()))
+logging.info("------------------------------------------------")
+
+
+logging.info("------------------------------------------------")
+test_name="List 1 Year  Conditioning"
+tokens=['leader']
+years=year_list
+#weight_cutoff=0.3
+#depth=1
+context=None
+norm=False
+param_string="(List) Years: {}, Tokens: {}, Cutoff: {}, Depth: {}, Context: {}, Norm: {}".format(years,tokens,weight_cutoff,depth,context,norm)
+logging.info("------- {} -------".format(test_name))
+time_list=[]
+semantic_network = neo4j_network(config, consume_type="list")
+# Random Seed
+for year in years:
+
+    start_time=time.time()
+    np.random.seed(100)
+    logging.disable(logging.ERROR)
+    semantic_network.decondition()
+    semantic_network.condition(years=year, tokens=tokens,weight_cutoff=weight_cutoff,depth=depth,context=context,norm=norm)
+    elapsed_time=time.time() - start_time
+    time_list.append(elapsed_time)
+    #logging.info("{} finished in {} seconds".format(year, elapsed_time))
+    #logging.info("nodes in network %i" % (len(semantic_network)))
+    #logging.info("ties in network %i" % (semantic_network.graph.number_of_edges()))
+logging.disable(logging.NOTSET)
+logging.info("------------------------------------------------")
 logging.info("{} finished in average {} seconds".format(test_name,np.mean(time_list)))
 logging.info(param_string)
 logging.info("nodes in network %i" % (len(semantic_network)))

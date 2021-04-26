@@ -104,7 +104,7 @@ class nw_processor():
         self.prune_missing_tokens = bool(self.processing_options['prune_missing_tokens'])
         self.maxn = int(self.processing_options['maxn'])
         self.nr_workers = int(self.processing_options['nr_workers'])
-        self.cutoff_prob = int(self.processing_options['cutoff_prob'])
+        self.cutoff_prob = float(self.processing_options['cutoff_prob'])
         
         
         if MAX_SEQ_LENGTH is not None:
