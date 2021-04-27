@@ -11,7 +11,7 @@ from src.classes.neo4jnw import neo4j_network
 # Set a configuration path
 configuration_path = '/config/config.ini'
 # Settings
-years = range(1980, 2020)
+years = range(2010, 2020)
 focal_words = ["founder"]
 
 # Load Configuration file
@@ -43,11 +43,13 @@ filename = "".join(
 logging.info("Network clustering: {}".format(filename))
 
 df = extract_all_clusters(level=level, cutoff=cutoff, focal_token=focal_words, semantic_network=semantic_network,
-                          depth=depth, algorithm=consensus_louvain, filename=filename,
+                          depth=depth, algorithm=consensus_louvain, times=years,filename=filename,
                           compositional=comp, reverse_ties=rev)
 
-# Follow these across years
 
+
+
+# Follow these across years
 filename = "".join(
     [config['Paths']['csv_outputs'], "/", str(focal_words), "_rev", str(rev), "_norm", str(comp), "_yearfixed_lev",
      str(level), "_clcut",

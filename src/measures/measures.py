@@ -391,7 +391,7 @@ def average_fixed_cluster_proximities(focal_token: str, interest_list: list, nw,
 
 def extract_all_clusters(level: int, cutoff: float, focal_token: str,
                          semantic_network, depth: Optional[int] = 0,
-                         interest_list: Optional[list] = None, algorithm: Optional[Callable] = None,
+                         interest_list: Optional[list] = None, algorithm: Optional[Callable] = None, times: Optional[Union[list,int]]=None,
                          filename: Optional[str] = None, compositional: Optional[bool] = False, reverse_ties: Optional[bool] = False) -> pd.DataFrame:
     """
     Create and extract all clusters relative to a focal token until a given level.
@@ -412,6 +412,8 @@ def extract_all_clusters(level: int, cutoff: float, focal_token: str,
         List of tokens that are of interest. Clusters that do not contain these tokens are discarded and not further clustered for deeper levels
     algorithm : callable
         Clustering algorithm to use
+    times : list, int
+        Times to use when conditioning
     filename : str
         If not None, dataframe is saved to filename
     compositional : bool
@@ -432,11 +434,11 @@ def extract_all_clusters(level: int, cutoff: float, focal_token: str,
     if depth > 0:
         clusters = semantic_network.cluster(ego_nw_tokens=focal_token, interest_list=interest_list, depth=depth,
                                             levels=level,
-                                            weight_cutoff=cutoff,
+                                            weight_cutoff=cutoff, years=times,
                                             to_measure=[proximity], algorithm=algorithm, norm_ties=compositional, reverse_ties=reverse_ties)
     else:
         clusters = semantic_network.cluster(levels=level, interest_list=interest_list, weight_cutoff=cutoff,
-                                            to_measure=[proximity],
+                                            to_measure=[proximity], years=times,
                                             algorithm=algorithm, norm_ties=compositional, reverse_ties=reverse_ties)
     for cl in clusters:
         if cl['level'] == 0:
