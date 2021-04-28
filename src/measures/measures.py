@@ -5,20 +5,19 @@ from typing import Optional, Callable, Union, List, Dict
 import numpy as np
 import pandas as pd
 
-#from src.classes import neo4jnw
-#from src.classes.neo4jnw import neo4j_network
+# from src.classes import neo4jnw
+# from src.classes.neo4jnw import neo4j_network
 from src.functions.file_helpers import check_create_folder
 from src.functions.graph_clustering import consensus_louvain
 from src.functions.node_measures import proximity, centrality
-#from src.classes import neo4jnw
+# from src.classes import neo4jnw
 from src.utils.input_check import input_check
 
 
-def centralities(snw, focal_tokens=None, types=["PageRank", "normedPageRank"], years=None, ego_nw_tokens=None,
-                 depth=1, context=None, weight_cutoff=None, norm_ties=None, reverse_ties: Optional[bool] = False):
+def centralities(snw, focal_tokens=None, types=["PageRank", "normedPageRank"], reverse_ties: Optional[bool] = False):
     """
     Calculate centralities for given tokens over an aggregate of given years.
-    If not conditioned, the semantic network will be conditioned according to the parameters given.
+    If not conditioned, error will be thrown!
 
     Parameters
     ----------
@@ -28,18 +27,6 @@ def centralities(snw, focal_tokens=None, types=["PageRank", "normedPageRank"], y
         List of tokens of interest. If not provided, centralities for all tokens will be returned.
     types : list, optional
         Types of centrality to calculate. The default is ["PageRank", "normedPageRank"].
-    years : dict, int, optional - used when conditioning
-        Given year, or an interval dict {"start":YYYYMMDD,"end":YYYYMMDD}. The default is None.
-    ego_nw_tokens : list, optional - used when conditioning
-         List of tokens for an ego-network if desired. Only used if no graph is supplied. The default is None.
-    depth : TYPE, optional - used when conditioning
-        Maximal path length for ego network. Only used if no graph is supplied. The default is 1.
-    context : list, optional - used when conditioning
-        List of tokens that need to appear in the context distribution of a tie. The default is None.
-    weight_cutoff : float, optional - used when conditioning
-        Only links of higher weight are considered in conditioning.. The default is None.
-    norm_ties : bool, optional - used when conditioning
-        Please see semantic network class. The default is None.
     reverse_ties : bool, optional
         Reverse all ties. The default is False.
 
@@ -50,61 +37,33 @@ def centralities(snw, focal_tokens=None, types=["PageRank", "normedPageRank"], y
 
     """
 
-    # Get default normation behavior
-    if norm_ties is None:
-        norm_ties = snw.norm_ties
-
     input_check(tokens=focal_tokens)
-    input_check(tokens=ego_nw_tokens)
-    input_check(tokens=context)
-    input_check(years=years)
 
     focal_tokens = snw.ensure_ids(focal_tokens)
 
     if not snw.conditioned:
-        was_conditioned = False
-        if ego_nw_tokens is None:
-            logging.debug("Conditioning year(s) {} with focus on tokens {}".format(
-                years, focal_tokens))
-            snw.condition(years=years, tokens=None, weight_cutoff=weight_cutoff,
-                           depth=depth, context=context, norm=norm_ties)
-            logging.debug("Finished conditioning, {} nodes and {} edges in graph".format(
-                len(snw.graph.nodes), len(snw.graph.edges)))
-        else:
-            logging.debug(
-                "Conditioning ego-network for {} tokens with depth {}, for year(s) {} with focus on tokens {}".format(
-                    len(ego_nw_tokens), depth, years, focal_tokens))
-            snw.condition(years=years, tokens=ego_nw_tokens, weight_cutoff=weight_cutoff,
-                           depth=depth, context=context, norm=norm_ties)
-            logging.debug("Finished ego conditioning, {} nodes and {} edges in graph".format(
-                len(snw.graph.nodes), len(snw.graph.edges)))
-    else:
-        logging.debug(
-            "Network already conditioned! No reconditioning attempted, parameters unused.")
-        was_conditioned = True
+        snw.condition_error()
 
     # Reverse ties if requested
     if reverse_ties:
         snw.to_reverse()
 
-
     cent_dict = centrality(
         snw.graph, focal_tokens=focal_tokens, types=types)
 
-    if not was_conditioned:
-        # Decondition
-        snw.decondition()
+    # Reverse ties if requested
+    if reverse_ties:
+        snw.to_reverse()
 
     return cent_dict
 
 
 def proximities(snw, focal_tokens: Optional[List] = None, alter_subset: Optional[List] = None,
-                years: Optional[Union[List, int, Dict]] = None,
-                context: Optional[List] = None, weight_cutoff: Optional[float] = None,
-                compositional: Optional[bool] = None, reverse_ties: Optional[bool] = False) -> Dict:
+                reverse_ties: Optional[bool] = False) -> Dict:
     """
     Calculate proximities for given tokens.
-    Conditions if network is not already conditioned.
+
+    Throwns error if network is not conditioned!
 
     Parameters
     ----------
@@ -114,14 +73,6 @@ def proximities(snw, focal_tokens: Optional[List] = None, alter_subset: Optional
         List of tokens of interest. If not provided, centralities for all tokens will be returned.
     alter_subset : list, str optional
         List of alters to show. Others are hidden. The default is None.
-    years : dict, int, optional - used when conditioning
-        Given year, or an interval dict {"start":YYYYMMDD,"end":YYYYMMDD}. The default is None.
-    context : list, optional - used when conditioning
-        List of tokens that need to appear in the context distribution of a tie. The default is None.
-    weight_cutoff : float, optional - used when conditioning
-        Only ties of higher weight are considered. The default is None.
-    compositional : bool, optional - used when conditioning
-        Norm ties to compositional. The default is None.
     reverse_ties : bool, optional
         Reverse all ties. The default is False.
 
@@ -132,14 +83,8 @@ def proximities(snw, focal_tokens: Optional[List] = None, alter_subset: Optional
 
     """
 
-    # Get default normation behavior
-    if compositional is None:
-        compositional = snw.norm_ties
-
     input_check(tokens=focal_tokens)
     input_check(tokens=alter_subset)
-    input_check(tokens=context)
-    input_check(years=years)
 
     if alter_subset is not None:
         alter_subset = snw.ensure_ids(alter_subset)
@@ -150,27 +95,10 @@ def proximities(snw, focal_tokens: Optional[List] = None, alter_subset: Optional
     else:
         focal_tokens = snw.ids
 
-    was_conditioned = False
-    if snw.conditioned:
-        was_conditioned = True
-        logging.debug(
-            "Network already conditioned! No reconditioning attempted, parameters unused.")
+    if not snw.conditioned:
+        snw.condition_error()
 
     proximity_dict = {}
-    # Condition
-    if not was_conditioned:
-        logging.info(
-            "Conditioning year(s) {}".format(years))
-        if len(focal_tokens) > 5:  # Condition on full network
-            logging.info("Calculating proximities for {} tokens!".format(len(focal_tokens)))
-
-            snw.condition(years=years, weight_cutoff=weight_cutoff, context=context, norm=compositional)
-        else:  # Shortcut method
-            snw.graph = snw.create_empty_graph()
-            ties = snw.query_nodes(focal_tokens, times=years, norm_ties=compositional, context=context,
-                                    weight_cutoff=weight_cutoff)
-            snw.graph.add_edges_from(ties)
-            snw.__complete_conditioning()
 
     # Reverse ties if requested
     if reverse_ties:
@@ -182,21 +110,24 @@ def proximities(snw, focal_tokens: Optional[List] = None, alter_subset: Optional
             'proximity'][token]
         proximity_dict.update({token: tie_dict})
 
-    if not was_conditioned:
-        # Decondition
-        snw.decondition()
+    # Reverse ties if requested
+    if reverse_ties:
+        snw.to_reverse()
 
     return {"proximity": proximity_dict}
 
 
-def yearly_centralities(nw, year_list, focal_tokens=None, types=["PageRank", "normedPageRank"], ego_nw_tokens=None,
-                        depth=None, context=None, weight_cutoff=None, norm_ties=None):
+def yearly_centralities(snw, year_list, focal_tokens=None, types=["PageRank", "normedPageRank"], ego_nw_tokens=None,
+                        depth=None, context=None, weight_cutoff=None, norm_ties=None,
+                        reverse_ties: Optional[bool] = False):
     """
     Compute directly year-by-year centralities for provided list.
 
+    This will decondition and re-condition the network across years
+
     Parameters
     ----------
-    nw
+    snw : semantic network
     year_list : list
         List of years for which to calculate centrality.
     focal_tokens : list, str
@@ -213,6 +144,8 @@ def yearly_centralities(nw, year_list, focal_tokens=None, types=["PageRank", "no
         Only links of higher weight are considered in conditioning.. The default is None.
     norm_ties : bool, optional - used when conditioning
         Please see semantic network class. The default is True.
+    reverse_ties : bool, optional
+        Reverse all ties. The default is False.
 
     Returns
     -------
@@ -223,28 +156,32 @@ def yearly_centralities(nw, year_list, focal_tokens=None, types=["PageRank", "no
 
     # Get default normation behavior
     if norm_ties is None:
-        norm_ties = nw.norm_ties
+        norm_ties = snw.norm_ties
 
     cent_year = {}
     assert isinstance(year_list, list), "Please provide list of years."
+
     for year in year_list:
-        cent_measures = nw.centralities(focal_tokens=focal_tokens, types=types, years=[
+        snw.decondition()
+        snw.condition(focal_tokens=focal_tokens, years=[
             year], ego_nw_tokens=ego_nw_tokens, depth=depth, context=context, weight_cutoff=weight_cutoff,
-                                        norm_ties=norm_ties)
+                      norm_ties=norm_ties)
+        cent_measures = snw.centralities(focal_tokens=focal_tokens, types=types, reverse_ties=reverse_ties)
         cent_year.update({year: cent_measures})
 
     return {'yearly_centrality': cent_year}
 
 
-
-
 def average_fixed_cluster_proximities(focal_token: str, interest_list: list, nw, levels: int,
+                                      times: Optional[Union[list,int]] = None,
                                       depth: Optional[int] = 1, context: Optional[list] = None,
                                       weight_cutoff: Optional[float] = None,
                                       cluster_cutoff: Optional[float] = 0, do_reverse: Optional[bool] = False,
                                       moving_average: Optional[tuple] = False,
                                       filename: Optional[str] = None,
-                                      compositional: Optional[bool] = False, reverse_ties: Optional[bool] = False) -> pd.DataFrame:
+                                      compositional: Optional[bool] = False,
+                                      reverse_ties: Optional[bool] = False,
+                                      seed: Optional[int] = None) -> pd.DataFrame:
     """
     First, derives clusters from overall network (across all years), then creates year-by-year average proximities for these clusters
 
@@ -284,18 +221,29 @@ def average_fixed_cluster_proximities(focal_token: str, interest_list: list, nw,
     pd.DataFrame
         Resulting average proximities of cluster year-by-year. year=-100 is overall cluster across all years.
     """
+    nw.decondition()
+
+    if seed is not None:
+        nw.set_random_seed(seed)
+
+    if times is None:
+        logging.info("Getting years.")
+        times = np.array(nw.get_times_list())
+        times = np.sort(times)
+
     # First, derive clusters
     if depth > 0:
-        clusters = nw.cluster(ego_nw_tokens=focal_token, interest_list=interest_list, depth=depth, levels=levels,
-                              weight_cutoff=weight_cutoff,
-                              to_measure=[proximity], algorithm=consensus_louvain, norm_ties=compositional, reverse_ties=reverse_ties)
+        nw.condition(tokens=focal_token, times=times, context=context,depth=depth,weight_cutoff=weight_cutoff,compositional=compositional,reverse_ties=reverse_ties)
+
     else:
-        clusters = nw.cluster(levels=levels, interest_list=interest_list, weight_cutoff=weight_cutoff,
-                              to_measure=[proximity],
-                              algorithm=consensus_louvain, norm_ties=compositional, reverse_ties=reverse_ties)
+        nw.condition(times=times,weight_cutoff=weight_cutoff, context=context,compositional=compositional,
+                     reverse_ties=reverse_ties)
+    # Get clusters
+    clusters = nw.cluster(interest_list=interest_list, levels=levels, to_measure=[proximity],
+                          algorithm=consensus_louvain)
     cluster_dict = {}
     cluster_dataframe = []
-    logging.info("Extracting relevant clusters at level {} across all years ".format(levels))
+    logging.info("Extracting relevant clusters at level {} across all years {}".format(levels,times))
     for cl in clusters:
         if cl['level'] == 0:  # Use zero cluster, where all tokens are present, to get proximities
             rev_proxim = nw.pd_format(cl['measures'])[0].loc[:, focal_token]
@@ -325,34 +273,32 @@ def average_fixed_cluster_proximities(focal_token: str, interest_list: list, nw,
                     df_dict.update(cluster_measures)
                     cluster_dataframe.append(df_dict.copy())
 
-    logging.info("Getting years.")
-    years = np.array(nw.get_times_list())
-    years = np.sort(years)
 
-    for year in years:
+
+    for year in times:
         nw.decondition()
-        logging.info(
-            "Calculating proximities for fixed relevant clusters for year {} with moving average -{} to {}".format(year,
-                                                                                                                   moving_average[
-                                                                                                                       0],
-                                                                                                                   moving_average[
-                                                                                                                       1]))
+        nw.condition(times=year,weight_cutoff=weight_cutoff, context=context, compositional=compositional,
+                     reverse_ties=reverse_ties)
+
         if moving_average is not None:
-            start_year = max(years[0], year - moving_average[0])
-            end_year = min(years[-1], year + moving_average[1])
+            start_year = max(times[0], year - moving_average[0])
+            end_year = min(times[-1], year + moving_average[1])
             ma_years = np.arange(start_year, end_year + 1)
         else:
             ma_years = year
+        logging.info(
+            "Calculating proximities for fixed relevant clusters for year {} with moving average -{} to {} over {}".format(year,
+                                                                                                                   moving_average[
+                                                                                                                       0],
+                                                                                                                   moving_average[
+                                                                                                                       1], ma_years))
         if do_reverse is True:
-            year_proxim = nw.proximities(years=ma_years, context=context, weight_cutoff=weight_cutoff,
-                                         compositional=compositional, reverse_ties=reverse_ties)
+            year_proxim = nw.proximities()
             year_proxim = nw.pd_format(year_proxim)[0]
             rev_proxim = year_proxim.loc[:, focal_token]
             proxim = year_proxim.loc[focal_token, :]
         else:
-            year_proxim = nw.proximities(focal_tokens=[focal_token], years=ma_years, context=context,
-                                         weight_cutoff=weight_cutoff,
-                                         compositional=compositional, reverse_ties=reverse_ties)
+            year_proxim = nw.proximities(focal_tokens=[focal_token])
             year_proxim = nw.pd_format(year_proxim)[0]
             proxim = year_proxim.loc[focal_token, :]
             rev_proxim = 0
@@ -384,15 +330,17 @@ def average_fixed_cluster_proximities(focal_token: str, interest_list: list, nw,
 
     if filename is not None:
         filename = check_create_folder(filename)
-        df.to_excel(filename+".xlsx")
-        #nw.export_gefx(filename=filename)
+        df.to_excel(filename + ".xlsx")
+        # nw.export_gefx(filename=filename)
     return df
 
 
 def extract_all_clusters(level: int, cutoff: float, focal_token: str,
-                         semantic_network, depth: Optional[int] = 0,
-                         interest_list: Optional[list] = None, algorithm: Optional[Callable] = None, times: Optional[Union[list,int]]=None,
-                         filename: Optional[str] = None, compositional: Optional[bool] = False, reverse_ties: Optional[bool] = False) -> pd.DataFrame:
+                         snw, depth: Optional[int] = 0, context:Optional[list] = None,
+                         interest_list: Optional[list] = None, algorithm: Optional[Callable] = None,
+                         times: Optional[Union[list, int]] = None,
+                         filename: Optional[str] = None, compositional: Optional[bool] = False,
+                         reverse_ties: Optional[bool] = False, add_focal_to_clusters: Optional[bool] = False,seed: Optional[int] = None) -> pd.DataFrame:
     """
     Create and extract all clusters relative to a focal token until a given level.
 
@@ -420,6 +368,8 @@ def extract_all_clusters(level: int, cutoff: float, focal_token: str,
         Whether to use compositional ties
     reverse_ties : bool
         Whether to reverse ties after conditioning
+    add_focal_to_clusters: bool
+        If true, add focal token to each cluster before clustering
     Returns
     -------
     pd.DataFrame:
@@ -429,27 +379,38 @@ def extract_all_clusters(level: int, cutoff: float, focal_token: str,
     if algorithm is None:
         algorithm = consensus_louvain
 
-    semantic_network.decondition()
-    dataframe_list = []
-    if depth > 0:
-        clusters = semantic_network.cluster(ego_nw_tokens=focal_token, interest_list=interest_list, depth=depth,
-                                            levels=level,
-                                            weight_cutoff=cutoff, years=times,
-                                            to_measure=[proximity], algorithm=algorithm, norm_ties=compositional, reverse_ties=reverse_ties)
+    if add_focal_to_clusters:
+        add_focal_to_clusters=focal_token
     else:
-        clusters = semantic_network.cluster(levels=level, interest_list=interest_list, weight_cutoff=cutoff,
-                                            to_measure=[proximity], years=times,
-                                            algorithm=algorithm, norm_ties=compositional, reverse_ties=reverse_ties)
+        add_focal_to_clusters=None
+
+    snw.decondition()
+
+    if seed is not None:
+        snw.set_random_seed(seed)
+
+    dataframe_list = []
+
+    # First, derive clusters
+    if depth > 0:
+        snw.condition(tokens=focal_token, times=times, context=context,depth=depth,weight_cutoff=cutoff,compositional=compositional,reverse_ties=reverse_ties)
+
+    else:
+        snw.condition(times=times,weight_cutoff=cutoff, context=context,compositional=compositional,
+                     reverse_ties=reverse_ties)
+    # Get clusters
+    clusters = snw.cluster(interest_list=interest_list, levels=level, to_measure=[proximity],
+                          algorithm=algorithm, add_ego_tokens=add_focal_to_clusters)
     for cl in clusters:
         if cl['level'] == 0:
-            rev_proxim = semantic_network.pd_format(cl['measures'])[0].loc[:, focal_token]
-            proxim = semantic_network.pd_format(cl['measures'])[0].loc[focal_token, :]
+            rev_proxim = snw.pd_format(cl['measures'])[0].loc[:, focal_token]
+            proxim = snw.pd_format(cl['measures'])[0].loc[focal_token, :]
         if len(cl['graph'].nodes) >= 1 and cl['level'] > 0:
-            nodes = semantic_network.ensure_tokens(list(cl['graph'].nodes))
+            nodes = snw.ensure_tokens(list(cl['graph'].nodes))
             proximate_nodes = proxim.reindex(nodes, fill_value=0)
             proximate_nodes = proximate_nodes[proximate_nodes > 0]
             if len(proximate_nodes) > 0:
-                cluster_measures=return_measure_dict(proximate_nodes)
+                cluster_measures = return_measure_dict(proximate_nodes)
 
                 top_node = proximate_nodes.idxmax()
                 # Default cluster entry
@@ -458,17 +419,19 @@ def extract_all_clusters(level: int, cutoff: float, focal_token: str,
                 delta_prox = -100
                 name = "-".join(list(proximate_nodes.nlargest(5).index))
                 df_dict = {'Token': name, 'Level': cl['level'], 'Clustername': cl['name'], 'Prom_Node': top_node,
-                           'Parent': cl['parent'],  'Proximity': node_prox,
+                           'Parent': cl['parent'], 'Proximity': node_prox,
                            'Rev_Proximity': node_rev_prox, 'Delta_Proximity': delta_prox,
                            'Nr_ProxNodes': len(proximate_nodes), 'NrNodes': len(nodes)}
                 df_dict.update(cluster_measures)
                 dataframe_list.append(df_dict.copy())
-                #if len(proximate_nodes) > 0:
-                    #logging.info("Name: {}, Level: {}, Parent: {}".format(cl['name'], cl['level'], cl['parent']))
-                    #logging.info("Nodes: {}".format(nodes))
-                    #logging.info(proximate_nodes)
+                # if len(proximate_nodes) > 0:
+                # logging.info("Name: {}, Level: {}, Parent: {}".format(cl['name'], cl['level'], cl['parent']))
+                # logging.info("Nodes: {}".format(nodes))
+                # Add focal node
+                if focal_token in nodes:
+                    proximate_nodes[focal_token] = -999
                 for node in list(proximate_nodes.index):
-                    if proxim.reindex([node], fill_value=0)[0] > 0:
+                    if proxim.reindex([node], fill_value=0)[0] > 0 or node==focal_token:
                         node_prox = proxim.reindex([node], fill_value=0)[0]
                         node_rev_prox = rev_proxim.reindex([node], fill_value=0)[0]
                         delta_prox = node_prox - node_rev_prox
@@ -484,13 +447,13 @@ def extract_all_clusters(level: int, cutoff: float, focal_token: str,
     df = pd.DataFrame(dataframe_list)
 
     if filename is not None:
-        df.to_excel(check_create_folder(filename+".xlsx"))
-        semantic_network.export_gefx(filename=check_create_folder(filename+".gexf"))
+        df.to_excel(check_create_folder(filename + ".xlsx"))
+        snw.export_gefx(filename=check_create_folder(filename + ".gexf"))
 
     return df
 
 
-def return_measure_dict(vec:Union[list, np.array]):
+def return_measure_dict(vec: Union[list, np.array]):
     """
     Helper function to create cluster measures
 
@@ -503,15 +466,15 @@ def return_measure_dict(vec:Union[list, np.array]):
     -------
         dict of measures
     """
-    if isinstance(vec,list):
-        vec=np.array(vec)
-    if len(vec)==0:
+    if isinstance(vec, list):
+        vec = np.array(vec)
+    if len(vec) == 0:
         return {}
 
-    avg=np.mean(vec)
-    weights=vec/np.sum(vec)
-    w_avg = np.average(vec,weights=weights)
-    sum_vec=np.sum(vec)
-    sd=np.std(vec)
+    avg = np.mean(vec)
+    weights = vec / np.sum(vec)
+    w_avg = np.average(vec, weights=weights)
+    sum_vec = np.sum(vec)
+    sd = np.std(vec)
 
-    return {"Avg": avg, "w_Avg":w_avg, "Std": sd, "Sum": sum_vec}
+    return {"Avg": avg, "w_Avg": w_avg, "Std": sd, "Sum": sum_vec}

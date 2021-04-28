@@ -1,19 +1,18 @@
+import time
 from itertools import product
 
 from src.functions.file_helpers import check_create_folder
+from src.measures.measures import average_fixed_cluster_proximities, extract_all_clusters
 from src.utils.logging_helpers import setup_logger
 import logging
-import time
 import numpy as np
+from src.functions.graph_clustering import consensus_louvain
 from src.classes.neo4jnw import neo4j_network
 
 # Set a configuration path
 configuration_path = '/config/config.ini'
 # Settings
-#alter_subset = ["boss"]
-#alter_subset = ["ceo", "kid", "manager", "head", "sadhu", "boss", "collector", "arbitrator", "offender", "partner", "person", "catcher", "player", "founder", "musician", "volunteer", "golfer", "commander", "employee", "speaker", "coach", "candidate", "champion", "expert", "negotiator", "owner", "chief", "entrepreneur", "successor", "star", "salesperson", "teacher", "alpha", "cop", "performer", "editor", "agent", "supervisor", "chef", "builder", "consultant", "listener", "assistant", "veteran", "journalist", "physicist", "chair", "reformer", "facilitator", "ally", "buddy", "colleague", "enthusiast", "proponent", "artist", "composer", "achiever", "citizen", "researcher", "hero", "minister", "designer", "protagonist", "writer", "scientist", "fool", "mayor", "senator", "admiral", "statesman", "co", "lawyer", "middle", "prosecutor", "businessman", "billionaire", "actor", "baseman", "politician", "novice", "secretary", "driver", "jerk", "rebel", "lieutenant", "victim", "sergeant", "inventor", "front", "helm"]
-#alter_subset = ["chieftain", "enemy", "congressman", "ombudsman", "believer", "deputy", "guest", "magistrate", "heir", "wizard", "hostess", "protaga", "athlete", "supervisor", "head", "emeritus", "critic", "thief", "man", "golfer", "policeman", "trainer", "visitor", "specialist", "trainee", "helper", "adjunct", "prey", "scholar", "dreamer", "titan", "partner", "resident", "preacher", "boxer", "successor", "reformer", "prosecutor", "warlord", "rocker", "peasant", "chairs", "champ", "coward", "salesperson", "comptroller", "sponsor", "builder", "former", "cornerback", "colonel", "bully", "negotiator", "nun", "rebel", "reporter", "hitter", "technician", "rear", "top", "warriors", "savior", "magician", "representative", "president", "hillbilly", "practitioner", "sheriff", "biker", "teenager", "patriarch", "front", "creature", "creator", "superstar", "archbishop", "monkey", "selector", "alpha", "player", "superman", "collaborator", "villain", "bystander", "director", "bearer", "advisor", "coordinator", "entrepreneur", "legislator", "keeper", "composer", "linguist", "spy", "predecessor", "priests", "recruiter", "offender", "co", "newcomer", "auditor", "missionary", "researcher", "slave", "outsider", "sociologist", "pessimist", "publisher", "salesman", "mentor", "racer", "heads", "spectator", "guardian", "aide", "ops", "sidekick", "teammate", "dean", "sergeant", "organizer", "instrumentalist", "contestant", "expert", "novice", "presidency", "warrior", "valet", "geek", "adversary", "intern", "victim", "sage", "liaison", "chairperson", "middle", "analyst", "minister", "chief", "crusader", "person", "bargainer", "commodore", "donor", "cop", "star", "forecaster", "psychologist", "calf", "poet", "administrator", "friend", "skipper", "operator", "vp", "biographer", "consultant", "counsels", "businessman", "buddy", "thinker", "moderator", "kid", "dictator", "celebrity", "seeker", "benefactor", "hacker", "citizen", "shortstop", "founding", "volunteer", "subordinate", "attorney", "skier", "theologian", "shooter", "coach", "bulldozer", "boy", "martyr", "counselor", "skeptic", "architect", "foreigner", "geologist", "therapist", "vo", "crook", "pianist", "enthusiast", "jock", "quarterback", "abolitionist", "nemesis", "diplomat", "professor", "journalist", "participant", "individualist", "captain", "philanthropist", "innovator", "officer", "priest", "holder", "trustee", "screenwriter", "playwright", "superintendent", "listener", "undertaker", "narrator", "lover", "mathematician", "choreographer", "ringmaster", "drummer", "baton", "connector", "patron", "opponent", "exec", "senior", "antagonist", "tops", "biologist", "scientist", "pioneer", "artist", "optimizers", "student", "columnist", "presidents", "strategist", "comrade", "alchemist", "governor", "performer", "lawyer", "apprentice", "swimmer", "guy", "anthropologist", "proprietor", "senator", "interpreter", "prisoner", "correspondent", "fortune", "regulator", "secretary", "manager", "banker", "apex", "translator", "chancellor", "writer", "scribe", "worker", "soldier", "historian", "executive", "neighbor", "chair", "chemist", "promoter", "industrialist", "perfectionist", "cartoonist", "applicant", "referee", "procrastinator", "controller", "receptionist", "storyteller", "educator", "examiner", "instructor", "ranger", "batter", "waiter", "synthesizer", "activist", "narcissist", "trader", "stars", "integrator", "hero", "statesman", "assistant", "godfather", "actor", "astronaut", "counsel", "freak", "monarch", "healer", "gardener", "farmer", "musician", "champion", "fan", "associate", "persuader", "psychoanalyst", "clergy", "summaries", "harasser", "physicist", "diva", "amateur", "chairman", "commander", "achiever", "conductor", "junior", "fellow", "goalkeeper", "disciple", "economist", "sadhu", "philosopher", "colleague", "ally", "sprinter", "adviser", "catcher", "editor", "evangelist", "starter", "accountant", "observer", "developer", "vice", "millionaire", "steward", "sailor", "librarian", "asshole", "cofounder", "clown", "nominee", "blogger", "tokugawa", "waitress", "bitch", "mayor", "gangster", "spokesperson", "ruler", "foreman", "avatar", "baseman", "swami", "recipient", "clerk", "expat", "ceo", "hulk", "latter", "arbitrator", "apostle", "contender", "boss", "cum", "broker", "craftsman", "politician", "theorist", "finalist", "guru", "chro", "messenger", "commissioner", "employee", "psychiatrist", "designer", "lieutenant", "rabbi", "spokesman", "investigator", "novelist", "speaker", "reviewer", "teacher", "foe", "dude", "servant", "admiral", "billionaire", "fool", "collector", "protector", "chef", "actress", "programmer", "stranger", "survivor", "idiot", "lobbyist", "presenter", "dentist", "veteran", "founder", "confidant", "filmmaker", "sergeants", "contributor", "dancer", "guitarist", "sucker", "bottom", "owner", "coachee", "fundraiser", "helm", "follower", "reader", "pitcher", "tyrant", "supporter", "jerk", "protege", "engineer", "photographer", "agent", "headmaster", "ambassador", "sculptor", "candidate", "corporal", "gentleman", "inventor", "protagonist", "bulldog", "proponent", "solver", "driver", "frontline", "treasurer", "facilitator", "rep", "planner", "commentator", "liar", "skeptics", "redhead", "author", "economists", "coauthor", "wife", "brother", "dad", "sons", "cousins", "girl", "apes", "widow", "mate", "daughter", "lady", "grandparents", "nephew", "spouse", "male", "fleas", "father", "feminist", "nanny", "maiden", "women", "children", "youth", "scout", "maternal", "son", "stepmother", "mother", "sister", "female", "uncle", "families", "offspring", "woman", "daddy", "cousin", "lesbian", "mom", "grandfather", "mover", "loser", "runner", "laureate", "winner", "impostor"]
-
+focal_words = ["founder"]
 
 # Load Configuration file
 import configparser
@@ -22,160 +21,32 @@ config = configparser.ConfigParser()
 print(check_create_folder(configuration_path))
 config.read(check_create_folder(configuration_path))
 # Setup logging
-setup_logger(config['Paths']['log'], config['General']['logging_level'], "bench_condition4")
-
-# First, create an empty network
-semantic_network = neo4j_network(config)
+setup_logger(config['Paths']['log'], config['General']['logging_level'], "context-conditioning")
 
 
 logging.info("-----------------Conditioning Benchmark---------------------")
 
 
-weight_list = [None, 0.01,0.1,0.25]
-depth_list = [1,2,3]
+weight_list = [0.1,0.25,0.5,0.01]
+batch_size = [None,10,100,1000,10000]
 year_list = [1981,1996,2010]
-comp_ties_list=[True,False]
-cond_type=["new","old"]
-token_list=[['leader'],['leader','ceo','manager'],['leader','ceo','manager', 'boss', 'partner', 'president']]
-rs_list=[100]
-param_list=product(weight_list, depth_list,comp_ties_list,token_list,rs_list)
-
+param_list=product(weight_list, batch_size)
+rs=1000
+rs_list=[1000,2000,3000]
 logging.info("######################################### Benchmark 1-Year Ego Conditioning #########################################")
 
-for cutoff,depth,comp,tokens,rs in param_list:
+for cutoff,batch in param_list:
 
-    cond="old"
     logging.info("------------------------------------------------")
-    test_name="1-Year Ego Conditioning"
-    param_string="Rs: {}, Years: {}, Tokens: {}, Cutoff: {}, Depth: {}, Cond_type: {}, Norm: {}".format(rs,year_list,tokens,cutoff,depth,cond,comp)
+    test_name="1-Year Conditioning"
+    param_string="Years: {},  Cutoff: {}, Batch Size: {}".format(year_list,cutoff,batch)
     time_list=[]
     for year in year_list:
         logging.disable(logging.ERROR)
         del semantic_network
-        semantic_network = neo4j_network(config)
+        semantic_network = neo4j_network(config, seed=rs)
         start_time=time.time()
-        np.random.seed(rs)
-        semantic_network.condition(years=year, tokens=tokens,weight_cutoff=cutoff,depth=depth,norm=comp, cond_type=cond)
-        logging.disable(logging.NOTSET)
-        time_list.append(time.time() - start_time)
-    logging.info("------- {} -------".format(test_name))
-    logging.info(param_string)
-    logging.info("{} finished in (across years) average {} seconds".format(test_name,np.mean(time_list)))
-    logging.info("Last Filename: {}".format(semantic_network.filename))
-    logging.info("nodes in network %i" % (len(semantic_network)))
-    logging.info("ties in network %i" % (semantic_network.graph.number_of_edges()))
-    logging.info("------------------------------------------------")
-
-    cond="new"
-    logging.info("------------------------------------------------")
-    test_name="1-Year Ego Conditioning"
-    param_string="Rs: {}, Years: {}, Tokens: {}, Cutoff: {}, Depth: {}, Cond_type: {}, Norm: {}".format(rs,year_list,tokens,cutoff,depth,cond,comp)
-    time_list=[]
-    for year in year_list:
-        logging.disable(logging.ERROR)
-        del semantic_network
-        semantic_network = neo4j_network(config)
-        start_time=time.time()
-        np.random.seed(rs)
-        semantic_network.condition(years=year, tokens=tokens,weight_cutoff=cutoff,depth=depth,norm=comp, cond_type=cond)
-        logging.disable(logging.NOTSET)
-        time_list.append(time.time() - start_time)
-    logging.info("------- {} -------".format(test_name))
-    logging.info(param_string)
-    logging.info("{} finished in (across years) average {} seconds".format(test_name,np.mean(time_list)))
-    logging.info("Last Filename: {}".format(semantic_network.filename))
-    logging.info("nodes in network %i" % (len(semantic_network)))
-    logging.info("ties in network %i" % (semantic_network.graph.number_of_edges()))
-    logging.info("------------------------------------------------")
-
-logging.info("######################################### Benchmark #########################################")
-param_list=product(weight_list, depth_list,comp_ties_list,token_list)
-for cutoff,depth,comp,tokens in param_list:
-
-    cond = "new"
-    logging.info("------------------------------------------------")
-    test_name="Multi-Year Ego Conditioning"
-    param_string="Years: {}, Tokens: {}, Cutoff: {}, Depth: {}, Cond_type: {}, Norm: {}".format(year_list,tokens,cutoff,depth,cond,comp)
-    time_list=[]
-    # Random Seed
-    for rs in rs_list:
-        logging.disable(logging.ERROR)
-        del semantic_network
-        semantic_network = neo4j_network(config)
-        start_time=time.time()
-        np.random.seed(rs)
-        semantic_network.condition(years=year_list, tokens=tokens,weight_cutoff=cutoff,depth=depth,norm=comp, cond_type=cond)
-        logging.disable(logging.NOTSET)
-        time_list.append(time.time() - start_time)
-    logging.info("------- {} -------".format(test_name))
-    logging.info(param_string)
-    logging.info("{} finished in (across years) average {} seconds".format(test_name,np.mean(time_list)))
-    logging.info("Last Filename: {}".format(semantic_network.filename))
-    logging.info("nodes in network %i" % (len(semantic_network)))
-    logging.info("ties in network %i" % (semantic_network.graph.number_of_edges()))
-    logging.info("------------------------------------------------")
-
-    cond = "old"
-    logging.info("------------------------------------------------")
-    test_name="Multi-Year Ego Conditioning"
-    param_string="Years: {}, Tokens: {}, Cutoff: {}, Depth: {}, Cond_type: {}, Norm: {}".format(year_list,tokens,cutoff,depth,cond,comp)
-    time_list=[]
-    # Random Seed
-    for rs in rs_list:
-        logging.disable(logging.ERROR)
-        del semantic_network
-        semantic_network = neo4j_network(config)
-        start_time=time.time()
-        np.random.seed(rs)
-        semantic_network.condition(years=year_list, tokens=tokens,weight_cutoff=cutoff,depth=depth,norm=comp, cond_type=cond)
-        logging.disable(logging.NOTSET)
-        time_list.append(time.time() - start_time)
-    logging.info("------- {} -------".format(test_name))
-    logging.info(param_string)
-    logging.info("{} finished in (across years) average {} seconds".format(test_name,np.mean(time_list)))
-    logging.info("Last Filename: {}".format(semantic_network.filename))
-    logging.info("nodes in network %i" % (len(semantic_network)))
-    logging.info("ties in network %i" % (semantic_network.graph.number_of_edges()))
-    logging.info("------------------------------------------------")
-
-logging.info("######################################### Benchmark #########################################")
-param_list=product(weight_list, depth_list,comp_ties_list,token_list)
-for cutoff,depth,comp,tokens in param_list:
-    cond = "new"
-    logging.info("------------------------------------------------")
-    test_name="All-Year Ego Conditioning"
-    param_string="Years: All, Tokens: {}, Cutoff: {}, Depth: {}, Cond_type: {}, Norm: {}".format(tokens,cutoff,depth,cond,comp)
-    time_list=[]
-    # Random Seed
-    for rs in rs_list:
-        logging.disable(logging.ERROR)
-        del semantic_network
-        semantic_network = neo4j_network(config)
-        start_time=time.time()
-        np.random.seed(rs)
-        semantic_network.condition(tokens=tokens,weight_cutoff=cutoff,depth=depth,norm=comp, cond_type=cond)
-        logging.disable(logging.NOTSET)
-        time_list.append(time.time() - start_time)
-    logging.info("------- {} -------".format(test_name))
-    logging.info(param_string)
-    logging.info("{} finished in (across years) average {} seconds".format(test_name,np.mean(time_list)))
-    logging.info("Last Filename: {}".format(semantic_network.filename))
-    logging.info("nodes in network %i" % (len(semantic_network)))
-    logging.info("ties in network %i" % (semantic_network.graph.number_of_edges()))
-    logging.info("------------------------------------------------")
-    cond = "old"
-    logging.info("------------------------------------------------")
-    test_name="All-Year Ego Conditioning"
-    param_string="Years: All, Tokens: {}, Cutoff: {}, Depth: {}, Cond_type: {}, Norm: {}".format(tokens,cutoff,depth,cond,comp)
-    time_list=[]
-    # Random Seed
-    for rs in rs_list:
-        logging.disable(logging.ERROR)
-        del semantic_network
-        semantic_network = neo4j_network(config)
-        start_time=time.time()
-        np.random.seed(rs)
-        semantic_network.condition(tokens=tokens,weight_cutoff=cutoff,depth=depth,norm=comp, cond_type=cond)
+        semantic_network.context_condition(year, weight_cutoff=cutoff, batchsize=batch) # condition on context
         logging.disable(logging.NOTSET)
         time_list.append(time.time() - start_time)
     logging.info("------- {} -------".format(test_name))
@@ -188,20 +59,20 @@ for cutoff,depth,comp,tokens in param_list:
 
 
 logging.info("######################################### Benchmark #########################################")
-param_list=product(weight_list, rs_list)
-for cutoff,rs in param_list:
+for cutoff,batch in param_list:
+
     logging.info("------------------------------------------------")
-    test_name="1-Year Context Conditioning"
-    param_string="Rs: {}, Years: {}, Tokens: All, Cutoff: {}".format(rs, year_list,cutoff)
+    test_name="Multi-Year Conditioning"
+    param_string="Years: {},  Cutoff: {}, Batch Size: {}".format(year_list,cutoff,batch)
     time_list=[]
     # Random Seed
-    for year in year_list:
+    for rs in rs_list:
         logging.disable(logging.ERROR)
         del semantic_network
-        semantic_network = neo4j_network(config)
+        semantic_network = neo4j_network(config, seed=rs)
         start_time=time.time()
         np.random.seed(rs)
-        semantic_network.context_condition(years=year,weight_cutoff=cutoff)
+        semantic_network.context_condition(year_list, weight_cutoff=cutoff, batchsize=batch) # condition on context
         logging.disable(logging.NOTSET)
         time_list.append(time.time() - start_time)
     logging.info("------- {} -------".format(test_name))
@@ -211,3 +82,30 @@ for cutoff,rs in param_list:
     logging.info("nodes in network %i" % (len(semantic_network)))
     logging.info("ties in network %i" % (semantic_network.graph.number_of_edges()))
     logging.info("------------------------------------------------")
+
+
+logging.info("######################################### Benchmark #########################################")
+for cutoff,batch in param_list:
+
+    logging.info("------------------------------------------------")
+    test_name="All-Year Conditioning"
+    param_string="Years: ALL,  Cutoff: {}, Batch Size: {}".format(cutoff,batch)
+    time_list=[]
+    # Random Seed
+    for rs in rs_list:
+        logging.disable(logging.ERROR)
+        del semantic_network
+        semantic_network = neo4j_network(config, seed=rs)
+        start_time=time.time()
+        np.random.seed(rs)
+        semantic_network.context_condition(weight_cutoff=cutoff, batchsize=batch) # condition on context
+        logging.disable(logging.NOTSET)
+        time_list.append(time.time() - start_time)
+    logging.info("------- {} -------".format(test_name))
+    logging.info(param_string)
+    logging.info("{} finished in (across years) average {} seconds".format(test_name,np.mean(time_list)))
+    logging.info("Last Filename: {}".format(semantic_network.filename))
+    logging.info("nodes in network %i" % (len(semantic_network)))
+    logging.info("ties in network %i" % (semantic_network.graph.number_of_edges()))
+    logging.info("------------------------------------------------")
+

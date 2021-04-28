@@ -1,5 +1,7 @@
 import copy
+import inspect
 from collections.abc import Sequence
+import random
 
 import numpy as np
 from networkx import compose_all
@@ -51,7 +53,7 @@ class neo4j_network(Sequence):
     def __init__(self, config=None, neo4j_creds=None, graph_type="networkx", agg_operator="SUM",
                  write_before_query=True,
                  neo_batch_size=None, queue_size=100000, tie_query_limit=100000, tie_creation="UNSAFE",
-                 logging_level=None, norm_ties=False, connection_type=None, consume_type=None):
+                 logging_level=None, norm_ties=False, connection_type=None, consume_type=None, seed=100):
         # Fill parameters from configuration file
         if logging_level is not None:
             self.logging_level = logging_level
@@ -112,6 +114,8 @@ class neo4j_network(Sequence):
         self.conditioned = False
         self.norm_ties = norm_ties
         self.years = []
+        self.seed=seed
+        self.set_random_seed(seed)
 
         # Dictionaries and token/id saved in memory
         self.cond_dict=defaultdict(lambda: None)
@@ -234,36 +238,45 @@ class neo4j_network(Sequence):
         return format_output
 
     # %% Conditoning functions
-    def condition(self, years=None, tokens=None, weight_cutoff=None, depth=None, context=None, norm=None,
-                  batchsize=None, cond_type=None):
+
+
+
+    def context_condition(self, times:Optional[Union[int,list]]=None, tokens:Optional[Union[int,str,list]]=None, weight_cutoff:Optional[float]=None, depth:Optional[int]=None,batchsize:Optional[int]=None,cond_type:Optional[str]=None):
         """
 
-        Condition the network.
+        Derive context network by conditioning on tokens that are likely to
 
         Parameters
         ----------
-        :param years: None, integer, list of integers, or interval dict of the form {"start":YYYY,"end":YYYY}
-        :param tokens: None or list of strings or integers (ids)
-        :param weight_cutoff: Ties with weight smaller will be ignored
-        :param depth: If ego network is requested, maximal path length from ego
-        :param context: list of tokens or token ids that are in the context of replacement
-        :param norm: True/False - Generate normed replacement or aggregate replacement
-        batchsize
+        times: int or list, optional
+            Times (Years) to condition on
+        tokens: int, str or list, optional
+            tokens or token_ids.
+            If given, ego networks of these tokens will be derived.
+        weight_cutoff: float, optinal
+            Ties below this cutoff value are discarded
+        depth: int, optional
+            The depth of the ego networks to consider.
+
+        batchsize: int, optional
+            If given, queries of this size are sent to the database.
+        cond_type: str, optional
+            Manually set how ego network is queried. If not set, heuristically determined.
+                "subset": queries the entire network into memory and uses network x to find the ego networks
+                "search": queries the ego networks in a "beam search" fashion. Slower for high depths.
+        Returns
+        -------
+
         """
 
         # Set up dict of configuration of the conditioning
         cond_dict = defaultdict(lambda: None)
 
-        # Get default normation behavior
-        if norm is None:
-            norm = self.norm_ties
-
         if batchsize is None:
             batchsize = self.neo_batch_size
 
         input_check(tokens=tokens)
-        input_check(tokens=context)
-        input_check(years=years)
+        input_check(years=times)
 
         # Check and fix up token lists
         if tokens is not None:
@@ -276,38 +289,121 @@ class neo4j_network(Sequence):
 
 
         # Without times, we query all
-        if years is None:
+        if times is None:
             years = self.get_times_list()
             cond_dict.update({'years': 'ALL'})
         else:
-            cond_dict.update({'years': years})
+            cond_dict.update({'years': times})
 
-        cond_dict.update({'compositional':norm, 'cutoff': weight_cutoff, 'context': context, 'depth': depth})
+        cond_dict.update({'type':"context", 'cutoff': weight_cutoff, 'depth': depth})
+
+        self.cond_dict=cond_dict
+
+
+        if tokens is None:
+            logging.debug("Context Conditioning dispatch: Yearly")
+            self.__yearly_context_condition(times=times, weight_cutoff=weight_cutoff,batchsize=batchsize)
+        else:
+            logging.debug("Context Conditioning dispatch: Ego")
+            self.__context_ego_conditioning(times=times, tokens=tokens, weight_cutoff=weight_cutoff, depth=depth, batchsize=batchsize, cond_type=cond_type)
+
+
+
+    def condition(self, times:Optional[Union[int,list]]=None, tokens:Optional[Union[int,str,list]]=None, weight_cutoff:Optional[float]=None, depth:Optional[int]=None, context:Optional[Union[int,str,list]]=None, compositional:Optional[bool]=None,
+                  batchsize:Optional[int]=None, cond_type:Optional[str]=None, reverse_ties:Optional[bool]=False):
+        """
+
+        Condition the network: Pull ties from database and aggregate according to given parameters.
+
+        Parameters
+        ----------
+        times: int or list, optional
+            Times (Years) to condition on
+        tokens: int, str or list, optional
+            tokens or token_ids.
+            If given, ego networks of these tokens will be derived.
+        weight_cutoff: float, optinal
+            Ties below this cutoff value are discarded
+        depth: int, optional
+            The depth of the ego networks to consider.
+        context: int, str or list, optional
+            tokens or token_ids.
+            If given, only ties that occur within a sentence including these tokens are considered
+        compositional: bool, optional
+            Whether to condition as compositional ties, or aggregate ties
+        batchsize: int, optional
+            If given, queries of this size are sent to the database.
+        cond_type: str, optional
+            Manually set how the queries are sent. If not set, heuristically determined.
+                "subset": queries the entire network into memory and uses network x to find the ego networks
+                "search": queries the ego networks in a "beam search" fashion. Slower for high depths.
+        reverse_ties: bool, optional
+            If true, ties will be reversed after conditioning.
+
+        Returns
+        -------
+        Nothing
+        """
+
+        # Set up dict of configuration of the conditioning
+        cond_dict = defaultdict(lambda: None)
+
+        # Get default normation behavior
+        if compositional is None:
+            compositional = self.norm_ties
+
+        if batchsize is None:
+            batchsize = self.neo_batch_size
+
+        input_check(tokens=tokens)
+        input_check(tokens=context)
+        input_check(years=times)
+
+        # Check and fix up token lists
+        if tokens is not None:
+            cond_dict.update({'tokens': tokens})
+            tokens = self.ensure_ids(tokens)
+            if not isinstance(tokens, list):
+                tokens = [tokens]
+        else:
+            cond_dict.update({'tokens': None})
+
+
+        # Without times, we query all
+        if times is None:
+            years = self.get_times_list()
+            cond_dict.update({'years': 'ALL'})
+        else:
+            cond_dict.update({'years': times})
+
+        cond_dict.update({'type':"replacement", 'compositional':compositional, 'cutoff': weight_cutoff, 'context': context, 'depth': depth})
 
         self.cond_dict=cond_dict
 
         if tokens is None:
             logging.debug("Conditioning dispatch: Yearly")
-            self.__year_condition(years=years, weight_cutoff=weight_cutoff, context=context, norm=norm, batchsize=batchsize)
+            self.__year_condition(years=times, weight_cutoff=weight_cutoff, context=context, norm=compositional, batchsize=batchsize)
         else:
             logging.debug("Conditioning dispatch: Ego")
             if cond_type is not None:
-                if cond_type=="new":
+                if cond_type=="subset":
                     logging.debug("Conditioning dispatch: Ego, new")
-                    self.__ego_condition(years=years, token_ids=tokens, weight_cutoff=weight_cutoff, depth=depth,
-                                         context=context, norm=norm, batchsize=batchsize)
+                    self.__ego_condition(years=times, token_ids=tokens, weight_cutoff=weight_cutoff, depth=depth,
+                                         context=context, norm=compositional, batchsize=batchsize)
                 else:
                     logging.debug("Conditioning dispatch: Ego, old")
-                    self.__ego_condition_old(years=years, token_ids=tokens, weight_cutoff=weight_cutoff, depth=depth,
-                                             context=context, norm=norm, batchsize=batchsize)
+                    self.__ego_condition_old(years=times, token_ids=tokens, weight_cutoff=weight_cutoff, depth=depth,
+                                             context=context, norm=compositional, batchsize=batchsize)
             else:
                 if depth < 2 and len(tokens) <= 5:
                     logging.debug("Conditioning dispatch: Ego, several token")
-                    self.__ego_condition_old(years=years, token_ids=tokens, weight_cutoff=weight_cutoff, depth=depth, context=context, norm=norm, batchsize=batchsize)
+                    self.__ego_condition_old(years=times, token_ids=tokens, weight_cutoff=weight_cutoff, depth=depth, context=context, norm=compositional, batchsize=batchsize)
                 else:
                     logging.debug("Conditioning dispatch: Ego, single token")
-                    self.__ego_condition(years=years, token_ids=tokens, weight_cutoff=weight_cutoff, depth=depth, context=context, norm=norm, batchsize=batchsize)
+                    self.__ego_condition(years=times, token_ids=tokens, weight_cutoff=weight_cutoff, depth=depth, context=context, norm=compositional, batchsize=batchsize)
 
+        if reverse_ties:
+            self.to_reverse()
 
     def decondition(self):
         # Reset token lists to original state.
@@ -327,15 +423,13 @@ class neo4j_network(Sequence):
     def cluster(self, levels: int = 1, name: Optional[str] = "base", interest_list: Optional[list] = None,
                 metadata: Optional[Union[dict, defaultdict]] = None,
                 algorithm: Optional[Callable[[nx.DiGraph], List]] = None,
-                to_measure: Optional[List[Callable[[nx.DiGraph], Dict]]] = None, ego_nw_tokens: Optional[List] = None,
-                depth: Optional[int] = 1, years: Optional[Union[int, Dict, List]] = None,
-                context: Optional[List] = None, weight_cutoff: Optional[float] = None, norm_ties: Optional[bool] = None, reverse_ties:Optional[bool]=False):
+                to_measure: Optional[List[Callable[[nx.DiGraph], Dict]]] = None,
+                reverse_ties:Optional[bool]=False, add_ego_tokens:Optional[Union[str,int,list]]=None):
         """
         Cluster the network, run measures on the clusters and return them as networkx subgraph in packaged dicts with metadata.
         Use the levels variable to determine how often to cluster hierarchically.
 
-        Function takes the usual conditioning argument when the network is not yet conditioned.
-        If it is conditioned, then the current graph will be used to cluster
+        Function requires network to be conditioned!
 
         Parameters
         ----------
@@ -351,46 +445,43 @@ class neo4j_network(Sequence):
             Any algorithm taking a networkx graph and return a list of lists of tokens.
         to_measure: list of callables. Optional.
             Functions that take a networkx graph as argument and return a formatted dict with measures.
-        ego_nw_tokens: list. Optional.
-            Ego network tokens. Used only when conditioning.
-        depth: int. Optional.
-            Depth of ego network. Used only when conditioning.
-        years: int, list, dict. Optional
-            Given year, list of year, or an interval dict {"start":int,"end":int}. The default is None.
-        context : list, optional - used when conditioning
-            List of tokens that need to appear in the context distribution of a tie. The default is None.
-        weight_cutoff : float, optional - used when conditioning
-            Only ties of higher weight are considered. The default is None.
-        norm_ties : bool, optional - used when conditioning
-            Norm ties to get correct probabilities. The default is None.
+        add_ego_tokens: str, int or list. Optional
+            Optional list of ego tokens (or ids). If given, they will be added to
+            each graph before further clustering occurs.
 
         Returns
         -------
         list of cluster-dictionaries.
         """
 
-        input_check(tokens=ego_nw_tokens)
-        input_check(tokens=interest_list)
-        input_check(tokens=context)
-        input_check(years=years)
 
-        # Check and fix up token lists
-        if ego_nw_tokens is not None:
-            ego_nw_tokens = self.ensure_ids(ego_nw_tokens)
-            if not isinstance(ego_nw_tokens, list):
-                ego_nw_tokens = [ego_nw_tokens]
+        input_check(tokens=interest_list)
+        input_check(tokens=add_ego_tokens)
+
+        # # Check and fix up token lists
+        # input_check(tokens=context)
+        # input_check(years=years)
+        # input_check(tokens=ego_nw_tokens)
+        # if ego_nw_tokens is not None:
+        #     ego_nw_tokens = self.ensure_ids(ego_nw_tokens)
+        #     if not isinstance(ego_nw_tokens, list):
+        #         ego_nw_tokens = [ego_nw_tokens]
+        # if context is not None:
+        #     context = self.ensure_ids(context)
+        # # Get default normation behavior
+        # if norm_ties is None:
+        #     norm_ties = self.norm_ties
 
         if interest_list is not None:
             interest_list = self.ensure_ids(interest_list)
             if not isinstance(interest_list, list):
                 interest_list = [interest_list]
 
-        if context is not None:
-            context = self.ensure_ids(context)
+        if add_ego_tokens is not None:
+            add_ego_tokens = self.ensure_ids(add_ego_tokens)
+            if not isinstance(add_ego_tokens, list):
+                add_ego_tokens = [add_ego_tokens]
 
-        # Get default normation behavior
-        if norm_ties is None:
-            norm_ties = self.norm_ties
 
         # Prepare metadata with standard additions
         # TODO Add standard metadata for conditioning
@@ -400,27 +491,28 @@ class neo4j_network(Sequence):
                 metadata_new[k].append(v)
 
         if not self.conditioned:
-            was_conditioned = False
-            if ego_nw_tokens is None:
-                logging.debug("Conditioning year(s) {} with all tokens".format(
-                    years))
-                self.condition(years=years, tokens=None, weight_cutoff=weight_cutoff,
-                               depth=depth, context=context, norm=norm_ties)
-                logging.debug("Finished conditioning, {} nodes and {} edges in graph".format(
-                    len(self.graph.nodes), len(self.graph.edges)))
-            else:
-                logging.debug(
-                    "Conditioning ego-network for {} tokens with depth {}, for year(s) {} with focus on tokens {}".format(
-                        len(ego_nw_tokens), depth, years, ego_nw_tokens))
-                self.condition(years=years, tokens=ego_nw_tokens, weight_cutoff=weight_cutoff,
-                               depth=depth, context=context, norm=norm_ties)
-                logging.debug("Finished ego conditioning, {} nodes and {} edges in graph".format(
-                    len(self.graph.nodes), len(self.graph.edges)))
-        else:
-            logging.debug(
-                "Network already conditioned! No reconditioning attempted, parameters unused.")
-            was_conditioned = True
+            # Previously, the conditioning function would be invoked here.
+            # We have since decided to require the user to condition before calling clustering
+            self.condition_error(call=inspect.stack()[1][3])
 
+            #was_conditioned = False
+            #if ego_nw_tokens is None:
+            #    logging.debug("Conditioning year(s) {} with all tokens".format(
+            #        years))
+            #    self.condition(years=years, tokens=None, weight_cutoff=weight_cutoff,
+            #                    depth=depth, context=context, norm=norm_ties)
+            #     logging.debug("Finished conditioning, {} nodes and {} edges in graph".format(
+            #         len(self.graph.nodes), len(self.graph.edges)))
+            # else:
+            #     logging.debug(
+            #         "Conditioning ego-network for {} tokens with depth {}, for year(s) {} with focus on tokens {}".format(
+            #             len(ego_nw_tokens), depth, years, ego_nw_tokens))
+            #     self.condition(years=years, tokens=ego_nw_tokens, weight_cutoff=weight_cutoff,
+            #                    depth=depth, context=context, norm=norm_ties)
+            #     logging.debug("Finished ego conditioning, {} nodes and {} edges in graph".format(
+            #         len(self.graph.nodes), len(self.graph.edges)))
+
+        # We allow to reverse ties in network
         if reverse_ties:
             self.to_reverse()
 
@@ -446,7 +538,7 @@ class neo4j_network(Sequence):
             step_list = []
             base_step_list = []
             for base in prior_list:
-                base, new_list, cluster_dict = cluster_graph(base, to_measure, algorithm)
+                base, new_list, cluster_dict = cluster_graph(base, to_measure, algorithm, add_ego_tokens=add_ego_tokens)
                 base_step_list.append(base)
                 # Add assignment (level) to graph of snw
                 nx.set_node_attributes(self.graph, cluster_dict, 'clusterl'+str(t))
@@ -462,30 +554,26 @@ class neo4j_network(Sequence):
         # Add last hierarchy
         cluster_list.extend(step_list)
 
-        if not was_conditioned:
-            # Decondition
-            pass
-            # self.decondition()
+        # Redo reverse ties
+        if reverse_ties:
+            self.to_reverse()
 
         return cluster_list
 
     # %% Measures
 
-    def centralities(self, focal_tokens=None, types=["PageRank", "normedPageRank"], years=None, ego_nw_tokens=None,
-                 depth=1, context=None, weight_cutoff=None, norm_ties=None, reverse_ties: Optional[bool] = False):
+    def centralities(self, focal_tokens=None, types=["PageRank", "normedPageRank"], reverse_ties: Optional[bool] = False):
         """
         See measures.centralities
         """
-        return centralities(self, focal_tokens=focal_tokens, types=types,years=years,ego_nw_tokens=ego_nw_tokens,depth=depth,context=context,weight_cutoff=weight_cutoff,norm_ties=norm_ties, reverse_ties=reverse_ties)
+        return centralities(self, focal_tokens=focal_tokens, types=types,reverse_ties=reverse_ties)
 
     def proximities(self,focal_tokens: Optional[List] = None, alter_subset: Optional[List] = None,
-                years: Optional[Union[List, int, Dict]] = None,
-                context: Optional[List] = None, weight_cutoff: Optional[float] = None,
-                compositional: Optional[bool] = None, reverse_ties: Optional[bool] = False) -> Dict:
+              reverse_ties: Optional[bool] = False) -> Dict:
         """
         See measures.proximities
         """
-        return proximities(self, focal_tokens=focal_tokens, alter_subset=alter_subset, years=years, context=context, weight_cutoff=weight_cutoff,compositional=compositional, reverse_ties=reverse_ties)
+        return proximities(self, focal_tokens=focal_tokens, alter_subset=alter_subset, reverse_ties=reverse_ties)
 
 
     def get_node_context(self, tokens:Union[list,int,str], years:Union[int,list,dict]=None, weight_cutoff:Optional[float]=None, occurrence:Optional[bool]=False):
@@ -792,12 +880,7 @@ class neo4j_network(Sequence):
     def __ego_condition_old(self, years, token_ids, weight_cutoff=None, depth=None, context=None, norm=None,
                             batchsize=None):
 
-        # Get default normation behavior
-        if norm is None:
-            norm = self.norm_ties
-        # Same for batchsize
-        if batchsize is None:
-            batchsize = self.neo_batch_size
+
 
         if not self.conditioned:  # This is the first conditioning
             # Build graph
@@ -882,7 +965,7 @@ class neo4j_network(Sequence):
 
         # Continue conditioning
 
-    def context_condition(self, years, weight_cutoff=None, batchsize=None):
+    def __yearly_context_condition(self, times, weight_cutoff=None, batchsize=None):
         """ Condition the entire network over all years """
 
 
@@ -908,7 +991,7 @@ class neo4j_network(Sequence):
                     "Conditioning by query batch {} of {} tokens.".format(i, len(token_ids)))
                 # Query Neo4j
                 self.graph.add_edges_from(
-                    self.query_context(token_ids, times=years, weight_cutoff=weight_cutoff))
+                    self.query_context(token_ids, times=times, weight_cutoff=weight_cutoff))
             try:
                 all_ids = list(self.graph.nodes)
             except:
@@ -927,8 +1010,91 @@ class neo4j_network(Sequence):
 
         else:  # Remove conditioning and recondition
             self.decondition()
-            self.context_condition(years, weight_cutoff)
+            self.__yearly_context_condition(times, weight_cutoff, batchsize)
 
+    def __context_ego_conditioning(self, times:Optional[Union[int,list]]=None, tokens:Optional[Union[int,str,list]]=None, weight_cutoff:Optional[float]=None, depth:Optional[int]=None,batchsize:Optional[int]=None,cond_type:Optional[str]=None):
+
+
+        if not self.conditioned:  # This is the first conditioning
+            # Save original depth variable
+            or_depth = depth
+
+            if cond_type=="search":
+                # Build graph
+                self.graph = self.create_empty_graph()
+
+                # Depth 0 and Depth 1 really mean the same thing here
+                if depth == 0 or depth is None:
+                    depth = 1
+                # Check one level deeper
+
+                depth += 1
+                # Create a dict to hold previously queried ids
+                prev_queried_ids = list()
+                # ids to check
+                ids_to_check = tokens
+                logging.debug(
+                    "Start of Depth {} conditioning: {} tokens".format(or_depth, len(ids_to_check)))
+                while depth > 0:
+                    if not isinstance(ids_to_check, (list, np.ndarray)):
+                        ids_to_check = [ids_to_check]
+                    # Work from ID list, give error if tokens are not in database
+                    ids_to_check = self.ensure_ids(ids_to_check)
+                    # Do not consider already added tokens
+                    ids_to_check = np.setdiff1d(ids_to_check, prev_queried_ids)
+                    logging.debug(
+                        "Depth {} Context conditioning: {} new found tokens, where {} already added.".format(depth,
+                                                                                                     len(ids_to_check),
+                                                                                                     len(
+                                                                                                         prev_queried_ids)))
+                    # Add ids_to_check to list since they will be queried this iteration
+                    prev_queried_ids.extend(ids_to_check)
+                    # Add starting nodes
+                    self.graph.add_nodes_from(ids_to_check)
+                    for i in tqdm(range(0, len(ids_to_check), batchsize), leave=False, position=0):
+
+                        id_batch = ids_to_check[i:i + batchsize]
+                        logging.debug(
+                            "Conditioning by query batch {} of {} tokens.".format(i, len(id_batch)))
+                        # Query Neo4j
+                        try:
+                            self.graph.add_edges_from(self.query_context(ids=id_batch, times=times, weight_cutoff=weight_cutoff))
+                        except:
+                            logging.error("Could not context condition graph by query search method.")
+
+                    # Delete disconnected nodes
+                    remove = [node for node, degree in dict(self.graph.degree).items() if degree <= 0]
+                    self.graph.remove_nodes_from(remove)
+
+                    # Update IDs and Tokens to reflect conditioning
+                    all_ids = list(self.graph.nodes)
+                    all_tokens = [self.get_token_from_id(x) for x in all_ids]
+
+                    # Set the next set of tokens as those that have not been previously queried
+                    ids_to_check = np.setdiff1d(all_ids, prev_queried_ids)
+
+                    # print("{} tokens post setdiff: {}".format(len(token_ids),token_ids))
+                    # Set additional attributes
+                    att_list = [{"token": x} for x in all_tokens]
+                    att_dict = dict(list(zip(all_ids, att_list)))
+                    nx.set_node_attributes(self.graph, att_dict)
+
+                    # decrease depth
+                    depth = depth - 1
+                    # No more ids to check
+                    if not ids_to_check.size > 0:
+                        depth = 0
+            else:
+                self.__yearly_context_condition(times=times,weight_cutoff=weight_cutoff,batchsize=batchsize)
+
+            # Create ego graph for each node and compose
+            self.graph = compose_all([nx.generators.ego.ego_graph(self.graph, x, radius=or_depth, center=True,
+                                                                  undirected=False) for x in tokens])
+            # Set conditioning true
+            self.__complete_conditioning()
+        else:  # Remove conditioning and recondition
+            self.decondition()
+            self.__context_ego_conditioning(times=times,tokens=tokens,weight_cutoff=weight_cutoff,depth=depth,batchsize=batchsize,cond_type=cond_type)
 
     def __complete_conditioning(self, copy_ids=True):
 
@@ -948,13 +1114,16 @@ class neo4j_network(Sequence):
 
     def __create_filename(self, cond_dict):
 
+        if cond_dict['type'] is not None:
+            fn = str(cond_dict['type'])+"-"
+        else:
+            fn = ""
+
         if cond_dict['tokens'] is not None:
             if not isinstance(cond_dict['tokens'],list):
                 cond_dict['tokens']=[cond_dict['tokens']]
-            fn="EGO-"
+            fn=fn+"EGO-"
             fn=fn+'-'.join([str(x) for x in cond_dict['tokens']])+'-'
-        else:
-            fn=""
 
         if cond_dict['years'] is not "ALL":
             if not isinstance(cond_dict['years'],list):
@@ -990,6 +1159,34 @@ class neo4j_network(Sequence):
         self.graph = None
 
     # %% Utility functioncs
+
+    def __condition_error(self, call:Optional[str] = None):
+        """
+        Raises an error that the network is to be conditioned.
+        Tries to find the call that was used.
+
+        Parameters
+        ----------
+        call : str
+            Optionally pass the call or more information.
+
+        Returns
+        -------
+        Nothing
+
+        """
+        if not call:
+            try:
+                call=inspect.stack()[2][3]
+            except:
+                call=None
+        if call is not None:
+            msg = "You tried to invoke an operation without conditioning the network. Please use condition() before doing so! The call was: {}".format(call)
+        else:
+            msg= "You tried to invoke an operation without conditioning the network. Please use condition() before doing so!"
+        logging.error(msg)
+        raise RuntimeError(msg)
+
     def update_dicts(self):
         """Simply update dictionaries"""
         # Update dictionaries
@@ -1213,3 +1410,8 @@ class neo4j_network(Sequence):
 
     def insert_edges_context(self, ego, ties, contexts):
         return self.db.insert_edges_context(ego, ties, contexts)
+
+    def set_random_seed(self, seed):
+        random.seed(seed)
+        np.random.seed(seed)
+        self.seed=seed

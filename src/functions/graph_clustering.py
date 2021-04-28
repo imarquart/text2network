@@ -78,7 +78,7 @@ def consensus_louvain(graph, iterations=4):
 
 
 def cluster_graph(graph: GraphDict, to_measure: Optional[List[Callable[[nx.DiGraph], Dict]]] = None,
-                  algorithm: Optional[Callable[[nx.DiGraph], List]] = None) -> Tuple[GraphDict, List[GraphDict], dict]:
+                  algorithm: Optional[Callable[[nx.DiGraph], List]] = None, add_ego_tokens:Optional[list] = None) -> Tuple[GraphDict, List[GraphDict], dict]:
     """
     Cluster a graph in a GraphDict into its subgraphs and create measures
 
@@ -90,6 +90,8 @@ def cluster_graph(graph: GraphDict, to_measure: Optional[List[Callable[[nx.DiGra
         Callables taking a nw_graph:nx.DiGraph parameters
     algorithm: function
         Callable taking a nx.DiGraph as first argument and returning a list of list of nodes.
+    add_ego_tokens: list of ints. Optional
+        Optional list of token ids that will be added to each cluster.
 
     Returns
     -------
@@ -113,11 +115,19 @@ def cluster_graph(graph: GraphDict, to_measure: Optional[List[Callable[[nx.DiGra
         logging.error(msg)
         raise AttributeError(msg)
 
+
     # Create dict of nodes->cluster associations
     cluster_node_dict = {}
     for i, nodes in enumerate(node_list):
         for node in nodes:
             cluster_node_dict.update({node: i})
+
+    if add_ego_tokens is not None: # Add ego tokens to each cluster
+        node_list=[list(set(x+add_ego_tokens)) for x in node_list]
+        for ego in add_ego_tokens:
+            if ego not in list(cluster_node_dict.keys()):
+                cluster_node_dict[ego]=0
+
 
     # Add cluster attribute to original graph
     nx.set_node_attributes(graph['graph'], cluster_node_dict, 'cluster')
