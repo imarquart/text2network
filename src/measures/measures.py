@@ -173,7 +173,7 @@ def yearly_centralities(snw, year_list, focal_tokens=None, types=["PageRank", "n
 
 
 def average_fixed_cluster_proximities(focal_token: str, interest_list: list, nw, levels: int,
-                                      times: Optional[Union[list,int]] = None,
+                                      times: Optional[Union[list, int]] = None,
                                       depth: Optional[int] = 1, context: Optional[list] = None,
                                       weight_cutoff: Optional[float] = None,
                                       cluster_cutoff: Optional[float] = 0, do_reverse: Optional[bool] = False,
@@ -181,6 +181,8 @@ def average_fixed_cluster_proximities(focal_token: str, interest_list: list, nw,
                                       filename: Optional[str] = None,
                                       compositional: Optional[bool] = False,
                                       reverse_ties: Optional[bool] = False,
+                                      add_focal_to_clusters: Optional[bool] = False,
+                                      mode: Optional[str] = "replacement", occurrence: Optional[bool] = False,
                                       seed: Optional[int] = None) -> pd.DataFrame:
     """
     First, derives clusters from overall network (across all years), then creates year-by-year average proximities for these clusters
@@ -215,7 +217,16 @@ def average_fixed_cluster_proximities(focal_token: str, interest_list: list, nw,
         Whether to use compositional ties
     reverse_ties : bool
         Whether to reverse ties after conditioning
-
+    add_focal_to_clusters: bool
+        If true, add focal token to each cluster before clustering
+    mode: str
+        Whether to derive replacement or contextual clusters
+            "replacement" (Default)
+            "context"
+    occurrence: bool
+        When mode is set to "context", query either
+            False (Default): Context are those words that are plausible replacement in the sentence
+            True: Contexts are the words that actually occur in the sentence
     Returns
     -------
     pd.DataFrame
@@ -232,18 +243,20 @@ def average_fixed_cluster_proximities(focal_token: str, interest_list: list, nw,
         times = np.sort(times)
 
     # First, derive clusters
-    if depth > 0:
-        nw.condition(tokens=focal_token, times=times, context=context,depth=depth,weight_cutoff=weight_cutoff,compositional=compositional,reverse_ties=reverse_ties)
+    if mode == "context":
+        nw.context_condition(tokens=focal_token, times=times, depth=depth, weight_cutoff=weight_cutoff,
+                             occurrence=occurrence)
 
     else:
-        nw.condition(times=times,weight_cutoff=weight_cutoff, context=context,compositional=compositional,
-                     reverse_ties=reverse_ties)
+        nw.condition(tokens=focal_token, times=times, context=context, depth=depth, weight_cutoff=weight_cutoff,
+                     compositional=compositional, reverse_ties=reverse_ties)
     # Get clusters
     clusters = nw.cluster(interest_list=interest_list, levels=levels, to_measure=[proximity],
-                          algorithm=consensus_louvain)
+                          algorithm=consensus_louvain, add_ego_tokens=add_focal_to_clusters)
+
     cluster_dict = {}
     cluster_dataframe = []
-    logging.info("Extracting relevant clusters at level {} across all years {}".format(levels,times))
+    logging.info("Extracting relevant clusters at level {} across all years {}".format(levels, times))
     for cl in clusters:
         if cl['level'] == 0:  # Use zero cluster, where all tokens are present, to get proximities
             rev_proxim = nw.pd_format(cl['measures'])[0].loc[:, focal_token]
@@ -273,11 +286,9 @@ def average_fixed_cluster_proximities(focal_token: str, interest_list: list, nw,
                     df_dict.update(cluster_measures)
                     cluster_dataframe.append(df_dict.copy())
 
-
-
     for year in times:
         nw.decondition()
-        nw.condition(times=year,weight_cutoff=weight_cutoff, context=context, compositional=compositional,
+        nw.condition(times=year, weight_cutoff=weight_cutoff, context=context, compositional=compositional,
                      reverse_ties=reverse_ties)
 
         if moving_average is not None:
@@ -287,11 +298,12 @@ def average_fixed_cluster_proximities(focal_token: str, interest_list: list, nw,
         else:
             ma_years = year
         logging.info(
-            "Calculating proximities for fixed relevant clusters for year {} with moving average -{} to {} over {}".format(year,
-                                                                                                                   moving_average[
-                                                                                                                       0],
-                                                                                                                   moving_average[
-                                                                                                                       1], ma_years))
+            "Calculating proximities for fixed relevant clusters for year {} with moving average -{} to {} over {}".format(
+                year,
+                moving_average[
+                    0],
+                moving_average[
+                    1], ma_years))
         if do_reverse is True:
             year_proxim = nw.proximities()
             year_proxim = nw.pd_format(year_proxim)[0]
@@ -336,11 +348,13 @@ def average_fixed_cluster_proximities(focal_token: str, interest_list: list, nw,
 
 
 def extract_all_clusters(level: int, cutoff: float, focal_token: str,
-                         snw, depth: Optional[int] = 0, context:Optional[list] = None,
+                         snw, depth: Optional[int] = None, context: Optional[list] = None,
                          interest_list: Optional[list] = None, algorithm: Optional[Callable] = None,
                          times: Optional[Union[list, int]] = None,
                          filename: Optional[str] = None, compositional: Optional[bool] = False,
-                         reverse_ties: Optional[bool] = False, add_focal_to_clusters: Optional[bool] = False,seed: Optional[int] = None) -> pd.DataFrame:
+                         reverse_ties: Optional[bool] = False, add_focal_to_clusters: Optional[bool] = False,
+                         mode: Optional[str] = "replacement", occurrence: Optional[bool] = False,
+                         seed: Optional[int] = None) -> pd.DataFrame:
     """
     Create and extract all clusters relative to a focal token until a given level.
 
@@ -351,7 +365,7 @@ def extract_all_clusters(level: int, cutoff: float, focal_token: str,
     cutoff : float
         Cutoff weight for querying network
     depth : int
-        If nonzero, query an ego network of given depth instead of full network, default is 0
+        If nonzero, query an ego network of given depth instead of full network, default is None
     focal_token : str
         The focal token to consider for proximities and ego network
     semantic_network : neo4jnw
@@ -370,6 +384,14 @@ def extract_all_clusters(level: int, cutoff: float, focal_token: str,
         Whether to reverse ties after conditioning
     add_focal_to_clusters: bool
         If true, add focal token to each cluster before clustering
+    mode: str
+        Whether to derive replacement or contextual clusters
+            "replacement" (Default)
+            "context"
+    occurrence: bool
+        When mode is set to "context", query either
+            False (Default): Context are those words that are plausible replacement in the sentence
+            True: Contexts are the words that actually occur in the sentence
     Returns
     -------
     pd.DataFrame:
@@ -380,9 +402,9 @@ def extract_all_clusters(level: int, cutoff: float, focal_token: str,
         algorithm = consensus_louvain
 
     if add_focal_to_clusters:
-        add_focal_to_clusters=focal_token
+        add_focal_to_clusters = focal_token
     else:
-        add_focal_to_clusters=None
+        add_focal_to_clusters = None
 
     snw.decondition()
 
@@ -392,15 +414,15 @@ def extract_all_clusters(level: int, cutoff: float, focal_token: str,
     dataframe_list = []
 
     # First, derive clusters
-    if depth > 0:
-        snw.condition(tokens=focal_token, times=times, context=context,depth=depth,weight_cutoff=cutoff,compositional=compositional,reverse_ties=reverse_ties)
+    if mode == "context":
+        snw.context_condition(tokens=focal_token, times=times, depth=depth, weight_cutoff=cutoff, occurrence=occurrence)
 
     else:
-        snw.condition(times=times,weight_cutoff=cutoff, context=context,compositional=compositional,
-                     reverse_ties=reverse_ties)
+        snw.condition(tokens=focal_token, times=times, context=context, depth=depth, weight_cutoff=cutoff,
+                      compositional=compositional, reverse_ties=reverse_ties)
     # Get clusters
     clusters = snw.cluster(interest_list=interest_list, levels=level, to_measure=[proximity],
-                          algorithm=algorithm, add_ego_tokens=add_focal_to_clusters)
+                           algorithm=algorithm, add_ego_tokens=add_focal_to_clusters)
     for cl in clusters:
         if cl['level'] == 0:
             rev_proxim = snw.pd_format(cl['measures'])[0].loc[:, focal_token]
@@ -431,7 +453,7 @@ def extract_all_clusters(level: int, cutoff: float, focal_token: str,
                 if focal_token in nodes:
                     proximate_nodes[focal_token] = -999
                 for node in list(proximate_nodes.index):
-                    if proxim.reindex([node], fill_value=0)[0] > 0 or node==focal_token:
+                    if proxim.reindex([node], fill_value=0)[0] > 0 or node == focal_token:
                         node_prox = proxim.reindex([node], fill_value=0)[0]
                         node_rev_prox = rev_proxim.reindex([node], fill_value=0)[0]
                         delta_prox = node_prox - node_rev_prox
@@ -468,7 +490,7 @@ def return_measure_dict(vec: Union[list, np.array]):
     """
     if isinstance(vec, list):
         vec = np.array(vec)
-    if len(vec) == 0:
+    if sum(vec.shape) <2:
         return {}
 
     avg = np.mean(vec)

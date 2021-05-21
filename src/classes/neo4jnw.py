@@ -241,7 +241,7 @@ class neo4j_network(Sequence):
 
 
 
-    def context_condition(self, times:Optional[Union[int,list]]=None, tokens:Optional[Union[int,str,list]]=None, weight_cutoff:Optional[float]=None, depth:Optional[int]=None,batchsize:Optional[int]=None,cond_type:Optional[str]=None):
+    def context_condition(self, times:Optional[Union[int,list]]=None, tokens:Optional[Union[int,str,list]]=None, weight_cutoff:Optional[float]=None, depth:Optional[int]=None,batchsize:Optional[int]=None,cond_type:Optional[str]=None,occurrence=False,asyncio=False):
         """
 
         Derive context network by conditioning on tokens that are likely to
@@ -302,15 +302,19 @@ class neo4j_network(Sequence):
 
         if tokens is None:
             logging.debug("Context Conditioning dispatch: Yearly")
-            self.__yearly_context_condition(times=times, weight_cutoff=weight_cutoff,batchsize=batchsize)
+            if asyncio:
+                self.__ayearly_context_condition(times=times, weight_cutoff=weight_cutoff, batchsize=batchsize, occurrence=occurrence)
+            else:
+                self.__yearly_context_condition(times=times, weight_cutoff=weight_cutoff,batchsize=batchsize, occurrence=occurrence)
         else:
             logging.debug("Context Conditioning dispatch: Ego")
-            self.__context_ego_conditioning(times=times, tokens=tokens, weight_cutoff=weight_cutoff, depth=depth, batchsize=batchsize, cond_type=cond_type)
+            self.__context_ego_conditioning(times=times, tokens=tokens, weight_cutoff=weight_cutoff, depth=depth, batchsize=batchsize, cond_type=cond_type, occurrence=occurrence)
 
 
 
     def condition(self, times:Optional[Union[int,list]]=None, tokens:Optional[Union[int,str,list]]=None, weight_cutoff:Optional[float]=None, depth:Optional[int]=None, context:Optional[Union[int,str,list]]=None, compositional:Optional[bool]=None,
-                  batchsize:Optional[int]=None, cond_type:Optional[str]=None, reverse_ties:Optional[bool]=False):
+                  batchsize:Optional[int]=None, cond_type:Optional[str]=None, reverse_ties:Optional[bool]=False,
+                  post_cutoff:Optional[float]=None, post_norm:Optional[bool]=False):
         """
 
         Condition the network: Pull ties from database and aggregate according to given parameters.
@@ -339,7 +343,12 @@ class neo4j_network(Sequence):
                 "search": queries the ego networks in a "beam search" fashion. Slower for high depths.
         reverse_ties: bool, optional
             If true, ties will be reversed after conditioning.
-
+        post_cutoff: float, optional
+            If set, network edges will be pruned by edges smaller than the given value.
+            Note that this does not affect the conditioning itself
+        post_norm: bool, optional
+            If true, network will be normed after post_cutoff is applied.
+            Network is normed such that the in-degree of each node is 1.
         Returns
         -------
         Nothing
@@ -385,25 +394,26 @@ class neo4j_network(Sequence):
             self.__year_condition(years=times, weight_cutoff=weight_cutoff, context=context, norm=compositional, batchsize=batchsize)
         else:
             logging.debug("Conditioning dispatch: Ego")
-            if cond_type is not None:
-                if cond_type=="subset":
-                    logging.debug("Conditioning dispatch: Ego, new")
-                    self.__ego_condition(years=times, token_ids=tokens, weight_cutoff=weight_cutoff, depth=depth,
+            if cond_type is None:
+                if depth <= 2 and len(tokens) <= 5:
+                    cond_type="search"
+                else:
+                    cond_type="subset"
+            if cond_type=="subset":
+                logging.debug("Conditioning dispatch: Ego, new")
+                self.__ego_condition(years=times, token_ids=tokens, weight_cutoff=weight_cutoff, depth=depth,
+                                     context=context, norm=compositional, batchsize=batchsize)
+            elif cond_type=="search":
+                logging.debug("Conditioning dispatch: Ego, old")
+                self.__ego_condition_old(years=times, token_ids=tokens, weight_cutoff=weight_cutoff, depth=depth,
                                          context=context, norm=compositional, batchsize=batchsize)
-                else:
-                    logging.debug("Conditioning dispatch: Ego, old")
-                    self.__ego_condition_old(years=times, token_ids=tokens, weight_cutoff=weight_cutoff, depth=depth,
-                                             context=context, norm=compositional, batchsize=batchsize)
             else:
-                if depth < 2 and len(tokens) <= 5:
-                    logging.debug("Conditioning dispatch: Ego, several token")
-                    self.__ego_condition_old(years=times, token_ids=tokens, weight_cutoff=weight_cutoff, depth=depth, context=context, norm=compositional, batchsize=batchsize)
-                else:
-                    logging.debug("Conditioning dispatch: Ego, single token")
-                    self.__ego_condition(years=times, token_ids=tokens, weight_cutoff=weight_cutoff, depth=depth, context=context, norm=compositional, batchsize=batchsize)
-
+                msg="Conditioning type {} requested. Please use either search or subset.".format(cond_type)
+                logging.debug(msg)
+                raise NotImplementedError(msg)
         if reverse_ties:
             self.to_reverse()
+        self.__cut_and_norm(post_cutoff,post_norm)
 
     def decondition(self):
         # Reset token lists to original state.
@@ -493,7 +503,7 @@ class neo4j_network(Sequence):
         if not self.conditioned:
             # Previously, the conditioning function would be invoked here.
             # We have since decided to require the user to condition before calling clustering
-            self.condition_error(call=inspect.stack()[1][3])
+            self.__condition_error(call=inspect.stack()[1][3])
 
             #was_conditioned = False
             #if ego_nw_tokens is None:
@@ -1012,13 +1022,69 @@ class neo4j_network(Sequence):
             self.decondition()
             self.__yearly_context_condition(times, weight_cutoff, batchsize)
 
-    def __context_ego_conditioning(self, times:Optional[Union[int,list]]=None, tokens:Optional[Union[int,str,list]]=None, weight_cutoff:Optional[float]=None, depth:Optional[int]=None,batchsize:Optional[int]=None,cond_type:Optional[str]=None):
+
+    def __ayearly_context_condition(self, times, weight_cutoff=None, batchsize=None):
+        """ Condition the entire network over all years """
+
+
+        # Same for batchsize
+        if batchsize is None:
+            batchsize = self.neo_batch_size
+
+        if not self.conditioned:  # This is the first conditioning
+            # Build graph
+            self.graph = self.create_empty_graph()
+
+
+            # All tokens
+            worklist = self.ids
+            # Add all tokens to graph
+            self.graph.add_nodes_from(worklist)
+
+            # Loop batched over all tokens to condition
+            for i in tqdm(range(0, len(worklist), batchsize), leave=False,position=0):
+
+                token_ids = worklist[i:i + batchsize]
+                logging.debug(
+                    "Conditioning by query batch {} of {} tokens.".format(i, len(token_ids)))
+                # Query Neo4j
+                self.graph.add_edges_from(
+                    self.query_context(token_ids, times=times, weight_cutoff=weight_cutoff))
+
+
+            try:
+                all_ids = list(self.graph.nodes)
+            except:
+                logging.error("Could not context-condition graph by query method.")
+
+            # Update IDs and Tokens to reflect conditioning
+
+            all_tokens = [self.get_token_from_id(x) for x in all_ids]
+            # Add final properties
+            att_list = [{"token": x} for x in all_ids]
+            att_dict = dict(list(zip(all_ids, att_list)))
+            nx.set_node_attributes(self.graph, att_dict)
+
+            # Set conditioning true
+            self.__complete_conditioning()
+
+        else:  # Remove conditioning and recondition
+            self.decondition()
+            self.__yearly_context_condition(times, weight_cutoff, batchsize)
+
+
+
+    def __context_ego_conditioning(self, times:Optional[Union[int,list]]=None, tokens:Optional[Union[int,str,list]]=None, weight_cutoff:Optional[float]=None, depth:Optional[int]=None,batchsize:Optional[int]=None,cond_type:Optional[str]=None, occurrence:Optional[bool]=False):
 
 
         if not self.conditioned:  # This is the first conditioning
             # Save original depth variable
             or_depth = depth
-
+            if cond_type is None:
+                if depth <= 2 and len(tokens) <= 5:
+                    cond_type="search"
+                else:
+                    cond_type="subset"
             if cond_type=="search":
                 # Build graph
                 self.graph = self.create_empty_graph()
@@ -1058,7 +1124,7 @@ class neo4j_network(Sequence):
                             "Conditioning by query batch {} of {} tokens.".format(i, len(id_batch)))
                         # Query Neo4j
                         try:
-                            self.graph.add_edges_from(self.query_context(ids=id_batch, times=times, weight_cutoff=weight_cutoff))
+                            self.graph.add_edges_from(self.query_context(ids=id_batch, times=times, weight_cutoff=weight_cutoff, occurrence=occurrence))
                         except:
                             logging.error("Could not context condition graph by query search method.")
 
@@ -1084,14 +1150,19 @@ class neo4j_network(Sequence):
                     # No more ids to check
                     if not ids_to_check.size > 0:
                         depth = 0
-            else:
+            elif cond_type=="subset":
                 self.__yearly_context_condition(times=times,weight_cutoff=weight_cutoff,batchsize=batchsize)
+            else:
+                msg="Conditioning type {} requested. Please use either search or subset.".format(cond_type)
+                logging.debug(msg)
+                raise NotImplementedError(msg)
 
             # Create ego graph for each node and compose
             self.graph = compose_all([nx.generators.ego.ego_graph(self.graph, x, radius=or_depth, center=True,
                                                                   undirected=False) for x in tokens])
             # Set conditioning true
             self.__complete_conditioning()
+
         else:  # Remove conditioning and recondition
             self.decondition()
             self.__context_ego_conditioning(times=times,tokens=tokens,weight_cutoff=weight_cutoff,depth=depth,batchsize=batchsize,cond_type=cond_type)
@@ -1110,6 +1181,18 @@ class neo4j_network(Sequence):
         self.update_dicts()
         self.conditioned=True
         self.filename= self.__create_filename(self.cond_dict)
+
+
+    # %% Graph abstractions - for now only networkx
+
+    @staticmethod
+    def create_empty_graph() -> nx.DiGraph:
+        return nx.DiGraph()
+
+    def delete_graph(self):
+        self.graph = None
+
+    # %% Internal functions
 
 
     def __create_filename(self, cond_dict):
@@ -1149,17 +1232,6 @@ class neo4j_network(Sequence):
 
         return fn
 
-    # %% Graph abstractions - for now only networkx
-
-    @staticmethod
-    def create_empty_graph() -> nx.DiGraph:
-        return nx.DiGraph()
-
-    def delete_graph(self):
-        self.graph = None
-
-    # %% Utility functioncs
-
     def __condition_error(self, call:Optional[str] = None):
         """
         Raises an error that the network is to be conditioned.
@@ -1186,6 +1258,27 @@ class neo4j_network(Sequence):
             msg= "You tried to invoke an operation without conditioning the network. Please use condition() before doing so!"
         logging.error(msg)
         raise RuntimeError(msg)
+
+
+    def __cut_and_norm(self, cutoff:Optional[float]=None, norm:Optional[bool] = False):
+
+        if cutoff is not None:
+            cut_edges= [(u,v) for u, v,wt in self.graph.edges.data('weight') if wt<=cutoff]
+            self.graph.remove_edges_from(cut_edges)
+        if norm:
+            # Get in-degrees
+            in_deg=dict(self.graph.in_degree(weight='weight'))
+            in_deg=pd.Series(list(in_deg.values()), index=list(in_deg.keys()))
+            # Normalize per in degree
+            for (u, v, wt) in self.graph.edges.data('weight'):
+                if in_deg[v] > 0:
+                    self.graph[u][v]['weight']=wt/in_deg[v]
+
+
+
+
+    # %% Utility functioncs
+
 
     def update_dicts(self):
         """Simply update dictionaries"""
@@ -1247,6 +1340,12 @@ class neo4j_network(Sequence):
                 return self.get_token_from_id(ids)
             else:
                 return ids
+
+    def set_random_seed(self, seed):
+        random.seed(seed)
+        np.random.seed(seed)
+        self.seed=seed
+
 
     def export_gefx(self, filename=None, path=None,  delete_isolates=True):
         if self.conditioned:
@@ -1311,7 +1410,7 @@ class neo4j_network(Sequence):
         self.tokens = tokens
         self.update_dicts()
 
-    def query_context(self, ids, times=None, weight_cutoff=None):
+    def query_context(self, ids, times=None, weight_cutoff=None, occurrence=False):
         """
         Query context of ids
 
@@ -1320,6 +1419,7 @@ class neo4j_network(Sequence):
         ids: list of ids or tokens
         times: list of times
         weight_cutoff: float in 0,1
+        occurrence: bool
 
         Returns
         -------
@@ -1341,7 +1441,7 @@ class neo4j_network(Sequence):
         else:
             times = [int(x) for x in times]
 
-        return self.db.query_context_of_node(ids=ids, times=times, weight_cutoff=weight_cutoff)
+        return self.db.query_context_of_node(ids=ids, times=times, weight_cutoff=weight_cutoff, occurrence=occurrence)
 
 
     def query_nodes(self, ids, context=None, times=None, weight_cutoff=None, norm_ties=None):
@@ -1411,7 +1511,3 @@ class neo4j_network(Sequence):
     def insert_edges_context(self, ego, ties, contexts):
         return self.db.insert_edges_context(ego, ties, contexts)
 
-    def set_random_seed(self, seed):
-        random.seed(seed)
-        np.random.seed(seed)
-        self.seed=seed

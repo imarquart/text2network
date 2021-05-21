@@ -43,23 +43,24 @@ def proximity(nw_graph, focal_tokens=None, alter_subset=None):
             alter_subset = [alter_subset]
 
         # Extract
-        neighbors = nw_graph[token]
-        n_keys = list(neighbors.keys())
-        # Choose only relevant alters
-        n_keys = tuple(np.intersect1d(alter_subset, n_keys))
-        neighbors = {k: v for k, v in neighbors.items() if k in n_keys}
+        if token in nw_graph.nodes:
+            neighbors = nw_graph[token]
+            n_keys = list(neighbors.keys())
+            # Choose only relevant alters
+            n_keys = tuple(np.intersect1d(alter_subset, n_keys))
+            neighbors = {k: v for k, v in neighbors.items() if k in n_keys}
 
-        # Extract edge weights and sort by weight
-        edge_weights = [x['weight'] for x in neighbors.values()]
-        edge_sort = np.argsort(-np.array(edge_weights))
-        neighbors = [x for x in neighbors]
-        edge_weights = np.array(edge_weights)
-        neighbors = np.array(neighbors)
-        edge_weights = edge_weights[edge_sort]
-        neighbors = neighbors[edge_sort]
+            # Extract edge weights and sort by weight
+            edge_weights = [x['weight'] for x in neighbors.values()]
+            edge_sort = np.argsort(-np.array(edge_weights))
+            neighbors = [x for x in neighbors]
+            edge_weights = np.array(edge_weights)
+            neighbors = np.array(neighbors)
+            edge_weights = edge_weights[edge_sort]
+            neighbors = neighbors[edge_sort]
 
-        tie_dict = dict(zip(neighbors, edge_weights))
-        proximity_dict.update({token: tie_dict})
+            tie_dict = dict(zip(neighbors, edge_weights))
+            proximity_dict.update({token: tie_dict})
 
     return {"proximity":proximity_dict}
 
