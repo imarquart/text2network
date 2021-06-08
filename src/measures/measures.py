@@ -106,9 +106,10 @@ def proximities(snw, focal_tokens: Optional[List] = None, alter_subset: Optional
 
     # Get proximities from conditioned network
     for token in focal_tokens:
-        tie_dict = proximity(snw.graph, focal_tokens=[token], alter_subset=alter_subset)[
-            'proximity'][token]
-        proximity_dict.update({token: tie_dict})
+        if token in snw.graph.nodes:
+            tie_dict = proximity(snw.graph, focal_tokens=[token], alter_subset=alter_subset)[
+                'proximity'][token]
+            proximity_dict.update({token: tie_dict})
 
     # Reverse ties if requested
     if reverse_ties:
@@ -172,18 +173,23 @@ def yearly_centralities(snw, year_list, focal_tokens=None, types=["PageRank", "n
     return {'yearly_centrality': cent_year}
 
 
-def average_fixed_cluster_proximities(focal_token: str, interest_list: list, nw, levels: int,
-                                      times: Optional[Union[list, int]] = None,
-                                      depth: Optional[int] = 1, context: Optional[list] = None,
-                                      weight_cutoff: Optional[float] = None,
-                                      cluster_cutoff: Optional[float] = 0, do_reverse: Optional[bool] = False,
-                                      moving_average: Optional[tuple] = False,
-                                      filename: Optional[str] = None,
-                                      compositional: Optional[bool] = False,
-                                      reverse_ties: Optional[bool] = False,
-                                      add_focal_to_clusters: Optional[bool] = False,
-                                      mode: Optional[str] = "replacement", occurrence: Optional[bool] = False,
-                                      seed: Optional[int] = None) -> pd.DataFrame:
+def average_cluster_proximities(focal_token: str,  nw, levels: int,
+                                interest_list: Optional[list]=None,
+                                times: Optional[Union[list, int]] = None,
+                                depth: Optional[int] = 1, context: Optional[list] = None,
+                                weight_cutoff: Optional[float] = None,
+                                cluster_cutoff: Optional[Union[float,int]] = 0, do_reverse: Optional[bool] = False,
+                                add_individual_nodes: Optional[bool] = False, year_by_year: Optional[bool] = False,
+                                include_all_levels: Optional[bool] = False,
+                                moving_average: Optional[tuple] = None,
+                                to_back_out:Optional[bool]=False,
+                                filename: Optional[str] = None,
+                                algorithm: Optional[Callable] = None,
+                                compositional: Optional[bool] = False,
+                                reverse_ties: Optional[bool] = False,
+                                add_focal_to_clusters: Optional[bool] = False,
+                                mode: Optional[str] = "replacement", occurrence: Optional[bool] = False,
+                                seed: Optional[int] = None) -> pd.DataFrame:
     """
     First, derives clusters from overall network (across all years), then creates year-by-year average proximities for these clusters
 
@@ -192,11 +198,13 @@ def average_fixed_cluster_proximities(focal_token: str, interest_list: list, nw,
     focal_token: str
         Token to which proximities are calculated
     interest_list: list
-        List of tokens of relevance. Only clusters that contain these tokens are considered.
+        List of tokens of relevance. Only clusters that contain these tokens are retained.
     nw: neo4jnw
         Semantic Network
     levels: int
         How many levels to cluster?
+    times: list, int
+        Overall timeframe to consider
     depth: int
         Depth of the ego network of focal_token to consider. If 0, consider whole semantic network.
     context: list
@@ -204,13 +212,30 @@ def average_fixed_cluster_proximities(focal_token: str, interest_list: list, nw,
     weight_cutoff: float
         Cutoff when querying the network
     do_reverse: bool
-        Calculate reverse proximities, note this needs to query the entire graph for each year
+        Calculate reverse proximities, note this needs to query the entire graph for each year.
+    seed : int
+        numpy random seed (e.g. for clustering)
+    algorithm: callable
+        Clustering algorithm (consensus_louvain by default)
+    include_all_levels: bool
+        If True, dataframe will include all cluster levels. If False, only the last one. Default is False.
+    year_by_year: bool
+        After getting the overall clustering across times, take the clusters and calculate measures
+        for each element in times. Default is False.
+    add_individual_nodes: bool
+        If True, add all tokens to the DataFrame with their respective measures and cluster associations. Default is False.
     moving_average: tuple
         Consider a moving_average window for years, given as tuple where (nr_prior,nr_past)
         So for example, a length 3 window around the focal year would be given by (1,1).
         A length 3 window behind the focal year would be (2,0)
-    cluster_cutoff: float
-        After clusters are derived, throw away proximities of less than this value
+    to_back_out: bool
+        Whether to back out network where i,j is the discounted and weighted similarity between i and j across
+        all paths in the network (cf. centrality measures). Default is False.
+    cluster_cutoff: float,int
+        If int:
+            sparsify with cluster_cutoff % cutoff
+        if float:
+            After clusters are derived, throw away proximities of less than this value
     filename: str
         If given, will save the resulting dataframe to this file as xlsx
     compositional : bool
@@ -242,17 +267,40 @@ def average_fixed_cluster_proximities(focal_token: str, interest_list: list, nw,
         times = np.array(nw.get_times_list())
         times = np.sort(times)
 
+    if algorithm is None:
+        algorithm = consensus_louvain
+
+    if isinstance(cluster_cutoff,int):
+        percentage=cluster_cutoff
+        cluster_cutoff=0
+    else:
+        percentage=0
+
     # First, derive clusters
     if mode == "context":
         nw.context_condition(tokens=focal_token, times=times, depth=depth, weight_cutoff=weight_cutoff,
-                             occurrence=occurrence)
+                             occurrence=occurrence, batchsize=None)
 
     else:
         nw.condition(tokens=focal_token, times=times, context=context, depth=depth, weight_cutoff=weight_cutoff,
                      compositional=compositional, reverse_ties=reverse_ties)
+
+    if percentage>0:
+        nw.sparsify(percentage)
+    if to_back_out:
+        nw.to_backout()
+
+    # Populate alter tokens if not given
+    if interest_list is None:
+        interest_list=nw.ensure_tokens(list(nw.graph.nodes))
+
     # Get clusters
+    if add_focal_to_clusters:
+        add_ego_tokens = focal_token
+    else:
+        add_ego_tokens = None
     clusters = nw.cluster(interest_list=interest_list, levels=levels, to_measure=[proximity],
-                          algorithm=consensus_louvain, add_ego_tokens=add_focal_to_clusters)
+                          algorithm=algorithm, add_ego_tokens=add_ego_tokens)
 
     cluster_dict = {}
     cluster_dataframe = []
@@ -261,7 +309,7 @@ def average_fixed_cluster_proximities(focal_token: str, interest_list: list, nw,
         if cl['level'] == 0:  # Use zero cluster, where all tokens are present, to get proximities
             rev_proxim = nw.pd_format(cl['measures'])[0].loc[:, focal_token]
             proxim = nw.pd_format(cl['measures'])[0].loc[focal_token, :]
-        if len(cl['graph'].nodes) > 0 and cl['level'] == levels:  # Consider only the last level
+        if len(cl['graph'].nodes) > 0 and (cl['level'] == levels or include_all_levels):  # Consider only the last level
             # Get List of tokens
             nodes = nw.ensure_tokens(list(cl['graph'].nodes))
             # Check if this is a cluster of interest
@@ -278,65 +326,99 @@ def average_fixed_cluster_proximities(focal_token: str, interest_list: list, nw,
                     # Default cluster entry
                     year = -100
                     name = "-".join(list(proximate_nodes.nlargest(5).index))
-                    df_dict = {'Year': year, 'Level': cl['level'], 'Clustername': name, 'Prom_Node': top_node,
-                               'Parent': cl['parent'], 'Cluster_Avg_Prox': mean_cluster_prox,
-                               'Cluster_rev_proximity': mean_cluster_rev_prox, 'Nr_ProxNodes': len(proximate_nodes),
-                               'NrNodes': len(nodes), 'Ma': 0}
+                    df_dict = {'Year': year, 'Token': name, 'Prom_Node': top_node, 'Level': cl['level'],
+                               'Cluster_Id': cl['name'],
+                               'Parent': cl['parent'], 'Cluster_Prox': mean_cluster_prox,
+                               'Cluster_Rev_Prox': mean_cluster_rev_prox, 'Nr_ProxNodes': len(proximate_nodes),
+                               'NrNodes': len(nodes), 'Ma': 0, 'Node_Proximity': 0,
+                               'Node_Rev_Proximity': 0, 'Node_Delta_Proximity': -100}
                     cluster_dict.update({name: cl})
                     df_dict.update(cluster_measures)
                     cluster_dataframe.append(df_dict.copy())
+                    # Add each node
+                    if add_individual_nodes:
+                        if focal_token in nodes:
+                            proximate_nodes[focal_token] = -999
+                        for node in list(proximate_nodes.index):
+                            if proxim.reindex([node], fill_value=0)[0] > 0 or node == focal_token:
+                                node_prox = proxim.reindex([node], fill_value=0)[0]
+                                node_rev_prox = rev_proxim.reindex([node], fill_value=0)[0]
+                                delta_prox = node_prox - node_rev_prox
+                                df_dict = {'Year': year, 'Token': node, 'Prom_Node': top_node, 'Level': cl['level'],
+                                           'Cluster_Id': cl['name'],
+                                           'Parent': cl['parent'], 'Cluster_Prox': mean_cluster_prox,
+                                           'Cluster_Rev_Prox': mean_cluster_rev_prox,
+                                           'Nr_ProxNodes': len(proximate_nodes),
+                                           'NrNodes': len(nodes), 'Ma': 0, 'Node_Proximity': node_prox,
+                                           'Node_Rev_Proximity': node_rev_prox, 'Node_Delta_Proximity': delta_prox}
+                                df_dict.update(cluster_measures)
+                                cluster_dataframe.append(df_dict.copy())
 
-    for year in times:
-        nw.decondition()
-        nw.condition(times=year, weight_cutoff=weight_cutoff, context=context, compositional=compositional,
-                     reverse_ties=reverse_ties)
+    if year_by_year:
+        for year in times:
+            nw.decondition()
 
-        if moving_average is not None:
-            start_year = max(times[0], year - moving_average[0])
-            end_year = min(times[-1], year + moving_average[1])
-            ma_years = np.arange(start_year, end_year + 1)
-        else:
-            ma_years = year
-        logging.info(
-            "Calculating proximities for fixed relevant clusters for year {} with moving average -{} to {} over {}".format(
-                year,
-                moving_average[
-                    0],
-                moving_average[
-                    1], ma_years))
-        if do_reverse is True:
-            year_proxim = nw.proximities()
-            year_proxim = nw.pd_format(year_proxim)[0]
-            rev_proxim = year_proxim.loc[:, focal_token]
-            proxim = year_proxim.loc[focal_token, :]
-        else:
-            year_proxim = nw.proximities(focal_tokens=[focal_token])
-            year_proxim = nw.pd_format(year_proxim)[0]
-            proxim = year_proxim.loc[focal_token, :]
-            rev_proxim = 0
-        for cl_name in cluster_dict:
-            cl = cluster_dict[cl_name]
-            nodes = nw.ensure_tokens(list(cl['graph'].nodes))
-            proximate_nodes = proxim.reindex(nodes, fill_value=0)
+            if moving_average is not None:
+                start_year = max(times[0], year - moving_average[0])
+                end_year = min(times[-1], year + moving_average[1])
+                ma_years = np.arange(start_year, end_year + 1)
+            else:
+                ma_years = year
+
+            logging.info(
+                "Calculating proximities for fixed relevant clusters for year {} with moving average -{} to {} over {}".format(
+                    year,
+                    moving_average[
+                        0],
+                    moving_average[
+                        1], ma_years))
+            nw.condition(times=ma_years, weight_cutoff=weight_cutoff, context=context, compositional=compositional,
+                         reverse_ties=reverse_ties)
+
+            if to_back_out:
+                nw.to_backout()
+
             if do_reverse is True:
-                rev_proximate_nodes = rev_proxim.reindex(nodes, fill_value=0)
+                year_proxim = nw.proximities()
+                year_proxim = nw.pd_format(year_proxim)[0]
+                rev_proxim = year_proxim.loc[:, focal_token]
+                proxim = year_proxim.loc[focal_token, :]
             else:
-                rev_proximate_nodes = [0]
-            proximate_nodes = proximate_nodes[proximate_nodes > cluster_cutoff]
+                year_proxim = nw.proximities(focal_tokens=[focal_token])
+                year_proxim = nw.pd_format(year_proxim)[0]
+                proxim = year_proxim.loc[focal_token, :]
+                rev_proxim = 0
+            for cl_name in cluster_dict:
+                cl = cluster_dict[cl_name]
+                nodes = nw.ensure_tokens(list(cl['graph'].nodes))
+                proximate_nodes = proxim.reindex(nodes, fill_value=0)
+                if do_reverse is True:
+                    rev_proximate_nodes = rev_proxim.reindex(nodes, fill_value=0)
+                else:
+                    rev_proximate_nodes = [0]
+                proximate_nodes = proximate_nodes[proximate_nodes > cluster_cutoff]
 
-            mean_cluster_prox = np.mean(proximate_nodes)
-            mean_cluster_rev_prox = np.mean(rev_proxim)
-            cluster_measures = return_measure_dict(proximate_nodes)
-            if len(proximate_nodes) > 0:
-                top_node = proximate_nodes.idxmax()
-            else:
-                top_node = "empty"
-            df_dict = {'Year': year, 'Level': cl['level'], 'Clustername': cl_name, 'Prom_Node': top_node,
-                       'Parent': cl['parent'], 'Cluster_Avg_Prox': mean_cluster_prox,
-                       'Cluster_rev_proximity': mean_cluster_rev_prox, 'Nr_ProxNodes': len(proximate_nodes),
-                       'NrNodes': len(nodes), 'Ma': len(ma_years)}
-            df_dict.update(cluster_measures)
-            cluster_dataframe.append(df_dict.copy())
+                mean_cluster_prox = np.mean(proximate_nodes)
+                mean_cluster_rev_prox = np.mean(rev_proxim)
+                cluster_measures = return_measure_dict(proximate_nodes)
+                if len(proximate_nodes) > 0:
+                    top_node = proximate_nodes.idxmax()
+                else:
+                    top_node = "empty"
+
+                df_dict = {'Year': year, 'Token': cl_name, 'Prom_Node': top_node, 'Level': cl['level'],
+                           'Cluster_Id': cl['name'],
+                           'Parent': cl['parent'], 'Cluster_Prox': mean_cluster_prox,
+                           'Cluster_Rev_Prox': mean_cluster_rev_prox, 'Nr_ProxNodes': len(proximate_nodes),
+                           'NrNodes': len(nodes), 'Ma': len(ma_years), 'Node_Proximity': 0,
+                           'Node_Rev_Proximity': 0, 'Node_Delta_Proximity': -100}
+
+                # df_dict = {'Year': year, 'Level': cl['level'], 'Clustername': cl_name, 'Prom_Node': top_node,
+                #           'Parent': cl['parent'], 'Cluster_Avg_Prox': mean_cluster_prox,
+                #           'Cluster_rev_proximity': mean_cluster_rev_prox, 'Nr_ProxNodes': len(proximate_nodes),
+                #           'NrNodes': len(nodes), 'Ma': len(ma_years)}
+                df_dict.update(cluster_measures)
+                cluster_dataframe.append(df_dict.copy())
 
     df = pd.DataFrame(cluster_dataframe)
 
@@ -349,12 +431,31 @@ def average_fixed_cluster_proximities(focal_token: str, interest_list: list, nw,
 
 def extract_all_clusters(level: int, cutoff: float, focal_token: str,
                          snw, depth: Optional[int] = None, context: Optional[list] = None,
+                         cluster_cutoff: Optional[float] = 0,
                          interest_list: Optional[list] = None, algorithm: Optional[Callable] = None,
                          times: Optional[Union[list, int]] = None,
                          filename: Optional[str] = None, compositional: Optional[bool] = False,
                          reverse_ties: Optional[bool] = False, add_focal_to_clusters: Optional[bool] = False,
+                         to_back_out: Optional[bool] = False,
                          mode: Optional[str] = "replacement", occurrence: Optional[bool] = False,
                          seed: Optional[int] = None) -> pd.DataFrame:
+    return average_cluster_proximities(focal_token=focal_token, interest_list=interest_list, nw=snw, levels=level, times=times, depth=depth, context=context,
+                                       weight_cutoff=cutoff, cluster_cutoff=cluster_cutoff, do_reverse=True,
+                                       add_individual_nodes=True, year_by_year=False, moving_average=None,
+                                       filename=filename, include_all_levels=True, to_back_out=to_back_out,
+                                       compositional=compositional, reverse_ties=reverse_ties,
+                                       add_focal_to_clusters=add_focal_to_clusters, mode=mode, occurrence=occurrence,
+                                       algorithm=algorithm, seed=seed)
+
+
+def old_extract_all_clusters(level: int, cutoff: float, focal_token: str,
+                             snw, depth: Optional[int] = None, context: Optional[list] = None,
+                             interest_list: Optional[list] = None, algorithm: Optional[Callable] = None,
+                             times: Optional[Union[list, int]] = None,
+                             filename: Optional[str] = None, compositional: Optional[bool] = False,
+                             reverse_ties: Optional[bool] = False, add_focal_to_clusters: Optional[bool] = False,
+                             mode: Optional[str] = "replacement", occurrence: Optional[bool] = False,
+                             seed: Optional[int] = None) -> pd.DataFrame:
     """
     Create and extract all clusters relative to a focal token until a given level.
 
@@ -421,8 +522,12 @@ def extract_all_clusters(level: int, cutoff: float, focal_token: str,
         snw.condition(tokens=focal_token, times=times, context=context, depth=depth, weight_cutoff=cutoff,
                       compositional=compositional, reverse_ties=reverse_ties)
     # Get clusters
+    if add_focal_to_clusters:
+        add_ego_tokens = focal_token
+    else:
+        add_ego_tokens = None
     clusters = snw.cluster(interest_list=interest_list, levels=level, to_measure=[proximity],
-                           algorithm=algorithm, add_ego_tokens=add_focal_to_clusters)
+                           algorithm=algorithm, add_ego_tokens=add_ego_tokens)
     for cl in clusters:
         if cl['level'] == 0:
             rev_proxim = snw.pd_format(cl['measures'])[0].loc[:, focal_token]
@@ -490,7 +595,7 @@ def return_measure_dict(vec: Union[list, np.array]):
     """
     if isinstance(vec, list):
         vec = np.array(vec)
-    if sum(vec.shape) <2:
+    if sum(vec.shape) < 2:
         return {}
 
     avg = np.mean(vec)

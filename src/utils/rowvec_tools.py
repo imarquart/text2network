@@ -1,6 +1,44 @@
 import numpy as np
+import pandas as pd
+from typing import Union
 from src.utils.delwords import create_stopword_strings
 
+
+# %% Utilities
+def cutoff_percentage(x: Union[pd.DataFrame, np.ndarray], percent: int = 100)->Union[pd.DataFrame,np.ndarray]:
+    """
+    Cuts a proximity table or adjancency matrix such that only
+    z-percent of the total mass of ties are retained.
+    This helps to sparsify the network
+
+    Parameters
+    ----------
+    percent : int
+        Percent (in xx%) of mass of row-vectors to retain
+    x : Union[pd.DataFrame, np.ndarray]
+        Adjacency matrix or dataframe of proximities
+
+
+    """
+    sortx = - np.sort(-x, axis=-1)
+    # Get cumulative sum
+    cum_sum = np.cumsum(sortx, axis=-1)
+    # Get cutoff value as fraction of largest cumulative element (in case vector does not sum to 1)
+    # This is the threshold to cross to explain 'percent' of mass in the vector
+    cutoff = cum_sum[..., -1] * percent / 100
+    cutoffs = np.tile(cutoff, (x.shape[-1], 1)).T
+    # Determine first position where cumulative sum crosses cutoff threshold
+    # Python indexing - add 1
+    cutoff_degrees = np.sum(np.where(cum_sum <= cutoffs, cum_sum, 0) > 0, axis=-1)
+    # Calculate corresponding probability
+    if x.ndim>1:
+        cutoff_values = sortx[(np.arange(0, len(cutoff_degrees)), cutoff_degrees)]
+        cutoff_values = np.tile(cutoff_values, (x.shape[-1], 1)).T
+    else:
+        cutoff_values= sortx[cutoff_degrees]
+    x[x < cutoff_values] = 0
+
+    return x
 
 def inverse_edge_weight(u, v, d):
     edge_wt = d.get('weight', 1)

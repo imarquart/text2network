@@ -2,21 +2,18 @@ import time
 from itertools import product
 
 from src.functions.file_helpers import check_create_folder
-from src.measures.measures import average_fixed_cluster_proximities, extract_all_clusters
+from src.measures.measures import average_cluster_proximities, extract_all_clusters
 from src.utils.logging_helpers import setup_logger
 import logging
 import numpy as np
-from src.functions.graph_clustering import consensus_louvain
+from src.functions.graph_clustering import consensus_louvain, louvain_cluster
 from src.classes.neo4jnw import neo4j_network
 
 # Set a configuration path
 configuration_path = '/config/config.ini'
 # Settings
-years = list(range(2010, 2020))
-
-years=None
-#years=2010
-focal_words = ["founder"]
+years = list(range(1980, 2020))
+focal_token = ["founder"]
 
 # Load Configuration file
 import configparser
@@ -25,76 +22,73 @@ config = configparser.ConfigParser()
 print(check_create_folder(configuration_path))
 config.read(check_create_folder(configuration_path))
 # Setup logging
-setup_logger(config['Paths']['log'], config['General']['logging_level'], "founder-analysis")
-
-
-# Random seed
-rs=1000
-# Get a list of all clusters at level up to 6
-rev=False
-comp=False
-depth=1
-cutoff=0.1
-level=10
-
+setup_logger(config['Paths']['log'], config['General']['logging_level'], "founder-context")
 
 # First, create an empty network
-semantic_network = neo4j_network(config, seed=rs)
+semantic_network = neo4j_network(config)
+
+focal_token="founder"
+alter_subset=None
+level_list = [2,5]
+weight_list = [0.3,0.1,0.01]
+cl_clutoff_list = [80,90]
+depth_list = [1]
+rs_list = [100]
+rev_ties_list = [False]
+algolist=[louvain_cluster,consensus_louvain]
+algolist=[consensus_louvain]
+focaladdlist=[True,False]
+comp_ties_list = [False]
+occ_list=[False]
+param_list = product(depth_list, level_list, rs_list, weight_list, rev_ties_list, comp_ties_list, cl_clutoff_list,algolist,focaladdlist,occ_list,occ_list)
+logging.info("------------------------------------------------")
+for depth, level, rs, cutoff, rev, comp, cluster_cutoff,algo,focaladd,occ,backout in param_list:
+    del semantic_network
+    np.random.seed(rs)
+    semantic_network = neo4j_network(config)
+    filename = "".join(
+        [config['Paths']['csv_outputs'], "/ContextCluster_", str(focal_token), "_backout", str(backout),"_occ", str(occ),"_fadd", str(focaladd),"_rev", str(rev), "_norm", str(comp),
+         "_lev", str(level), "_cut",
+         str(cutoff), "_clcut", str(cluster_cutoff), "_algo", str(algo.__name__), "_depth", str(depth), "_rs", str(rs)])
+    logging.info("Context Network clustering: {}".format(filename))
+    # Random Seed
+    df = extract_all_clusters(level=level, cutoff=cutoff, times=years, cluster_cutoff=cluster_cutoff, focal_token=focal_token,
+                              interest_list=alter_subset, snw=semantic_network,
+                              add_focal_to_clusters=focaladd,
+                              occurrence=occ, mode="context",to_back_out=backout,
+                              depth=depth, algorithm=algo, filename=filename,
+                              compositional=comp, reverse_ties=rev, seed=rs)
+
+#### Cluster yearly proximities
 
 
-
-# Contextual analysis
-del semantic_network
-semantic_network = neo4j_network(config, seed=rs)
-start_time=time.time()
-semantic_network.context_condition(times=years, tokens=focal_words, depth=1, weight_cutoff=cutoff) # condition on context
-logging.info("nodes in network %i" % (len(semantic_network)))
-logging.info("ties in network %i" % (semantic_network.graph.number_of_edges()))
-logging.info("finished in (across years) average {} seconds".format((time.time() - start_time)))
-context_dyads= semantic_network.pd_format(semantic_network.proximities(focal_tokens=focal_words))[0].T
-filename = "".join(
-    [config['Paths']['csv_outputs'], "/prox-", semantic_network.filename,".xlsx"])
-filename= check_create_folder(filename)
-context_dyads.to_excel(filename)
-
-del semantic_network
-semantic_network = neo4j_network(config, seed=rs)
-start_time=time.time()
-semantic_network.context_condition(times=years, tokens=focal_words, depth=1, weight_cutoff=cutoff, occurrence=True) # condition on context
-logging.info("nodes in network %i" % (len(semantic_network)))
-logging.info("ties in network %i" % (semantic_network.graph.number_of_edges()))
-logging.info("finished in (across years) average {} seconds".format((time.time() - start_time)))
-context_dyads2= semantic_network.pd_format(semantic_network.proximities(focal_tokens=focal_words))[0].T
-
-filename = "".join(
-    [config['Paths']['csv_outputs'], "/occ-prox-", semantic_network.filename,".xlsx"])
-filename= check_create_folder(filename)
-context_dyads2.to_excel(filename)
-# Contextual clustering
-filename = "".join(
-    [config['Paths']['csv_outputs'], "/cluster-", semantic_network.filename,""])
-filename= check_create_folder(filename)
-df = extract_all_clusters(level=level, cutoff=cutoff, focal_token=focal_words[0], snw=semantic_network,
-                          depth=1, algorithm=consensus_louvain, times=years,filename=filename,add_focal_to_clusters=False, mode="context",seed=rs)
-
-filename = "".join(
-    [config['Paths']['csv_outputs'], "/cluster-focaladd-", semantic_network.filename,""])
-filename= check_create_folder(filename)
-df2 = extract_all_clusters(level=level, cutoff=cutoff, focal_token=focal_words[0], snw=semantic_network,
-                          depth=1, algorithm=consensus_louvain, times=years,filename=filename,add_focal_to_clusters=True, mode="context",seed=rs)
-
-
-# Contextual clustering
-filename = "".join(
-    [config['Paths']['csv_outputs'], "/occ-cluster-", semantic_network.filename,""])
-filename= check_create_folder(filename)
-df = extract_all_clusters(level=level, cutoff=cutoff, focal_token=focal_words[0], snw=semantic_network,
-                          depth=1, algorithm=consensus_louvain, times=years,filename=filename,add_focal_to_clusters=False,occurrence=True, mode="context",seed=rs)
-
-filename = "".join(
-    [config['Paths']['csv_outputs'], "/occ-cluster-focaladd-", semantic_network.filename,""])
-filename= check_create_folder(filename)
-df2 = extract_all_clusters(level=level, cutoff=cutoff, focal_token=focal_words[0], snw=semantic_network,
-                          depth=1, algorithm=consensus_louvain, times=years,filename=filename,add_focal_to_clusters=True, mode="context",occurrence=True,seed=rs)
-
-
+ma_list = [(3, 2), (2, 2)]
+level_list = [2,5]
+weight_list = [0.3,0.1,0.01]
+weight_list = [ 0.3,0.1]
+cl_clutoff_list = [80,90]
+depth_list = [1]
+rs_list = [100]
+rev_ties_list = [False]
+algolist=[louvain_cluster,consensus_louvain]
+focaladdlist=[True,False]
+comp_ties_list = [False]
+param_list = product(ma_list,depth_list, level_list, rs_list, weight_list, rev_ties_list, comp_ties_list, cl_clutoff_list,algolist,focaladdlist,focaladdlist,focaladdlist)
+logging.info("------------------------------------------------")
+for ma,depth, level, rs, cutoff, rev, comp, cluster_cutoff,algo,focaladd,occ,backout in param_list:
+    interest_tokens = None
+    del semantic_network
+    np.random.seed(rs)
+    semantic_network = neo4j_network(config)
+    # weight_cutoff=0
+    filename = "".join(
+        [config['Paths']['csv_outputs'], "/ContextClusterYOY_",str(focal_token),  "_backout", str(backout),"_occ", str(occ),"_fadd", str(focaladd), "_rev", str(rev), "_norm", str(comp), "_lev",
+         str(level), "_clcut",
+         str(cluster_cutoff), "_cut", str(cutoff), "_algo", str(algo.__name__), "_depth", str(depth), "_ma", str(ma), "_rs",
+         str(rs)])
+    logging.info("YOY Network clustering: {}".format(filename))
+    df = average_cluster_proximities(focal_token=focal_token, nw=semantic_network, levels=level, interest_list=alter_subset, times=years,do_reverse=True,
+                                     depth=depth, weight_cutoff=cutoff, cluster_cutoff=cluster_cutoff, year_by_year=True,
+                                     add_focal_to_clusters=focaladd, occurrence=occ,to_back_out=backout,
+                                     moving_average=ma, filename=filename, compositional=comp, mode="context",
+                                     reverse_ties=rev, seed=rs)

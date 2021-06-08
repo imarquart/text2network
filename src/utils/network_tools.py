@@ -1,8 +1,13 @@
 import itertools
 import logging
 import os
+from typing import Union
+
 import networkx as nx
 import scipy as sp
+import numpy as np
+
+from src.utils.rowvec_tools import cutoff_percentage
 
 
 def make_reverse(graph):
@@ -142,6 +147,37 @@ def merge_nodes(graph, u, v, method="sum"):
             graph[x][y]['weight'] = wt / 2
 
     return new_graph
+
+
+def sparsify_graph(graph:Union[nx.DiGraph,nx.Graph], percentage:int=99):
+    """
+    Sparsify graph as follows:
+    For each node, keep *percentage* of aggregate tie weights of outgoing ties.
+
+    Parameters
+    ----------
+    graph
+    percentage
+
+    Returns
+    -------
+
+    """
+    for v in graph.nodes:
+        peers=np.array([z[1] for z in graph.out_edges(v, data="weight")])
+        weights = np.array([z[2] for z in graph.out_edges(v, data="weight")])
+        if len(peers)>0:
+            weights=cutoff_percentage(weights,percentage)
+            for u,wt in zip(peers,weights):
+                if wt>0:
+                    graph[v][u]['weight']=wt
+                else:
+                    graph.remove_edge(v,u)
+    return graph
+
+
+
+
 
 
 def plural_elimination(graph, method="sum"):

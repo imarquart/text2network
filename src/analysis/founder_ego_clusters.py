@@ -5,14 +5,13 @@ from src.measures.measures import average_cluster_proximities, extract_all_clust
 from src.utils.logging_helpers import setup_logger
 import logging
 import numpy as np
-from src.functions.graph_clustering import consensus_louvain
+from src.functions.graph_clustering import consensus_louvain, louvain_cluster
 from src.classes.neo4jnw import neo4j_network
 
 # Set a configuration path
 configuration_path = '/config/config.ini'
 # Settings
-years = range(1980, 2020)
-focal_words = ["leader", "manager"]
+years = list(range(1980, 2021))
 focal_token = "founder"
 alter_subset = ["boss"]
 alter_subset = ["ceo", "kid", "manager", "head", "sadhu", "boss", "collector", "arbitrator", "offender", "partner",
@@ -26,7 +25,7 @@ alter_subset = ["ceo", "kid", "manager", "head", "sadhu", "boss", "collector", "
                 "lawyer", "middle", "prosecutor", "businessman", "billionaire", "actor", "baseman", "politician",
                 "novice", "secretary", "driver", "jerk", "rebel", "lieutenant", "victim", "sergeant", "inventor",
                 "front", "helm"]
-alter_subset = ["chieftain", "enemy", "congressman", "ombudsman", "believer", "deputy", "guest", "magistrate", "heir",
+alter_subset3 = ["chieftain", "enemy", "congressman", "ombudsman", "believer", "deputy", "guest", "magistrate", "heir",
                 "wizard", "hostess", "protaga", "athlete", "supervisor", "head", "emeritus", "critic", "thief", "man",
                 "golfer", "policeman", "trainer", "visitor", "specialist", "trainee", "helper", "adjunct", "prey",
                 "scholar", "dreamer", "titan", "partner", "resident", "preacher", "boxer", "successor", "reformer",
@@ -84,7 +83,7 @@ alter_subset = ["chieftain", "enemy", "congressman", "ombudsman", "believer", "d
                 "scout", "maternal", "son", "stepmother", "mother", "sister", "female", "uncle", "families",
                 "offspring", "woman", "daddy", "cousin", "lesbian", "mom", "grandfather", "mover", "loser", "runner",
                 "laureate", "winner", "impostor", "leader"]
-alter_subset = ["ceo", "president", "leader", "owner", "insider", "director", "founding", "entrepreneur", "executive",
+alter_subset2 = ["ceo", "president", "leader", "owner", "insider", "director", "founding", "entrepreneur", "executive",
                 "father", "head", "chair", "member", "editor", "man", "professor", "consultant", "employee",
                 "innovator", "candidate", "boss", "visionary", "successor", "designer", "colleague", "builder",
                 "creator", "son", "donor", "coach", "incumbent", "husband", "salesman", "predecessor", "spokesperson",
@@ -93,6 +92,8 @@ alter_subset = ["ceo", "president", "leader", "owner", "insider", "director", "f
                 "alumnus", "associate", "deputy", "devil", "confidant", "ambassador", "actor", "advocate", "songwriter",
                 "master", "photographer", "millionaire", "legend", "teller", "comptroller", "pilgrim", "alpha",
                 "visitor", "catalyst", "sprinter", "boy", "anthropologist"]
+
+alter_subset=None
 # Load Configuration file
 import configparser
 
@@ -100,63 +101,75 @@ config = configparser.ConfigParser()
 print(check_create_folder(configuration_path))
 config.read(check_create_folder(configuration_path))
 # Setup logging
-setup_logger(config['Paths']['log'], config['General']['logging_level'], "clusteringleader")
+setup_logger(config['Paths']['log'], config['General']['logging_level'], "founder_ego_clusters.py")
 
 # First, create an empty network
 semantic_network = neo4j_network(config)
 
 level_list = [5]
-weight_list = [0, 0.01]
-cl_clutoff_list = [0, 0.01, 0.1]
+weight_list = [ 0.1]
+cl_clutoff_list = [90]
 depth_list = [1]
 rs_list = [100]
 rev_ties_list = [False]
+algolist=[louvain_cluster,consensus_louvain]
+algolist=[consensus_louvain]
+alter_set=[alter_subset,alter_subset2]
+focaladdlist=[True,False]
 comp_ties_list = [False]
-param_list = product(depth_list, level_list, rs_list, weight_list, rev_ties_list, comp_ties_list, cl_clutoff_list)
+back_out_list= [False]
+param_list = product(depth_list, level_list, rs_list, weight_list, rev_ties_list, comp_ties_list, cl_clutoff_list,algolist,back_out_list,focaladdlist,alter_set)
 logging.info("------------------------------------------------")
-for depth, level, rs, cutoff, rev, comp, cluster_cutoff in param_list:
-    del semantic_network
+for depth, level, rs, cutoff, rev, comp, cluster_cutoff,algo,backout,fadd,alters in param_list:
+    #del semantic_network
     np.random.seed(rs)
-    semantic_network = neo4j_network(config)
+    #semantic_network = neo4j_network(config)
     filename = "".join(
-        [config['Paths']['csv_outputs'], "/", str(focal_token), "_all_rev", str(rev), "_norm", str(comp),
-         "_egocluster_lev", str(level), "_cut",
-         str(cutoff), "_clcut", str(cluster_cutoff), "_depth", str(depth), "_rs", str(rs)])
+        [config['Paths']['csv_outputs'], "/EgoCluster_", str(focal_token), "_backout", str(backout),"_fadd", str(fadd),"_alters", str(str(isinstance(alters,list))),"_rev", str(rev), "_norm", str(comp),
+         "_lev", str(level), "_cut",
+         str(cutoff), "_clcut", str(cluster_cutoff), "_algo", str(algo.__name__), "_depth", str(depth), "_rs", str(rs)])
     logging.info("Network clustering: {}".format(filename))
     # Random Seed
-    np.random.seed(rs)
-    df = extract_all_clusters(level=level, cutoff=cutoff, cluster_cutoff=cluster_cutoff, focal_token=focal_token,
-                              interest_list=alter_subset, snw=semantic_network,
-                              depth=depth, algorithm=consensus_louvain, filename=filename,
-                              compositional=comp, reverse_ties=rev)
-
+    #df = extract_all_clusters(level=level, cutoff=cutoff, times=years, cluster_cutoff=cluster_cutoff, focal_token=focal_token,
+    #                          interest_list=alter_subset, snw=semantic_network,
+    #                          depth=depth, algorithm=algo, filename=filename, to_back_out=backout, add_focal_to_clusters=fadd,
+    #                         compositional=comp, reverse_ties=rev, seed=rs)
+    df = average_cluster_proximities(focal_token=focal_token, nw=semantic_network, levels=level, interest_list=alters, times=years,do_reverse=True,
+                                     depth=depth, weight_cutoff=cutoff, cluster_cutoff=cluster_cutoff, year_by_year=False, add_focal_to_clusters=fadd,
+                                     moving_average=None, filename=filename, compositional=comp, to_back_out=backout, include_all_levels=True, add_individual_nodes=True,
+                                     reverse_ties=rev, seed=rs)
 #### Cluster yearly proximities
+import os
+os.environ['NUMEXPR_MAX_THREADS'] = '16'
 
-
-ma_list = [(3, 2), (2, 2)]
+ma_list = [(2, 0), (2, 2)]
 level_list = [5]
-weight_list = [0.0, 0.01]
-cl_clutoff_list = [0, 0.01, 0.1]
+weight_list = [0, 0.1]
+cl_clutoff_list = [90]
 depth_list = [1]
 rs_list = [100]
 rev_ties_list = [False]
 comp_ties_list = [False]
+back_out_list= [False]
+algolist=[consensus_louvain]
+alter_set=[alter_subset,alter_subset2]
+focaladdlist=[True,False]
 param_list = product(depth_list, level_list, ma_list, weight_list, rev_ties_list, comp_ties_list, rs_list,
-                     cl_clutoff_list)
+                     cl_clutoff_list,back_out_list,focaladdlist,alter_set)
 logging.info("------------------------------------------------")
-for depth, levels, moving_average, weight_cutoff, rev, comp, rs, cluster_cutoff in param_list:
+for depth, levels, moving_average, weight_cutoff, rev, comp, rs, cluster_cutoff, backout,fadd,alters in param_list:
     interest_tokens = alter_subset
     del semantic_network
     np.random.seed(rs)
     semantic_network = neo4j_network(config)
     # weight_cutoff=0
     filename = "".join(
-        [config['Paths']['csv_outputs'], "/", str(focal_token), "_rev", str(rev), "_norm", str(comp), "_yearfixed_lev",
+        [config['Paths']['csv_outputs'], "/EgoClusterYOY_", str(focal_token),  "_backout", str(backout),"_fadd", str(fadd),"_alters", str(str(isinstance(alters,list))),"_rev", str(rev), "_norm", str(comp), "_lev",
          str(levels), "_clcut",
-         str(cluster_cutoff), "_cut", str(weight_cutoff), "_depth", str(depth), "_ma", str(moving_average), "_rs",
+         str(cluster_cutoff), "_cut", str(weight_cutoff), "_algo", str(algo.__name__), "_depth", str(depth), "_ma", str(moving_average), "_rs",
          str(rs)])
-
-    df = average_cluster_proximities(focal_token, interest_tokens, semantic_network, levels, do_reverse=True,
-                                     depth=depth, weight_cutoff=weight_cutoff, cluster_cutoff=cluster_cutoff,
-                                     moving_average=moving_average, filename=filename, compositional=comp,
+    logging.info("YOY Network clustering: {}".format(filename))
+    df = average_cluster_proximities(focal_token=focal_token, nw=semantic_network, levels=levels, interest_list=alters, times=years,do_reverse=True,
+                                     depth=depth, weight_cutoff=weight_cutoff, cluster_cutoff=cluster_cutoff, year_by_year=True, add_focal_to_clusters=fadd,
+                                     moving_average=moving_average, filename=filename, compositional=comp, to_back_out=backout,
                                      reverse_ties=rev, seed=rs)

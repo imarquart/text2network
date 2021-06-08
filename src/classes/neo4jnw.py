@@ -17,7 +17,7 @@ from src.functions.graph_clustering import *
 from src.functions.node_measures import proximity, centrality
 from src.measures.measures import proximities, centralities
 from src.utils.input_check import input_check
-from src.utils.network_tools import make_reverse
+from src.utils.network_tools import make_reverse, sparsify_graph
 from src.utils.twowaydict import TwoWayDict
 import pandas as pd
 
@@ -688,6 +688,26 @@ class neo4j_network(Sequence):
 
     # %% Graph manipulation
 
+    def sparsify(self,percentage:int=100):
+        """
+        Sparsify the graph as follows:
+        For each node, delete low strength ties until percentage of the prior aggregate outgoing ties mass is retained
+
+        Parameters
+        ----------
+        percentage: int
+            Percentage of out-degree mass to retain
+        Returns
+        -------
+
+        """
+        if not self.conditioned:
+            # Previously, the conditioning function would be invoked here.
+            # We have since decided to require the user to condition before calling clustering
+            self.__condition_error(call=inspect.stack()[1][3])
+
+        self.graph=sparsify_graph(self.graph, percentage)
+
     def to_backout(self, decay=None, method="invert", stopping=25):
         """
         If each node is defined by the ties to its neighbors, and neighbors
@@ -719,9 +739,10 @@ class neo4j_network(Sequence):
 
         """
         if not self.conditioned:
-            logging.warning(
-                "Network is not conditioned. Conditioning on all data...")
-            self.condition()
+            # Previously, the conditioning function would be invoked here.
+            # We have since decided to require the user to condition before calling clustering
+            self.__condition_error(call=inspect.stack()[1][3])
+
 
         self.graph = backout_measure(
             self.graph, decay=decay, method=method, stopping=stopping)
@@ -735,9 +756,10 @@ class neo4j_network(Sequence):
         None.
         """
         if not self.conditioned:
-            logging.warning(
-                "Network is not conditioned. Conditioning on all data...")
-            self.condition()
+            # Previously, the conditioning function would be invoked here.
+            # We have since decided to require the user to condition before calling clustering
+            self.__condition_error(call=inspect.stack()[1][3])
+
 
         self.graph = make_reverse(self.graph)
 
@@ -762,9 +784,10 @@ class neo4j_network(Sequence):
         """
 
         if not self.conditioned:
-            logging.warning(
-                "Network is not conditioned. Conditioning on all data...")
-            self.condition()
+            # Previously, the conditioning function would be invoked here.
+            # We have since decided to require the user to condition before calling clustering
+            self.__condition_error(call=inspect.stack()[1][3])
+
 
         self.graph = make_symmetric(self.graph, technique)
 
@@ -975,7 +998,7 @@ class neo4j_network(Sequence):
 
         # Continue conditioning
 
-    def __yearly_context_condition(self, times, weight_cutoff=None, batchsize=None):
+    def __yearly_context_condition(self, times, weight_cutoff=None, batchsize=None, occurrence=False):
         """ Condition the entire network over all years """
 
 
@@ -984,6 +1007,9 @@ class neo4j_network(Sequence):
             batchsize = self.neo_batch_size
 
         if not self.conditioned:  # This is the first conditioning
+
+
+            logging.info("Called into yearly conditioning, batch size: {}, cutoff: {}, occurrence: {}".format(batchsize,weight_cutoff,occurrence))
             # Build graph
             self.graph = self.create_empty_graph()
 
@@ -1001,7 +1027,7 @@ class neo4j_network(Sequence):
                     "Conditioning by query batch {} of {} tokens.".format(i, len(token_ids)))
                 # Query Neo4j
                 self.graph.add_edges_from(
-                    self.query_context(token_ids, times=times, weight_cutoff=weight_cutoff))
+                    self.query_context(token_ids, times=times, weight_cutoff=weight_cutoff, occurrence=occurrence))
             try:
                 all_ids = list(self.graph.nodes)
             except:
@@ -1020,10 +1046,10 @@ class neo4j_network(Sequence):
 
         else:  # Remove conditioning and recondition
             self.decondition()
-            self.__yearly_context_condition(times, weight_cutoff, batchsize)
+            self.__yearly_context_condition(times, weight_cutoff, batchsize,occurrence)
 
 
-    def __ayearly_context_condition(self, times, weight_cutoff=None, batchsize=None):
+    def __ayearly_context_condition(self, times, weight_cutoff=None, batchsize=None,occurrence=False):
         """ Condition the entire network over all years """
 
 
@@ -1080,11 +1106,14 @@ class neo4j_network(Sequence):
         if not self.conditioned:  # This is the first conditioning
             # Save original depth variable
             or_depth = depth
+            if not isinstance(times, list):
+                times=[times]
             if cond_type is None:
-                if depth <= 2 and len(tokens) <= 5:
+                if (depth <= 2 and len(tokens) <= 5):
                     cond_type="search"
                 else:
                     cond_type="subset"
+            logging.info("Context clustering mode: {} and batch size: {}".format(cond_type, batchsize))
             if cond_type=="search":
                 # Build graph
                 self.graph = self.create_empty_graph()
@@ -1099,7 +1128,7 @@ class neo4j_network(Sequence):
                 prev_queried_ids = list()
                 # ids to check
                 ids_to_check = tokens
-                logging.debug(
+                logging.info(
                     "Start of Depth {} conditioning: {} tokens".format(or_depth, len(ids_to_check)))
                 while depth > 0:
                     if not isinstance(ids_to_check, (list, np.ndarray)):
@@ -1108,7 +1137,7 @@ class neo4j_network(Sequence):
                     ids_to_check = self.ensure_ids(ids_to_check)
                     # Do not consider already added tokens
                     ids_to_check = np.setdiff1d(ids_to_check, prev_queried_ids)
-                    logging.debug(
+                    logging.info(
                         "Depth {} Context conditioning: {} new found tokens, where {} already added.".format(depth,
                                                                                                      len(ids_to_check),
                                                                                                      len(
@@ -1151,7 +1180,7 @@ class neo4j_network(Sequence):
                     if not ids_to_check.size > 0:
                         depth = 0
             elif cond_type=="subset":
-                self.__yearly_context_condition(times=times,weight_cutoff=weight_cutoff,batchsize=batchsize)
+                self.__yearly_context_condition(times=times,weight_cutoff=weight_cutoff,batchsize=batchsize, occurrence=occurrence)
             else:
                 msg="Conditioning type {} requested. Please use either search or subset.".format(cond_type)
                 logging.debug(msg)
@@ -1364,9 +1393,6 @@ class neo4j_network(Sequence):
                 reverse_dict = dict(
                     zip([self.get_token_from_id(x) for x in self.ids], self.ids))
                 if delete_isolates:
-                    isolates = list(nx.isolates(self.graph))
-                    logging.debug(
-                        "Found {} isolated nodes in graph, deleting.".format(len(isolates)))
                     cleaned_graph = self.graph.copy()
                     cleaned_graph = nx.relabel_nodes(cleaned_graph, labeldict)
                     # need to put strings on edges for gefx to write (not sure why)
@@ -1374,6 +1400,10 @@ class neo4j_network(Sequence):
                     for n1, n2, d in cleaned_graph.edges(data=True):
                         for att in ['time', 'start', 'end']:
                             d[att] = int(d[att])
+                    isolates = list(nx.isolates(self.graph))
+                    logging.debug(
+                        "Found {} isolated nodes in graph, deleting.".format(len(isolates)))
+                    cleaned_graph.remove_nodes_from(isolates)
                     nx.write_gexf(cleaned_graph, path)
                 else:
                     cleaned_graph = self.graph.copy()
