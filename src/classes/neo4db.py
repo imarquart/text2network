@@ -363,7 +363,7 @@ class neo4j_database():
 
         return ties
 
-    def query_multiple_nodes(self, ids, times=None, weight_cutoff=None, context=None, norm_ties=False):
+    def query_multiple_nodes(self, ids, times=None, weight_cutoff=None, context=None, norm_ties=False, context_mode="bidirectional", context_weight=True):
         """
         Query multiple nodes by ID and over a set of time intervals
 
@@ -408,7 +408,7 @@ class neo4j_database():
 
         # Context if desired
         if  context is not None:
-            c_where_query=" WHERE  e.token IN $contexts "
+            c_where_query=" WHERE  e.token_id IN $contexts "
         else: 
             c_where_query = ""
 
@@ -433,8 +433,12 @@ class neo4j_database():
         # Enable this for occurrences
         #return_query = ''.join([" RETURN b.token_id AS sender,a.token_id AS receiver,count(r.pos) AS occurrences,",
         #                        self.aggregate_operator, "(r.weight) AS agg_weight order by receiver"])
-        return_query = ''.join([" RETURN b.token_id AS sender,a.token_id AS receiver, ",
-                                self.aggregate_operator, "(r.weight) AS agg_weight order by receiver"])
+        if context_weight and context is not None:
+            return_query = ''.join([" RETURN b.token_id AS sender,a.token_id AS receiver, ",
+                                    self.aggregate_operator, "(r.weight*qwd) AS agg_weight order by receiver"])
+        else:
+            return_query = ''.join([" RETURN b.token_id AS sender,a.token_id AS receiver, ",
+                                    self.aggregate_operator, "(r.weight) AS agg_weight order by receiver"])
         if isinstance(times, int):
             if  context is not None:
                 match_query = "".join(["MATCH p=(a:word)-[:onto]->(r:edge {time:",str(times),", run_index:ridx})-[:onto]->(b:word) "])
@@ -444,14 +448,20 @@ class neo4j_database():
                 c_match = ""
         else:
             if  context is not None:
-                match_query = "MATCH p=(a:word)-[:onto]->(r:edge {run_index:ridx}})-[:onto]->(b:word) "
-                c_match = "MATCH (q:edge {time:",str(times),"}) - [:onto]->(e:word) "
+                match_query = "MATCH p=(a:word)-[:onto]->(r:edge {run_index:ridx})-[:onto]->(b:word) "
+                if context_mode=="bidirectional":
+                    c_match = "".join(["MATCH (q:edge) - [:onto]-(e:word) "])
+                else:
+                    c_match = "".join(["MATCH (q:edge) - [:onto]->(e:word) "])
             else:
                 match_query = "MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word) "
                 c_match = ""
 
-        if  context is not None:
-            c_with = "WITH DISTINCT q.run_index as ridx "
+        if context is not None:
+            if context_weight:
+                c_with = "WITH DISTINCT q.run_index as ridx, SUM(q.weight) as qwd "
+            else:
+                c_with = "WITH DISTINCT q.run_index as ridx "
         else:
             c_with = ""
 

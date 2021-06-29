@@ -106,14 +106,15 @@ setup_logger(config['Paths']['log'], config['General']['logging_level'], "founde
 # First, create an empty network
 semantic_network = neo4j_network(config)
 
-level_list = [5]
-weight_list = [ 0.1]
-cl_clutoff_list = [90]
+level_list = [2,5]
+weight_list = [0.01,0]
+cl_clutoff_list = [None,90]
 depth_list = [1]
 rs_list = [100]
 rev_ties_list = [False]
 algolist=[louvain_cluster,consensus_louvain]
 algolist=[consensus_louvain]
+context=["facebook","zuckerberg"]
 alter_set=[alter_subset,alter_subset2]
 focaladdlist=[True,False]
 comp_ties_list = [False]
@@ -125,7 +126,7 @@ for depth, level, rs, cutoff, rev, comp, cluster_cutoff,algo,backout,fadd,alters
     np.random.seed(rs)
     #semantic_network = neo4j_network(config)
     filename = "".join(
-        [config['Paths']['csv_outputs'], "/EgoCluster_", str(focal_token), "_backout", str(backout),"_fadd", str(fadd),"_alters", str(str(isinstance(alters,list))),"_rev", str(rev), "_norm", str(comp),
+        [config['Paths']['csv_outputs'], "/cw_", str(context[0]),"_EgoCluster_", str(focal_token), "_backout", str(backout),"_fadd", str(fadd),"_alters", str(str(isinstance(alters,list))),"_rev", str(rev), "_norm", str(comp),
          "_lev", str(level), "_cut",
          str(cutoff), "_clcut", str(cluster_cutoff), "_algo", str(algo.__name__), "_depth", str(depth), "_rs", str(rs)])
     logging.info("Network clustering: {}".format(filename))
@@ -137,39 +138,42 @@ for depth, level, rs, cutoff, rev, comp, cluster_cutoff,algo,backout,fadd,alters
     #df = average_cluster_proximities(focal_token=focal_token, nw=semantic_network, levels=level, interest_list=alters, times=years,do_reverse=True,
     #                                 depth=depth, weight_cutoff=cutoff, cluster_cutoff=cluster_cutoff, year_by_year=False, add_focal_to_clusters=fadd,
     #                                 moving_average=None, filename=filename, compositional=comp, to_back_out=backout, include_all_levels=True, add_individual_nodes=True,
-    #                                 reverse_ties=rev, seed=rs)
+    #                                 reverse_ties=rev, seed=rs, context=context)
 #### Cluster yearly proximities
 import os
 os.environ['NUMEXPR_MAX_THREADS'] = '16'
 
-ma_list = [(3, 2)]
-level_list = [5]
-weight_list = [0, 0.1]
+ma_list = [(3,2)]
+level_list = [2,5]
+weight_list = [0.01,0]
 cl_clutoff_list = [100,90]
 depth_list = [1]
 rs_list = [100]
-rev_ties_list = [True]
+rev_ties_list = [False]
 comp_ties_list = [False]
 back_out_list= [False]
+context_list=[["facebook"],["microsoft"],["apple"],["google"]]
+context_list=[["ceo","business","president","chairman","new"],["market","companies","total","firm","consumer"],["people","financial","organization","best","team"],["company","industry","insider","year","yes"]]
+
 algolist=[consensus_louvain]
 alter_set=[alter_subset]
 focaladdlist=[True]
 param_list = product(depth_list, level_list, ma_list, weight_list, rev_ties_list, comp_ties_list, rs_list,
-                     cl_clutoff_list,back_out_list,focaladdlist,alter_set)
+                     cl_clutoff_list,back_out_list,focaladdlist,alter_set,context_list)
 logging.info("------------------------------------------------")
-for depth, levels, moving_average, weight_cutoff, rev, comp, rs, cluster_cutoff, backout,fadd,alters in param_list:
+for depth, levels, moving_average, weight_cutoff, rev, comp, rs, cluster_cutoff, backout,fadd,alters,context in param_list:
     interest_tokens = alter_subset
     del semantic_network
     np.random.seed(rs)
     semantic_network = neo4j_network(config)
     # weight_cutoff=0
     filename = "".join(
-        [config['Paths']['csv_outputs'], "/EgoClusterYOY_", str(focal_token),  "_backout", str(backout),"_fadd", str(fadd),"_alters", str(str(isinstance(alters,list))),"_rev", str(rev), "_norm", str(comp), "_lev",
+        [config['Paths']['csv_outputs'], "/", str(context[0]),"_EgoClusterYOY_", str(focal_token),  "_backout", str(backout),"_fadd", str(fadd),"_alters", str(str(isinstance(alters,list))),"_rev", str(rev), "_norm", str(comp), "_lev",
          str(levels), "_clcut",
          str(cluster_cutoff), "_cut", str(weight_cutoff), "_algo", str(algo.__name__), "_depth", str(depth), "_ma", str(moving_average), "_rs",
          str(rs)])
     logging.info("YOY Network clustering: {}".format(filename))
-    df = average_cluster_proximities(focal_token=focal_token, nw=semantic_network, levels=levels, interest_list=alters, times=years,do_reverse=True,
+    df = average_cluster_proximities(focal_token=focal_token, nw=semantic_network, levels=levels, interest_list=alters, times=years,do_reverse=False,
                                      depth=depth, weight_cutoff=weight_cutoff, cluster_cutoff=cluster_cutoff, year_by_year=True, add_focal_to_clusters=fadd,
                                      moving_average=moving_average, filename=filename, compositional=comp, to_back_out=backout,
-                                     reverse_ties=rev, seed=rs)
+                                     reverse_ties=rev, seed=rs, context=context)

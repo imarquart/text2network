@@ -394,8 +394,12 @@ class neo4j_network(Sequence):
             self.__year_condition(years=times, weight_cutoff=weight_cutoff, context=context, norm=compositional, batchsize=batchsize)
         else:
             logging.debug("Conditioning dispatch: Ego")
+            if not depth:
+                checkdepth=1000
+            else:
+                checkdepth=depth
             if cond_type is None:
-                if depth <= 2 and len(tokens) <= 5:
+                if checkdepth <= 2 and len(tokens) <= 5:
                     cond_type="search"
                 else:
                     cond_type="subset"
@@ -900,13 +904,15 @@ class neo4j_network(Sequence):
         logging.debug("Full year conditioning before ego subsetting.")
         self.__year_condition(years=years, weight_cutoff=weight_cutoff, context=context, norm=norm, batchsize=batchsize)
 
-        # Create ego graph for each node
-        graph_list=[]
-        for focal_token in token_ids:
-            temp_graph=nx.generators.ego.ego_graph(self.graph, focal_token, radius=depth, center=True, undirected=False)
-            graph_list.append(temp_graph)
-        # Compose ego graphs
-        self.graph = compose_all(graph_list)
+        if depth is not None:
+            # Create ego graph for each node
+            graph_list=[]
+
+            for focal_token in token_ids:
+                temp_graph=nx.generators.ego.ego_graph(self.graph, focal_token, radius=depth, center=True, undirected=False)
+                graph_list.append(temp_graph)
+            # Compose ego graphs
+            self.graph = compose_all(graph_list)
         # Set conditioning true
         self.__complete_conditioning(copy_ids=False)
 
@@ -1106,7 +1112,7 @@ class neo4j_network(Sequence):
         if not self.conditioned:  # This is the first conditioning
             # Save original depth variable
             or_depth = depth
-            if not isinstance(times, list):
+            if not isinstance(times, (list, np.ndarray)):
                 times=[times]
             if cond_type is None:
                 if (depth <= 2 and len(tokens) <= 5):
@@ -1522,7 +1528,7 @@ class neo4j_network(Sequence):
                 context = [int(context)]
             else:
                 context = [int(x) for x in context]
-            return self.db.query_multiple_nodes_in_context(ids=ids, context=context, times=times, weight_cutoff=weight_cutoff, norm_ties=norm_ties)
+            return self.db.query_multiple_nodes(ids=ids, context=context, times=times, weight_cutoff=weight_cutoff, norm_ties=norm_ties)
         else:
             return self.db.query_multiple_nodes(ids=ids, times=times, weight_cutoff=weight_cutoff, norm_ties=norm_ties)
 

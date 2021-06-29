@@ -285,12 +285,13 @@ def create_ego_context_graph_simple(snw: neo4j_network, focal_word: Union[str, i
     snw.context_condition(times=context_years, tokens=focal_word, depth=1,
                           weight_cutoff=context_cutoff)  # condition on context
     if symmetric: snw.to_symmetric()
-
+    if sparsity_percentage is not None:
+        snw.sparsify(sparsity_percentage)
     # Get all names
 
     # Get proximities
     context_proximities = snw.pd_format(snw.proximities(focal_tokens=context_tokens, alter_subset=context_tokens))[0]
-    context_proximities = cutoff_percentage(context_proximities, sparsity_percentage)
+    #context_proximities = cutoff_percentage(context_proximities, sparsity_percentage)
     # Create context cluster descriptions
     dataframe_list = []
     for cluster in context_cluster_list:
@@ -349,12 +350,13 @@ def create_ego_context_graph_simple(snw: neo4j_network, focal_word: Union[str, i
     snw.condition(times=ego_years, tokens=focal_word, depth=1, weight_cutoff=ego_cutoff,
                   compositional=compositional)
     if symmetric: snw.to_symmetric()
-
+    if sparsity_percentage is not None:
+        snw.sparsify(sparsity_percentage)
     # Get all names
 
     # Get proximities
     ego_proximities = snw.pd_format(snw.proximities(focal_tokens=context_tokens, alter_subset=context_tokens))[0]
-    ego_proximities = cutoff_percentage(ego_proximities, sparsity_percentage)
+    #ego_proximities = cutoff_percentage(ego_proximities, sparsity_percentage)
     # Create context cluster descriptions
     dataframe_list = []
     for cluster in replacement_cluster_list:
@@ -394,10 +396,12 @@ def create_ego_context_graph_simple(snw: neo4j_network, focal_word: Union[str, i
         snw.condition(times=ma_years, tokens=ego_tokens, depth=1, weight_cutoff=ego_cutoff,
                       compositional=compositional)
         if symmetric: snw.to_symmetric()
+        if sparsity_percentage is not None:
+            snw.sparsify(sparsity_percentage)
         ego_proxim_np = snw.pd_format(
             snw.proximities(focal_tokens=ego_tokens, alter_subset=ego_tokens),
             ids_to_tokens=True)[0]
-        ego_proxim_np = cutoff_percentage(ego_proxim_np, sparsity_percentage)
+        #ego_proxim_np = cutoff_percentage(ego_proxim_np, sparsity_percentage)
         for i, j in product(ego_cluster_ids, ego_cluster_ids):
             if i != j:
                 if cluster_reduction == "max":
@@ -444,12 +448,14 @@ def create_ego_context_graph_simple(snw: neo4j_network, focal_word: Union[str, i
         name_dict = {}
         for node in ego_tokens:
             c_node = str(year) + "_" + node
-            name_dict[c_node] = {"token": node, "year": year}
+            name_dict[c_node] = {"token": node, "year": str(year)}
         nx.set_node_attributes(ego_graph, name_dict)
 
-    context_ego_graph = ego_graph.copy()
-    context_ego_graph.add_node(context_graph.nodes.data())
-    context_ego_graph.add_edges_from(context_graph.edges.data())
+    context_ego_graph = nx.DiGraph()
+    context_ego_graph.add_nodes_from(ego_graph.nodes(data=True))
+    context_ego_graph.add_edges_from(ego_graph.edges(data=True))
+    context_ego_graph.add_nodes_from(context_graph.nodes(data=True))
+    context_ego_graph.add_edges_from(context_graph.edges(data=True))
 
     logging.info("Calculating ties between context and ego network")
     for year in ego_years:
@@ -472,6 +478,10 @@ def create_ego_context_graph_simple(snw: neo4j_network, focal_word: Union[str, i
                     1], ma_years))
 
         snw.context_condition(times=ma_years, tokens=ego_tokens + context_tokens, depth=1, weight_cutoff=context_cutoff)
+        if sparsity_percentage is not None:
+            snw.sparsify(sparsity_percentage)
+        if symmetric: snw.to_symmetric()
+
         for i, j in product(ego_cluster_ids, context_clusters_ids):
 
             ego_subset = replacement_cluster_list[i]

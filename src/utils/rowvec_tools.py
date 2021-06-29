@@ -20,6 +20,7 @@ def cutoff_percentage(x: Union[pd.DataFrame, np.ndarray], percent: int = 100)->U
 
 
     """
+
     sortx = - np.sort(-x, axis=-1)
     # Get cumulative sum
     cum_sum = np.cumsum(sortx, axis=-1)
@@ -35,7 +36,10 @@ def cutoff_percentage(x: Union[pd.DataFrame, np.ndarray], percent: int = 100)->U
         cutoff_values = sortx[(np.arange(0, len(cutoff_degrees)), cutoff_degrees)]
         cutoff_values = np.tile(cutoff_values, (x.shape[-1], 1)).T
     else:
-        cutoff_values= sortx[cutoff_degrees]
+        if cutoff_degrees<len(sortx):
+            cutoff_values= sortx[cutoff_degrees]
+        else:
+            cutoff_values=sortx[-1]
     x[x < cutoff_values] = 0
 
     return x

@@ -12,7 +12,7 @@ from src.classes.neo4jnw import neo4j_network
 # Set a configuration path
 configuration_path = '/config/config.ini'
 # Settings
-years = list(range(1980, 2020))
+years = list(range(1980, 2021))
 focal_token = ["founder"]
 
 # Load Configuration file
@@ -30,7 +30,7 @@ semantic_network = neo4j_network(config)
 focal_token="founder"
 alter_subset=None
 level_list = [2,5]
-weight_list = [0.3,0.1,0.01]
+weight_list = [0.3,0.1,0.2]
 cl_clutoff_list = [80,90]
 depth_list = [1]
 rs_list = [100]
@@ -52,26 +52,25 @@ for depth, level, rs, cutoff, rev, comp, cluster_cutoff,algo,focaladd,occ,backou
          str(cutoff), "_clcut", str(cluster_cutoff), "_algo", str(algo.__name__), "_depth", str(depth), "_rs", str(rs)])
     logging.info("Context Network clustering: {}".format(filename))
     # Random Seed
-    df = extract_all_clusters(level=level, cutoff=cutoff, times=years, cluster_cutoff=cluster_cutoff, focal_token=focal_token,
-                              interest_list=alter_subset, snw=semantic_network,
-                              add_focal_to_clusters=focaladd,
-                              occurrence=occ, mode="context",to_back_out=backout,
-                              depth=depth, algorithm=algo, filename=filename,
-                              compositional=comp, reverse_ties=rev, seed=rs)
+    #df = extract_all_clusters(level=level, cutoff=cutoff, times=years, cluster_cutoff=cluster_cutoff, focal_token=focal_token,
+    #                          interest_list=alter_subset, snw=semantic_network,
+    #                          add_focal_to_clusters=focaladd,
+    #                          occurrence=occ, mode="context",to_back_out=backout,
+    #                          depth=depth, algorithm=algo, filename=filename,
+    #                          compositional=comp, reverse_ties=rev, seed=rs)
 
 #### Cluster yearly proximities
 
 
-ma_list = [(3, 2), (2, 2)]
-level_list = [2,5]
-weight_list = [0.3,0.1,0.01]
-weight_list = [ 0.3,0.1]
-cl_clutoff_list = [80,90]
+ma_list = [(2, 2)]
+level_list = [1]
+weight_list = [0.1]
+cl_clutoff_list = [100]
 depth_list = [1]
 rs_list = [100]
 rev_ties_list = [False]
-algolist=[louvain_cluster,consensus_louvain]
-focaladdlist=[True,False]
+algolist=[consensus_louvain]
+focaladdlist=[True]
 comp_ties_list = [False]
 param_list = product(ma_list,depth_list, level_list, rs_list, weight_list, rev_ties_list, comp_ties_list, cl_clutoff_list,algolist,focaladdlist,focaladdlist,focaladdlist)
 logging.info("------------------------------------------------")

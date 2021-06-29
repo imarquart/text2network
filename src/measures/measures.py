@@ -118,9 +118,9 @@ def proximities(snw, focal_tokens: Optional[List] = None, alter_subset: Optional
     return {"proximity": proximity_dict}
 
 
-def yearly_centralities(snw, year_list, focal_tokens=None, types=["PageRank", "normedPageRank"], ego_nw_tokens=None,
-                        depth=None, context=None, weight_cutoff=None, norm_ties=None,
-                        reverse_ties: Optional[bool] = False):
+def yearly_centralities(snw, year_list, focal_tokens=None, types=["PageRank", "normedPageRank"],
+                        depth=None, context=None, weight_cutoff=None, compositional=None,
+                        reverse_ties: Optional[bool] = False, backout: Optional[bool]=False):
     """
     Compute directly year-by-year centralities for provided list.
 
@@ -155,18 +155,16 @@ def yearly_centralities(snw, year_list, focal_tokens=None, types=["PageRank", "n
 
     """
 
-    # Get default normation behavior
-    if norm_ties is None:
-        norm_ties = snw.norm_ties
-
     cent_year = {}
     assert isinstance(year_list, list), "Please provide list of years."
 
     for year in year_list:
         snw.decondition()
-        snw.condition(focal_tokens=focal_tokens, years=[
-            year], ego_nw_tokens=ego_nw_tokens, depth=depth, context=context, weight_cutoff=weight_cutoff,
-                      norm_ties=norm_ties)
+        snw.condition(tokens=focal_tokens, times=[
+            year], depth=depth, context=context, weight_cutoff=weight_cutoff,
+                      compositional=compositional)
+        if backout:
+            snw.to_backout()
         cent_measures = snw.centralities(focal_tokens=focal_tokens, types=types, reverse_ties=reverse_ties)
         cent_year.update({year: cent_measures})
 
@@ -372,8 +370,17 @@ def average_cluster_proximities(focal_token: str,  nw, levels: int,
                         0],
                     moving_average[
                         1], ma_years))
-            nw.condition(times=ma_years, weight_cutoff=weight_cutoff, context=context, compositional=compositional,
-                         reverse_ties=reverse_ties)
+
+            if mode == "context":
+                nw.context_condition(tokens=focal_token, times=ma_years, depth=depth, weight_cutoff=weight_cutoff,
+                                     occurrence=occurrence, batchsize=None)
+
+            else:
+                #nw.condition(times=ma_years, weight_cutoff=weight_cutoff, context=context, compositional=compositional,
+                #             reverse_ties=reverse_ties)
+                nw.condition(tokens=focal_token, times=ma_years, weight_cutoff=weight_cutoff, context=context, compositional=compositional,
+                             reverse_ties=reverse_ties)
+
 
             if to_back_out:
                 nw.to_backout()
@@ -399,7 +406,7 @@ def average_cluster_proximities(focal_token: str,  nw, levels: int,
                 proximate_nodes = proximate_nodes[proximate_nodes > cluster_cutoff]
 
                 mean_cluster_prox = np.mean(proximate_nodes)
-                mean_cluster_rev_prox = np.mean(rev_proxim)
+                mean_cluster_rev_prox = np.mean(rev_proximate_nodes)
                 cluster_measures = return_measure_dict(proximate_nodes)
                 if len(proximate_nodes) > 0:
                     top_node = proximate_nodes.idxmax()
