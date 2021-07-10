@@ -65,14 +65,14 @@ for depth, level, rs, cutoff, rev, comp, cluster_cutoff,algo,focaladd,occ,backou
 ma_list = [(2, 2)]
 level_list = [1]
 weight_list = [0.1]
-cl_clutoff_list = [100]
-depth_list = [1]
-rs_list = [100]
+cl_clutoff_list = [0,100]
+depth_list = [1,2]
+rs_list = [200]
 rev_ties_list = [False]
 algolist=[consensus_louvain]
 focaladdlist=[True]
 comp_ties_list = [False]
-param_list = product(ma_list,depth_list, level_list, rs_list, weight_list, rev_ties_list, comp_ties_list, cl_clutoff_list,algolist,focaladdlist,focaladdlist,focaladdlist)
+param_list = product(ma_list,depth_list, level_list, rs_list, weight_list, rev_ties_list, comp_ties_list, cl_clutoff_list,algolist,focaladdlist,comp_ties_list,comp_ties_list)
 logging.info("------------------------------------------------")
 for ma,depth, level, rs, cutoff, rev, comp, cluster_cutoff,algo,focaladd,occ,backout in param_list:
     interest_tokens = None

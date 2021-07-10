@@ -26,7 +26,7 @@ def make_reverse(graph):
 
     """
 
-    if nx.to_directed(graph):
+    if nx.is_directed(graph):
         return graph.reverse()
     else:
         return graph

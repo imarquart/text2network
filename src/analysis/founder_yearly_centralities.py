@@ -21,11 +21,11 @@ setup_logger(config['Paths']['log'], config['General']['logging_level'], "yearly
 # First, create an empty network
 semantic_network = neo4j_network(config)
 
-cent=yearly_centralities(semantic_network, semantic_network.get_times_list(),focal_tokens=tokens, compositional=False, backout=True)
+cent=yearly_centralities(semantic_network, semantic_network.get_times_list(),focal_tokens=tokens, reverse_ties=True, compositional=False, backout=False)
 cent=semantic_network.pd_format(cent)[0]
 
 
-filename="/backout_ycent_founder.xlsx"
+filename="/rev_ycent_founder.xlsx"
 path = config['Paths']['csv_outputs']+filename
 path = check_create_folder(path)
 
