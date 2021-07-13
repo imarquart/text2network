@@ -24,7 +24,8 @@ class neo4j_database():
 
         self.neo4j_connection, self.neo4j_credentials = neo4j_creds
         self.write_before_query = write_before_query
-
+        oldlevel=logging.getLogger().getEffectiveLevel()
+        logging.getLogger().setLevel(30)
         # Set up Neo4j driver
         if connection_type == "bolt" and GraphDatabase is not None:
             self.driver = GraphDatabase.driver(self.neo4j_connection, auth=self.neo4j_credentials)
@@ -34,7 +35,7 @@ class neo4j_database():
         else:  # Fallback custom HTTP connector for Neo4j <= 4.02
             self.driver = neo_connector.Connector(self.neo4j_connection, self.neo4j_credentials)
             self.connection_type = "http"
-
+        logging.getLogger().setLevel(oldlevel)
         # Neo4J Internals
         # Pick Merge or Create. Create will double ties but Merge becomes very slow for large networks
         if tie_creation == "SAFE":
@@ -442,7 +443,10 @@ class neo4j_database():
         if isinstance(times, int):
             if  context is not None:
                 match_query = "".join(["MATCH p=(a:word)-[:onto]->(r:edge {time:",str(times),", run_index:ridx})-[:onto]->(b:word) "])
-                c_match = "MATCH (q:edge {time:",str(times),"}) - [:onto]->(e:word) "
+                if context_mode=="bidirectional":
+                    c_match = "".join(["MATCH (q:edge {time:",str(times),"}) - [:onto]-(e:word) "])
+                else:
+                    c_match = "".join(["MATCH (q:edge {time:",str(times),"}) - [:onto]->(e:word) "])
             else:
                 match_query = "".join(["MATCH p=(a:word)-[:onto]->(r:edge {time:",str(times),"})-[:onto]->(b:word) "])
                 c_match = ""
@@ -901,6 +905,8 @@ class neo4j_database():
             return [dict(x) for x in result]
 
     def receive_query(self, query, params=None):
+        oldlevel=logging.getLogger().getEffectiveLevel()
+        logging.getLogger().setLevel(30)
         if self.connection_type == "bolt":
             with self.driver.session() as session:
                 res = session.read_transaction(self.consume_result, query, params, self.consume_type)
@@ -909,7 +915,7 @@ class neo4j_database():
                 res = self.driver.run(query, params)
             else:
                 res = self.driver.run(query)
-
+        logging.getLogger().setLevel(oldlevel)
         return res
 
     async def areceive_query(self, query, params=None):

@@ -142,34 +142,35 @@ for depth, level, rs, cutoff, rev, comp, cluster_cutoff,algo,backout,fadd,alters
 import os
 os.environ['NUMEXPR_MAX_THREADS'] = '16'
 
-ma_list = [(3, 2)]
+ma_list = [(2, 0)]
 level_list = [5]
-weight_list = [0, 0.1]
-cl_clutoff_list = [100,90]
+weight_list = [0.01]
+cl_clutoff_list = [0]
 depth_list = [1]
 rs_list = [100]
-rev_ties_list = [True]
+rev_ties_list = [False]
 comp_ties_list = [False]
 back_out_list= [False]
 algolist=[consensus_louvain]
 alter_set=[alter_subset]
+focal_set=["entrepreneur","manager","ceo","genius","star"]
 focaladdlist=[True]
 param_list = product(depth_list, level_list, ma_list, weight_list, rev_ties_list, comp_ties_list, rs_list,
-                     cl_clutoff_list,back_out_list,focaladdlist,alter_set)
+                     cl_clutoff_list,back_out_list,focaladdlist,alter_set,focal_set)
 logging.info("------------------------------------------------")
-for depth, levels, moving_average, weight_cutoff, rev, comp, rs, cluster_cutoff, backout,fadd,alters in param_list:
+for depth, levels, moving_average, weight_cutoff, rev, comp, rs, cluster_cutoff, backout,fadd,alters,f_token in param_list:
     interest_tokens = alter_subset
     del semantic_network
     np.random.seed(rs)
     semantic_network = neo4j_network(config)
     # weight_cutoff=0
     filename = "".join(
-        [config['Paths']['csv_outputs'], "/EgoClusterYOY_", str(focal_token),  "_backout", str(backout),"_fadd", str(fadd),"_alters", str(str(isinstance(alters,list))),"_rev", str(rev), "_norm", str(comp), "_lev",
+        [config['Paths']['csv_outputs'], "/EgoClusterYOY_", str(f_token),  "_backout", str(backout),"_fadd", str(fadd),"_alters", str(str(isinstance(alters,list))),"_rev", str(rev), "_norm", str(comp), "_lev",
          str(levels), "_clcut",
          str(cluster_cutoff), "_cut", str(weight_cutoff), "_algo", str(algo.__name__), "_depth", str(depth), "_ma", str(moving_average), "_rs",
          str(rs)])
     logging.info("YOY Network clustering: {}".format(filename))
-    df = average_cluster_proximities(focal_token=focal_token, nw=semantic_network, levels=levels, interest_list=alters, times=years,do_reverse=True,
+    df = average_cluster_proximities(focal_token=f_token, nw=semantic_network, levels=levels, interest_list=alters, times=years,do_reverse=True,
                                      depth=depth, weight_cutoff=weight_cutoff, cluster_cutoff=cluster_cutoff, year_by_year=True, add_focal_to_clusters=fadd,
                                      moving_average=moving_average, filename=filename, compositional=comp, to_back_out=backout,
                                      reverse_ties=rev, seed=rs)

@@ -160,11 +160,13 @@ def yearly_centralities(snw, year_list, focal_tokens=None, types=["PageRank", "n
 
     for year in year_list:
         snw.decondition()
+        logging.debug("Conditioning network on year {} with {} focal tokens and depth {}".format(year,len(focal_tokens),depth))
         snw.condition(tokens=focal_tokens, times=[
             year], depth=depth, context=context, weight_cutoff=weight_cutoff,
                       compositional=compositional)
         if backout:
             snw.to_backout()
+        logging.debug("Computing centralities for year {}".format(year))
         cent_measures = snw.centralities(focal_tokens=focal_tokens, types=types, reverse_ties=reverse_ties)
         cent_year.update({year: cent_measures})
 

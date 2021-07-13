@@ -2,6 +2,7 @@ from src.functions.file_helpers import check_create_folder
 from src.measures.measures import yearly_centralities
 from src.utils.logging_helpers import setup_logger
 from src.classes.neo4jnw import neo4j_network
+import logging
 
 # Set a configuration path
 configuration_path = '/config/config.ini'
@@ -15,12 +16,13 @@ import configparser
 config = configparser.ConfigParser()
 print(check_create_folder(configuration_path))
 config.read(check_create_folder(configuration_path))
-# Setup logging
-setup_logger(config['Paths']['log'], config['General']['logging_level'], "yearly_cent")
-
+# Setup logging config['General']['logging_level']
+setup_logger(config['Paths']['log'],0, "yearly_cent")
+logging.debug("Test")
 # First, create an empty network
-semantic_network = neo4j_network(config)
-
+semantic_network = neo4j_network(config,logging_level=0)
+logging.getLogger().setLevel(0)
+logging.debug("Test")
 cent=yearly_centralities(semantic_network, semantic_network.get_times_list(),focal_tokens=tokens, reverse_ties=True, compositional=False, backout=False)
 cent=semantic_network.pd_format(cent)[0]
 
