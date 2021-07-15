@@ -59,7 +59,7 @@ def centralities(snw, focal_tokens=None, types=["PageRank", "normedPageRank"], r
 
 
 def proximities(snw, focal_tokens: Optional[List] = None, alter_subset: Optional[List] = None,
-                reverse_ties: Optional[bool] = False) -> Dict:
+                reverse_ties: Optional[bool] = False, to_backout: Optional[bool] = False) -> Dict:
     """
     Calculate proximities for given tokens.
 
@@ -103,7 +103,8 @@ def proximities(snw, focal_tokens: Optional[List] = None, alter_subset: Optional
     # Reverse ties if requested
     if reverse_ties:
         snw.to_reverse()
-
+    if to_backout:
+        snw.to_backout()
     # Get proximities from conditioned network
     for token in focal_tokens:
         if token in snw.graph.nodes:
@@ -275,6 +276,9 @@ def average_cluster_proximities(focal_token: str,  nw, levels: int,
         cluster_cutoff=0
     else:
         percentage=0
+
+    if cluster_cutoff==None:
+        cluster_cutoff=0
 
     # First, derive clusters
     if mode == "context":

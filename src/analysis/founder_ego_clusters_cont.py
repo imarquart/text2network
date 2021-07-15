@@ -144,16 +144,16 @@ import os
 os.environ['NUMEXPR_MAX_THREADS'] = '16'
 
 ma_list = [(3,2)]
-level_list = [2,5]
-weight_list = [0.01,0]
-cl_clutoff_list = [100,90]
+level_list = [5]
+weight_list = [0.01]
+cl_clutoff_list = [0,90]
 depth_list = [1]
 rs_list = [100]
 rev_ties_list = [False]
 comp_ties_list = [False]
 back_out_list= [False]
 context_list=[["facebook"],["microsoft"],["apple"],["google"]]
-context_list=[["ceo","business","president","chairman","new"],["market","companies","total","firm","consumer"],["people","financial","organization","best","team"],["company","industry","insider","year","yes"]]
+#context_list=[["ceo","business","president","chairman","new"],["market","companies","total","firm","consumer"],["people","financial","organization","best","team"],["company","industry","insider","year","yes"]]
 
 algolist=[consensus_louvain]
 alter_set=[alter_subset]
@@ -168,7 +168,7 @@ for depth, levels, moving_average, weight_cutoff, rev, comp, rs, cluster_cutoff,
     semantic_network = neo4j_network(config)
     # weight_cutoff=0
     filename = "".join(
-        [config['Paths']['csv_outputs'], "/", str(context[0]),"_EgoClusterYOY_", str(focal_token),  "_backout", str(backout),"_fadd", str(fadd),"_alters", str(str(isinstance(alters,list))),"_rev", str(rev), "_norm", str(comp), "_lev",
+        [config['Paths']['csv_outputs'], "/", str(context[0]),"_EgoClusterYOY_nocweight_", str(focal_token),  "_backout", str(backout),"_fadd", str(fadd),"_alters", str(str(isinstance(alters,list))),"_rev", str(rev), "_norm", str(comp), "_lev",
          str(levels), "_clcut",
          str(cluster_cutoff), "_cut", str(weight_cutoff), "_algo", str(algo.__name__), "_depth", str(depth), "_ma", str(moving_average), "_rs",
          str(rs)])
