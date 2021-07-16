@@ -371,8 +371,10 @@ class neo4j_database():
                              context_mode="bidirectional", context_weight=True, mode="new"):
 
         if mode=="old":
+            logging.info("Query Dispatch OLD")
             return self.query_multiple_nodes1(ids=ids,times=times,weight_cutoff=weight_cutoff, context=context,norm_ties=norm_ties, context_mode=context_mode, context_weight=context_weight)
         else:
+            logging.info("Query Dispatch NEW")
             return self.query_multiple_nodes2(ids=ids, times=times, weight_cutoff=weight_cutoff, context=context,
                                               norm_ties=norm_ties, context_mode=context_mode,
                                               context_weight=context_weight)
@@ -571,9 +573,9 @@ class neo4j_database():
 
         if context is not None:
             if context_mode == "bidirectional":
-                c_match = "".join(["MATCH (q:edge) - [:onto]-(e:word) "])
+                c_match = "".join(["MATCH (q:edge {run_index:r.run_index}) - [:onto]-(e:word) "])
             else:
-                c_match = "".join(["MATCH (q:edge) - [:onto]->(e:word) "])
+                c_match = "".join(["MATCH (q:edge {run_index:r.run_index}) - [:onto]->(e:word) "])
         else:
             c_match = " "
 
@@ -591,23 +593,22 @@ class neo4j_database():
 
         # Context if desired
         if context is not None:
-            c_where_query = " WHERE e.token_id IN $contexts "
+            c_where_query = " WHERE e.token_id IN $contexts AND q.pos<>r.pos "
         else:
             c_where_query = ""
 
         # Allow cutoff value of (non-aggregated) weights and set up time-interval query
+        if weight_cutoff is not None:
+            if weight_cutoff <= 1e-07:
+                weight_cutoff = None
         if weight_cutoff is not None:
             where_query = ''.join([where_query, " AND r.weight >=", str(weight_cutoff), " "])
             if context is not None:
                 c_where_query = ''.join([c_where_query, " AND q.weight >=", str(weight_cutoff), " "])
         if isinstance(times, dict):
             where_query = ''.join([where_query, " AND  $times.start <= r.time<= $times.end "])
-            if context is not None:
-                c_where_query = ''.join([c_where_query, " AND  $times.start <= q.time<= $times.end "])
         elif isinstance(times, list):
             where_query = ''.join([where_query, " AND  r.time in $times "])
-            if context is not None:
-                c_where_query = ''.join([c_where_query, " AND  q.time in $times "])
 
         ### RETURN QUERIES
 

@@ -125,7 +125,7 @@ algolist = [louvain_cluster, consensus_louvain]
 algolist = [consensus_louvain]
 focal_context_list = [("zuckerberg", ["facebook", "mark", "marc"]), ("jobs", ["steve", "apple", "next"]),
                        ("gates", ["bill", "microsoft"]),
-                      ("page", ["larry", "google"]),("brinn", ["sergej", "google"]),("branson", ["richard", "virgin"]),("bezos", ["jeff", "amazon"]),]
+                      ("page", ["larry", "google"]),("branson", ["richard", "virgin"]),("bezos", ["jeff", "amazon"]),]
 alter_set = [None]
 focaladdlist = [True]
 comp_ties_list = [False]

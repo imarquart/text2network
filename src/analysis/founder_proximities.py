@@ -1,3 +1,4 @@
+import time
 from itertools import product
 
 from src.functions.file_helpers import check_create_folder
@@ -19,7 +20,7 @@ config = configparser.ConfigParser()
 print(check_create_folder(configuration_path))
 config.read(check_create_folder(configuration_path))
 # Setup logging
-setup_logger(config['Paths']['log'], config['General']['logging_level'], "founder_ego_clusters.py")
+setup_logger(config['Paths']['log'], config['General']['logging_level'], "founder_proximities.py")
 
 
 import os
@@ -28,7 +29,7 @@ os.environ['NUMEXPR_MAX_THREADS'] = '16'
 # First, create an empty network
 semantic_network = neo4j_network(config)
 
-weight_list = [0.01]
+weight_list = [0]
 depth_list = [1]
 rs_list = [100]
 rev_ties_list = [False]
@@ -36,31 +37,34 @@ focal_context_list = [("zuckerberg", ["facebook", "mark", "marc"]), ("jobs", ["s
                       ("musk", ["elon", "tesla", "paypal"]), ("gates", ["bill", "microsoft"]),
                       ("page", ["larry", "google"]),("brinn", ["sergej", "google"]),("branson", ["richard", "virgin"]),("bezos", ["jeff", "amazon"]),]
 focal_context_list = [("zuckerberg", ["facebook", "mark", "marc"])]
+
+#focal_context_list = [("founder", None),("ceo", None)]
+
 comp_ties_list = [False]
 back_out_list = [False]
-param_list = product(rs_list, weight_list,focal_context_list,rev_ties_list,back_out_list,comp_ties_list)
+query_modes=["new", "old"]
+param_list = product(rs_list, weight_list,focal_context_list,rev_ties_list,back_out_list,comp_ties_list,query_modes)
 logging.info("------------------------------------------------")
-for rs, cutoff, fc_list, rev,backout,comp  in param_list:
+for rs, cutoff, fc_list, rev,backout,comp,mode  in param_list:
     focal_token, context = fc_list
     ##
-
+    start_time = time.time()
     logging.info("Focal token:{} Context: {}".format(focal_token,context))
     del semantic_network
     np.random.seed(rs)
     semantic_network = neo4j_network(config)
     filename = "".join(
-        [config['Paths']['csv_outputs'], "/NEWProx_", str(focal_token), "_backout",
-         str(backout), "_context", context[0], "_rev", str(rev), "_norm",
+        [config['Paths']['csv_outputs'], "/",str(mode),"cProx_", str(focal_token), "_backout",
+         str(backout), "_context", str(context is not None), "_rev", str(rev), "_norm",
          str(comp), "_cut",
          str(cutoff), "_rs", str(rs),".xlsx"])
     logging.info("Proximities: {}".format(filename))
-    context = None
-    semantic_network.condition(tokens=focal_token, times=years, context=context, depth=1, weight_cutoff=cutoff,
-                 compositional=comp, reverse_ties=rev)
+    semantic_network.condition(tokens=focal_token, times=None, context=context, depth=1, weight_cutoff=cutoff,
+                 compositional=comp, reverse_ties=rev, query_mode=mode)
     df = proximities(semantic_network, focal_tokens=focal_token)
-    df = semantic_network.pd_format(df)[0]
+    df = semantic_network.pd_format(df)[0].T
     filename = check_create_folder(filename)
-
+    logging.info("Time:{}".format(time.time() - start_time))
     df.to_excel(filename,merge_cells=False)
 
 

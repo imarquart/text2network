@@ -314,7 +314,7 @@ class neo4j_network(Sequence):
 
     def condition(self, times:Optional[Union[int,list]]=None, tokens:Optional[Union[int,str,list]]=None, weight_cutoff:Optional[float]=None, depth:Optional[int]=None, context:Optional[Union[int,str,list]]=None, compositional:Optional[bool]=None,
                   batchsize:Optional[int]=None, cond_type:Optional[str]=None, reverse_ties:Optional[bool]=False,
-                  post_cutoff:Optional[float]=None, post_norm:Optional[bool]=False):
+                  post_cutoff:Optional[float]=None, post_norm:Optional[bool]=False, query_mode="old"):
         """
 
         Condition the network: Pull ties from database and aggregate according to given parameters.
@@ -380,7 +380,6 @@ class neo4j_network(Sequence):
 
         # Without times, we query all
         if times is None:
-            years = self.get_times_list()
             cond_dict.update({'years': 'ALL'})
         else:
             cond_dict.update({'years': times})
@@ -406,11 +405,11 @@ class neo4j_network(Sequence):
             if cond_type=="subset":
                 logging.debug("Conditioning dispatch: Ego, new")
                 self.__ego_condition(years=times, token_ids=tokens, weight_cutoff=weight_cutoff, depth=depth,
-                                     context=context, norm=compositional, batchsize=batchsize)
+                                     context=context, norm=compositional, batchsize=batchsize, query_mode=query_mode)
             elif cond_type=="search":
                 logging.debug("Conditioning dispatch: Ego, old")
                 self.__ego_condition_old(years=times, token_ids=tokens, weight_cutoff=weight_cutoff, depth=depth,
-                                         context=context, norm=compositional, batchsize=batchsize)
+                                         context=context, norm=compositional, batchsize=batchsize, query_mode=query_mode)
             else:
                 msg="Conditioning type {} requested. Please use either search or subset.".format(cond_type)
                 logging.debug(msg)
@@ -891,7 +890,7 @@ class neo4j_network(Sequence):
             self.__year_condition(years, weight_cutoff, context, norm)
 
     def __ego_condition(self, years, token_ids, weight_cutoff=None, depth=None, context=None, norm=None,
-                        batchsize=None):
+                        batchsize=None, query_mode="old"):
 
         # Get default normation behavior
         if norm is None:
@@ -902,7 +901,7 @@ class neo4j_network(Sequence):
 
         # First, do a year conditioning
         logging.debug("Full year conditioning before ego subsetting.")
-        self.__year_condition(years=years, weight_cutoff=weight_cutoff, context=context, norm=norm, batchsize=batchsize)
+        self.__year_condition(years=years, weight_cutoff=weight_cutoff, context=context, norm=norm, batchsize=batchsize, query_mode=query_mode)
 
         if depth is not None:
             # Create ego graph for each node
@@ -917,7 +916,7 @@ class neo4j_network(Sequence):
         self.__complete_conditioning(copy_ids=False)
 
     def __ego_condition_old(self, years, token_ids, weight_cutoff=None, depth=None, context=None, norm=None,
-                            batchsize=None):
+                            batchsize=None,query_mode="old"):
 
 
 
@@ -960,7 +959,7 @@ class neo4j_network(Sequence):
                     try:
                         self.graph.add_edges_from(
                             self.query_nodes(id_batch, context=context, times=years, weight_cutoff=weight_cutoff,
-                                             norm_ties=norm))
+                                             norm_ties=norm,query_mode=query_mode))
                     except:
                         logging.error("Could not condition graph by query method.")
 
@@ -1480,7 +1479,7 @@ class neo4j_network(Sequence):
         return self.db.query_context_of_node(ids=ids, times=times, weight_cutoff=weight_cutoff, occurrence=occurrence)
 
 
-    def query_nodes(self, ids, context=None, times=None, weight_cutoff=None, norm_ties=None):
+    def query_nodes(self, ids, context=None, times=None, weight_cutoff=None, norm_ties=None, query_mode="old"):
         """
         Query multiple nodes by ID and over a set of time intervals, return distinct occurrences
         If provided with context, return under the condition that elements of context are present in the context element distribution of
@@ -1506,8 +1505,11 @@ class neo4j_network(Sequence):
         if norm_ties is None:
             norm_ties = self.norm_ties
 
-        if times is None:
-            times=self.get_times_list()
+        if times is not None:
+            if not isinstance(times, (list, np.ndarray)):
+                times = [int(times)]
+            else:
+                times = [int(x) for x in times]
 
         # Make sure we have a list of ids and times
         # Get rid of numpy here as well
@@ -1516,10 +1518,7 @@ class neo4j_network(Sequence):
             ids = [int(ids)]
         else:
             ids = [int(x) for x in ids]
-        if not isinstance(times, (list, np.ndarray)):
-            times = [int(times)]
-        else:
-            times = [int(x) for x in times]
+
 
         # Dispatch with or without context
         if context is not None:
@@ -1528,9 +1527,9 @@ class neo4j_network(Sequence):
                 context = [int(context)]
             else:
                 context = [int(x) for x in context]
-            return self.db.query_multiple_nodes(ids=ids, context=context, times=times, weight_cutoff=weight_cutoff, norm_ties=norm_ties)
+            return self.db.query_multiple_nodes(ids=ids, context=context, times=times, weight_cutoff=weight_cutoff, norm_ties=norm_ties, mode=query_mode)
         else:
-            return self.db.query_multiple_nodes(ids=ids, times=times, weight_cutoff=weight_cutoff, norm_ties=norm_ties)
+            return self.db.query_multiple_nodes(ids=ids, times=times, weight_cutoff=weight_cutoff, norm_ties=norm_ties, mode=query_mode)
 
     def query_multiple_nodes(self, ids, times=None, weight_cutoff=None, norm_ties=None):
         """
