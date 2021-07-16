@@ -267,6 +267,9 @@ def average_cluster_proximities(focal_token: str,  nw, levels: int,
         logging.info("Getting years.")
         times = np.array(nw.get_times_list())
         times = np.sort(times)
+        query_times=None
+    else:
+        query_times=times
 
     if algorithm is None:
         algorithm = consensus_louvain
@@ -282,11 +285,11 @@ def average_cluster_proximities(focal_token: str,  nw, levels: int,
 
     # First, derive clusters
     if mode == "context":
-        nw.context_condition(tokens=focal_token, times=times, depth=depth, weight_cutoff=weight_cutoff,
+        nw.context_condition(tokens=focal_token, times=query_times, depth=depth, weight_cutoff=weight_cutoff,
                              occurrence=occurrence, batchsize=None)
 
     else:
-        nw.condition(tokens=focal_token, times=times, context=context, depth=depth, weight_cutoff=weight_cutoff,
+        nw.condition(tokens=focal_token, times=query_times, context=context, depth=depth, weight_cutoff=weight_cutoff,
                      compositional=compositional, reverse_ties=reverse_ties)
 
     if percentage>0:

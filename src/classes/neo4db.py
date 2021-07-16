@@ -374,7 +374,6 @@ class neo4j_database():
             logging.info("Query Dispatch OLD")
             return self.query_multiple_nodes1(ids=ids,times=times,weight_cutoff=weight_cutoff, context=context,norm_ties=norm_ties, context_mode=context_mode, context_weight=context_weight)
         else:
-            logging.info("Query Dispatch NEW")
             return self.query_multiple_nodes2(ids=ids, times=times, weight_cutoff=weight_cutoff, context=context,
                                               norm_ties=norm_ties, context_mode=context_mode,
                                               context_weight=context_weight)
@@ -583,7 +582,8 @@ class neo4j_database():
 
         if context is not None:
             with_query = "WITH a,r,b "
-            c_with = " WITH r.pos as rpos, r.run_index as ridx, b.token_id AS sender,a.token_id AS receiver, CASE WHEN sum(q.weight)>1.0 THEN 1 else sum(q.weight) END as cweight, head(collect(r.weight)) AS rweight WITH DISTINCT(rpos) as rp, ridx, sender, receiver,  cweight,rweight,cweight*rweight as weight "
+            #c_with = " WITH r.pos as rpos, r.run_index as ridx, b.token_id AS sender,a.token_id AS receiver, CASE WHEN sum(q.weight)>1.0 THEN 1 else sum(q.weight) END as cweight, head(collect(r.weight)) AS rweight WITH DISTINCT(rpos) as rp, ridx, sender, receiver,  cweight,rweight,cweight*rweight as weight "
+            c_with = " WITH r.pos as rpos, r.run_index as ridx, b.token_id AS sender,a.token_id AS receiver, CASE WHEN sum(q.weight)>1.0 THEN 1 else sum(q.weight) END as cweight, head(collect(r.weight)) AS rweight WITH rpos as rp, ridx, sender, receiver,  cweight,rweight,cweight*rweight as weight "
         else:
             with_query = " "
             c_with = " WITH r.pos as rpos, r.run_index as ridx, b.token_id AS sender,a.token_id AS receiver, head(collect(r.weight)) AS rweight"

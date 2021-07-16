@@ -29,14 +29,14 @@ os.environ['NUMEXPR_MAX_THREADS'] = '16'
 # First, create an empty network
 semantic_network = neo4j_network(config)
 
-weight_list = [0]
+weight_list = [0.01, 0]
 depth_list = [1]
 rs_list = [100]
 rev_ties_list = [False]
 focal_context_list = [("zuckerberg", ["facebook", "mark", "marc"]), ("jobs", ["steve", "apple", "next"]),
                       ("musk", ["elon", "tesla", "paypal"]), ("gates", ["bill", "microsoft"]),
                       ("page", ["larry", "google"]),("brinn", ["sergej", "google"]),("branson", ["richard", "virgin"]),("bezos", ["jeff", "amazon"]),]
-focal_context_list = [("zuckerberg", ["facebook", "mark", "marc"])]
+focal_context_list = [("zuckerberg", ["facebook", "mark", "marc"]),("zuckerberg", None)]
 
 #focal_context_list = [("founder", None),("ceo", None)]
 

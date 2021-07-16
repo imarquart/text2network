@@ -314,7 +314,7 @@ class neo4j_network(Sequence):
 
     def condition(self, times:Optional[Union[int,list]]=None, tokens:Optional[Union[int,str,list]]=None, weight_cutoff:Optional[float]=None, depth:Optional[int]=None, context:Optional[Union[int,str,list]]=None, compositional:Optional[bool]=None,
                   batchsize:Optional[int]=None, cond_type:Optional[str]=None, reverse_ties:Optional[bool]=False,
-                  post_cutoff:Optional[float]=None, post_norm:Optional[bool]=False, query_mode="old"):
+                  post_cutoff:Optional[float]=None, post_norm:Optional[bool]=False, query_mode="new"):
         """
 
         Condition the network: Pull ties from database and aggregate according to given parameters.
@@ -838,7 +838,7 @@ class neo4j_network(Sequence):
 
     # %% Conditioning sub-functions
 
-    def __year_condition(self, years, weight_cutoff=None, context=None, norm=None, batchsize=None):
+    def __year_condition(self, years, weight_cutoff=None, context=None, norm=None, batchsize=None, query_mode="old"):
         """ Condition the entire network over all years """
 
         # Get default normation behavior
@@ -868,7 +868,7 @@ class neo4j_network(Sequence):
                 # Query Neo4j
                 self.graph.add_edges_from(
                     self.query_nodes(token_ids, context=context, times=years, weight_cutoff=weight_cutoff,
-                                     norm_ties=norm))
+                                     norm_ties=norm, query_mode=query_mode))
             try:
                 all_ids = list(self.graph.nodes)
             except:

@@ -11,7 +11,7 @@ from src.classes.neo4jnw import neo4j_network
 # Set a configuration path
 configuration_path = '/config/config.ini'
 # Settings
-years = list(range(1980, 2021))
+years = None
 focal_token = "founder"
 alter_subset = ["boss"]
 alter_subset = ["ceo", "kid", "manager", "head", "sadhu", "boss", "collector", "arbitrator", "offender", "partner",
