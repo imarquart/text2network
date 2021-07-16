@@ -314,7 +314,7 @@ class neo4j_network(Sequence):
 
     def condition(self, times:Optional[Union[int,list]]=None, tokens:Optional[Union[int,str,list]]=None, weight_cutoff:Optional[float]=None, depth:Optional[int]=None, context:Optional[Union[int,str,list]]=None, compositional:Optional[bool]=None,
                   batchsize:Optional[int]=None, cond_type:Optional[str]=None, reverse_ties:Optional[bool]=False,
-                  post_cutoff:Optional[float]=None, post_norm:Optional[bool]=False, query_mode="new"):
+                  post_cutoff:Optional[float]=None, post_norm:Optional[bool]=False, query_mode="old"):
         """
 
         Condition the network: Pull ties from database and aggregate according to given parameters.
@@ -923,7 +923,7 @@ class neo4j_network(Sequence):
         if not self.conditioned:  # This is the first conditioning
             # Build graph
             self.graph = self.create_empty_graph()
-
+            self.db.open_session()
             # Depth 0 and Depth 1 really mean the same thing here
             if depth == 0 or depth is None:
                 depth = 1
@@ -948,13 +948,17 @@ class neo4j_network(Sequence):
                                                                                                  len(prev_queried_ids)))
                 # Add ids_to_check to list since they will be queried this iteration
                 prev_queried_ids.extend(ids_to_check)
+                if isinstance(ids_to_check, (np.ndarray)):
+                    ids_to_check=list(ids_to_check)
+                ids_to_check.reverse()
                 # Add starting nodes
                 self.graph.add_nodes_from(ids_to_check)
                 for i in tqdm(range(0, len(ids_to_check), batchsize), leave=False,position=0):
 
                     id_batch = ids_to_check[i:i + batchsize]
+                    id_batch
                     logging.debug(
-                        "Conditioning by query batch {} of {} tokens.".format(i, len(id_batch)))
+                        "Conditioning by query batch {} of {} tokens.".format(i, len(ids_to_check)))
                     # Query Neo4j
                     try:
                         self.graph.add_edges_from(
@@ -986,7 +990,8 @@ class neo4j_network(Sequence):
                 if not ids_to_check.size > 0:
                     depth = 0
 
-            # Delete last layer of disconnected nodes
+            # Close session
+            self.db.close_session()
 
             # Create ego graph for each node and compose
             self.graph = compose_all([nx.generators.ego.ego_graph(self.graph, x, radius=or_depth, center=True,

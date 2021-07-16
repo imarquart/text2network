@@ -31,7 +31,7 @@ class neo4j_database():
         if connection_type == "bolt" and GraphDatabase is not None:
             self.driver = GraphDatabase.driver(self.neo4j_connection, auth=self.neo4j_credentials)
             self.connection_type = "bolt"
-
+            self.read_session = None
 
         else:  # Fallback custom HTTP connector for Neo4j <= 4.02
             self.driver = neo_connector.Connector(self.neo4j_connection, self.neo4j_credentials)
@@ -371,7 +371,7 @@ class neo4j_database():
                              context_mode="bidirectional", context_weight=True, mode="new"):
 
         if mode=="old":
-            logging.info("Query Dispatch OLD")
+            logging.debug("Query Dispatch OLD")
             return self.query_multiple_nodes1(ids=ids,times=times,weight_cutoff=weight_cutoff, context=context,norm_ties=norm_ties, context_mode=context_mode, context_weight=context_weight)
         else:
             return self.query_multiple_nodes2(ids=ids, times=times, weight_cutoff=weight_cutoff, context=context,
@@ -1058,11 +1058,32 @@ class neo4j_database():
     def consume_result(tx, query, params=None, consume_type=None):
         result = tx.run(query, params)
         if consume_type == "data":
+        #if True:
             return result.data()
         else:
             return [dict(x) for x in result]
 
+    def open_session(self, fetch_size=50):
+        logging.debug("Opening Session!")
+        self.read_session=self.driver.session(fetch_size=fetch_size)
+
+    def close_session(self):
+        self.read_session.close()
+        self.read_session=None
+
     def receive_query(self, query, params=None):
+        if self.read_session is None:
+            logging.debug("Session was closed, opening new one")
+            self.open_session()
+        oldlevel = logging.getLogger().getEffectiveLevel()
+        logging.getLogger().setLevel(30)
+        #res = self.read_session.read_transaction(self.consume_result, query, params, self.consume_type)
+        result=self.read_session.run(query,params)
+        res=[dict(x) for x in result]
+        logging.getLogger().setLevel(oldlevel)
+        return res
+
+    def receive_query2(self, query, params=None):
         oldlevel = logging.getLogger().getEffectiveLevel()
         logging.getLogger().setLevel(30)
         if self.connection_type == "bolt":

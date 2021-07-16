@@ -176,4 +176,4 @@ for depth, levels, moving_average, weight_cutoff, rev, comp, rs, cluster_cutoff,
     df = average_cluster_proximities(focal_token=focal_token, nw=semantic_network, levels=levels, interest_list=alters, times=years,do_reverse=False,
                                      depth=depth, weight_cutoff=weight_cutoff, cluster_cutoff=cluster_cutoff, year_by_year=True, add_focal_to_clusters=fadd,
                                      moving_average=moving_average, filename=filename, compositional=comp, to_back_out=backout,
-                                     reverse_ties=rev, seed=rs, context=context)
+                                     reverse_ties=rev, seed=rs, context=context, mode="new")

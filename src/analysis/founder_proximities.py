@@ -20,7 +20,7 @@ config = configparser.ConfigParser()
 print(check_create_folder(configuration_path))
 config.read(check_create_folder(configuration_path))
 # Setup logging
-setup_logger(config['Paths']['log'], config['General']['logging_level'], "founder_proximities.py")
+setup_logger(config['Paths']['log'], config['General']['logging_level'], "founder_proximities2.py")
 
 
 import os
@@ -29,23 +29,24 @@ os.environ['NUMEXPR_MAX_THREADS'] = '16'
 # First, create an empty network
 semantic_network = neo4j_network(config)
 
-weight_list = [0.01, 0]
+weight_list = [0.1, 0.01,0]
 depth_list = [1]
 rs_list = [100]
+batch_sizes=[1000]
 rev_ties_list = [False]
 focal_context_list = [("zuckerberg", ["facebook", "mark", "marc"]), ("jobs", ["steve", "apple", "next"]),
                       ("musk", ["elon", "tesla", "paypal"]), ("gates", ["bill", "microsoft"]),
                       ("page", ["larry", "google"]),("brinn", ["sergej", "google"]),("branson", ["richard", "virgin"]),("bezos", ["jeff", "amazon"]),]
 focal_context_list = [("zuckerberg", ["facebook", "mark", "marc"]),("zuckerberg", None)]
-
+focal_context_list = [("founder",None),("ceo", None)]
 #focal_context_list = [("founder", None),("ceo", None)]
 
 comp_ties_list = [False]
 back_out_list = [False]
 query_modes=["new", "old"]
-param_list = product(rs_list, weight_list,focal_context_list,rev_ties_list,back_out_list,comp_ties_list,query_modes)
+param_list = product(rs_list, weight_list,focal_context_list,rev_ties_list,back_out_list,comp_ties_list,query_modes, batch_sizes)
 logging.info("------------------------------------------------")
-for rs, cutoff, fc_list, rev,backout,comp,mode  in param_list:
+for rs, cutoff, fc_list, rev,backout,comp,mode,batch_size  in param_list:
     focal_token, context = fc_list
     ##
     start_time = time.time()
@@ -58,9 +59,9 @@ for rs, cutoff, fc_list, rev,backout,comp,mode  in param_list:
          str(backout), "_context", str(context is not None), "_rev", str(rev), "_norm",
          str(comp), "_cut",
          str(cutoff), "_rs", str(rs),".xlsx"])
-    logging.info("Proximities: {}".format(filename))
+    logging.info("Proximities: {}, batch_size: {}".format(filename, batch_size))
     semantic_network.condition(tokens=focal_token, times=None, context=context, depth=1, weight_cutoff=cutoff,
-                 compositional=comp, reverse_ties=rev, query_mode=mode)
+                 compositional=comp, reverse_ties=rev, query_mode=mode, batchsize=batch_size)
     df = proximities(semantic_network, focal_tokens=focal_token)
     df = semantic_network.pd_format(df)[0].T
     filename = check_create_folder(filename)
