@@ -123,25 +123,31 @@ rs_list = [100]
 rev_ties_list = [False]
 algolist = [louvain_cluster, consensus_louvain]
 algolist = [consensus_louvain]
-focal_context_list = [("zuckerberg", ["facebook", "mark", "marc"]), ("jobs", ["steve", "apple", "next"]),
+focal_context_list = [("zuckerberg", ["facebook", "mark"]), ("jobs", ["steve", "apple", "next"]),
                        ("gates", ["bill", "microsoft"]),
-                      ("page", ["larry", "google"]),("branson", ["richard", "virgin"]),("bezos", ["jeff", "amazon"]),]
+                      ("page", ["larry", "google"]),("bezos", ["jeff", "amazon"]),]
+
+focal_context_list=[("founder", ["bezos", "amazon"]), ("founder", ["zuckerberg", "facebook"]),("founder", ["gates", "microsoft"]),
+                    ("founder", ["page", "google"]), ("founder", ["jobs", "apple"]),("founder", ["bezos", "zuckerberg","gates","jobs"]),]
+focal_context_list=[("founder", ["bezos", "amazon"])]
 alter_set = [None]
 focaladdlist = [True]
 comp_ties_list = [False]
 back_out_list = [False]
+sym_list = [True,False]
+occ_list = [True,False]
 param_list = product(depth_list, level_list, rs_list, weight_list, rev_ties_list, comp_ties_list, cl_clutoff_list,
-                     algolist, back_out_list, focaladdlist, alter_set, focal_context_list)
+                     algolist, back_out_list, focaladdlist, alter_set, focal_context_list, sym_list,occ_list)
 logging.info("------------------------------------------------")
-for depth, level, rs, cutoff, rev, comp, cluster_cutoff, algo, backout, fadd, alters, fc_list in param_list:
+for depth, level, rs, cutoff, rev, comp, cluster_cutoff, algo, backout, fadd, alters, fc_list,sym,occ in param_list:
     focal_token, context = fc_list
     logging.info("Focal token:{} Context: {}".format(focal_token,context))
     del semantic_network
     np.random.seed(rs)
     semantic_network = neo4j_network(config)
     filename = "".join(
-        [config['Paths']['csv_outputs'], "/cw_", str(context[0]), "_EgoCluster_", str(focal_token), "_backout",
-         str(backout), "_fadd", str(fadd), "_alters", str(str(isinstance(alters, list))), "_rev", str(rev), "_norm",
+        [config['Paths']['csv_outputs'], "/c2_", str(context[0]), "_EgoCluster_", str(focal_token), "_backout",
+         str(backout), "_fadd", str(fadd), "_sym", str(sym),"_occ", str(occ), "_alters", str(str(isinstance(alters, list))), "_rev", str(rev), "_norm",
          str(comp),
          "_lev", str(level), "_cut",
          str(cutoff), "_clcut", str(cluster_cutoff), "_algo", str(algo.__name__), "_depth", str(depth), "_rs", str(rs)])
@@ -154,15 +160,12 @@ for depth, level, rs, cutoff, rev, comp, cluster_cutoff, algo, backout, fadd, al
     df = average_cluster_proximities(focal_token=focal_token, nw=semantic_network, levels=level, interest_list=alters,
                                      times=years, do_reverse=True,
                                      depth=depth, weight_cutoff=cutoff, cluster_cutoff=cluster_cutoff,
-                                     year_by_year=False, add_focal_to_clusters=fadd,
+                                     year_by_year=False, add_focal_to_clusters=fadd, occurrence=occ,
                                      moving_average=None, filename=filename, compositional=comp, to_back_out=backout,
-                                     include_all_levels=True, add_individual_nodes=True,
+                                     include_all_levels=True, add_individual_nodes=True, symmetric=sym,
                                      reverse_ties=rev, seed=rs, context=context)
 #### Cluster yearly proximities
 
-focal_context_list = [("zuckerberg", ["facebook", "mark", "marc"]), ("jobs", ["steve", "apple", "next"]),
-                      ("gates", ["bill", "microsoft"]),
-                      ("page", ["larry", "google"]),("brinn", ["sergej", "google"]),("branson", ["richard", "virgin"]),("bezos", ["jeff", "amazon"]),]
 ma_list = [(2, 0)]
 level_list = [5]
 weight_list = [0.0]
@@ -202,4 +205,4 @@ for depth, levels, moving_average, weight_cutoff, rev, comp, rs, cluster_cutoff,
                                      year_by_year=True, add_focal_to_clusters=fadd,
                                      moving_average=moving_average, filename=filename, compositional=comp,
                                      to_back_out=backout,
-                                     reverse_ties=rev, seed=rs, context=context)
+                                     reverse_ties=rev, seed=rs, context=context, mode="new")

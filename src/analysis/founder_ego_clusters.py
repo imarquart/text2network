@@ -92,7 +92,8 @@ alter_subset2 = ["ceo", "president", "leader", "owner", "insider", "director", "
                 "alumnus", "associate", "deputy", "devil", "confidant", "ambassador", "actor", "advocate", "songwriter",
                 "master", "photographer", "millionaire", "legend", "teller", "comptroller", "pilgrim", "alpha",
                 "visitor", "catalyst", "sprinter", "boy", "anthropologist"]
-
+import os
+os.environ['NUMEXPR_MAX_THREADS'] = '16'
 alter_subset=None
 # Load Configuration file
 import configparser
@@ -107,25 +108,25 @@ setup_logger(config['Paths']['log'], config['General']['logging_level'], "founde
 semantic_network = neo4j_network(config)
 
 level_list = [5]
-weight_list = [ 0.1]
-cl_clutoff_list = [90]
+weight_list = [0, 0.01]
+cl_clutoff_list = [0,90]
 depth_list = [1]
 rs_list = [100]
 rev_ties_list = [False]
 algolist=[louvain_cluster,consensus_louvain]
-algolist=[consensus_louvain]
-alter_set=[alter_subset,alter_subset2]
-focaladdlist=[True,False]
+alter_set=[None]
+focaladdlist=[True]
 comp_ties_list = [False]
 back_out_list= [False]
-param_list = product(depth_list, level_list, rs_list, weight_list, rev_ties_list, comp_ties_list, cl_clutoff_list,algolist,back_out_list,focaladdlist,alter_set)
+symmetry_list=[False,True]
+param_list = product(depth_list, level_list, rs_list, weight_list, rev_ties_list, comp_ties_list, cl_clutoff_list,algolist,back_out_list,symmetry_list,focaladdlist,alter_set)
 logging.info("------------------------------------------------")
-for depth, level, rs, cutoff, rev, comp, cluster_cutoff,algo,backout,fadd,alters in param_list:
-    #del semantic_network
+for depth, level, rs, cutoff, rev, comp, cluster_cutoff,algo,backout,sym,fadd,alters in param_list:
+    del semantic_network
     np.random.seed(rs)
-    #semantic_network = neo4j_network(config)
+    semantic_network = neo4j_network(config)
     filename = "".join(
-        [config['Paths']['csv_outputs'], "/EgoCluster_", str(focal_token), "_backout", str(backout),"_fadd", str(fadd),"_alters", str(str(isinstance(alters,list))),"_rev", str(rev), "_norm", str(comp),
+        [config['Paths']['csv_outputs'], "/EgoCluster_", str(focal_token), "_backout", str(backout),"_sym", str(sym),"_fadd", str(fadd),"_alters", str(str(isinstance(alters,list))),"_rev", str(rev), "_norm", str(comp),
          "_lev", str(level), "_cut",
          str(cutoff), "_clcut", str(cluster_cutoff), "_algo", str(algo.__name__), "_depth", str(depth), "_rs", str(rs)])
     logging.info("Network clustering: {}".format(filename))
@@ -134,18 +135,17 @@ for depth, level, rs, cutoff, rev, comp, cluster_cutoff,algo,backout,fadd,alters
     #                          interest_list=alter_subset, snw=semantic_network,
     #                          depth=depth, algorithm=algo, filename=filename, to_back_out=backout, add_focal_to_clusters=fadd,
     #                         compositional=comp, reverse_ties=rev, seed=rs)
-    #df = average_cluster_proximities(focal_token=focal_token, nw=semantic_network, levels=level, interest_list=alters, times=years,do_reverse=True,
-    #                                 depth=depth, weight_cutoff=cutoff, cluster_cutoff=cluster_cutoff, year_by_year=False, add_focal_to_clusters=fadd,
-    #                                 moving_average=None, filename=filename, compositional=comp, to_back_out=backout, include_all_levels=True, add_individual_nodes=True,
-    #                                 reverse_ties=rev, seed=rs)
+    df = average_cluster_proximities(focal_token=focal_token, nw=semantic_network, levels=level, interest_list=alters, times=years,do_reverse=True,
+                                     depth=depth, weight_cutoff=cutoff, cluster_cutoff=cluster_cutoff, year_by_year=False, add_focal_to_clusters=fadd,
+                                     moving_average=None, filename=filename, compositional=comp, to_back_out=backout, include_all_levels=True, add_individual_nodes=True,
+                                     reverse_ties=rev, symmetric=sym, seed=rs)
 #### Cluster yearly proximities
-import os
-os.environ['NUMEXPR_MAX_THREADS'] = '16'
+
 
 ma_list = [(2, 0)]
 level_list = [5]
-weight_list = [0.01]
-cl_clutoff_list = [0]
+weight_list = [0,0.01]
+cl_clutoff_list = [0,90]
 depth_list = [1]
 rs_list = [100]
 rev_ties_list = [False]

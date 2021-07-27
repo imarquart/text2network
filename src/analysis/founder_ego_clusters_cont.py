@@ -143,10 +143,10 @@ for depth, level, rs, cutoff, rev, comp, cluster_cutoff,algo,backout,fadd,alters
 import os
 os.environ['NUMEXPR_MAX_THREADS'] = '16'
 
-ma_list = [(3,2)]
+ma_list = [(2,2),(2,0)]
 level_list = [5]
 weight_list = [0.01]
-cl_clutoff_list = [0,90]
+cl_clutoff_list = [0,95,90]
 depth_list = [1]
 rs_list = [100]
 rev_ties_list = [False]

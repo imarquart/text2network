@@ -30,7 +30,7 @@ os.environ['NUMEXPR_MAX_THREADS'] = '16'
 semantic_network = neo4j_network(config)
 
 weight_list = [0.1, 0.01,0]
-depth_list = [1]
+depth_list = [0]
 rs_list = [100]
 batch_sizes=[1000]
 rev_ties_list = [False]
@@ -38,15 +38,15 @@ focal_context_list = [("zuckerberg", ["facebook", "mark", "marc"]), ("jobs", ["s
                       ("musk", ["elon", "tesla", "paypal"]), ("gates", ["bill", "microsoft"]),
                       ("page", ["larry", "google"]),("brinn", ["sergej", "google"]),("branson", ["richard", "virgin"]),("bezos", ["jeff", "amazon"]),]
 focal_context_list = [("zuckerberg", ["facebook", "mark", "marc"]),("zuckerberg", None)]
-focal_context_list = [("founder",None),("ceo", None)]
+focal_context_list = [(["founder","ceo"],None)]
 #focal_context_list = [("founder", None),("ceo", None)]
 
 comp_ties_list = [False]
 back_out_list = [False]
-query_modes=["new", "old"]
-param_list = product(rs_list, weight_list,focal_context_list,rev_ties_list,back_out_list,comp_ties_list,query_modes, batch_sizes)
+query_modes=["old"]
+param_list = product(rs_list, weight_list,focal_context_list,rev_ties_list,back_out_list,comp_ties_list,query_modes, batch_sizes, depth_list)
 logging.info("------------------------------------------------")
-for rs, cutoff, fc_list, rev,backout,comp,mode,batch_size  in param_list:
+for rs, cutoff, fc_list, rev,backout,comp,mode,batch_size, depth  in param_list:
     focal_token, context = fc_list
     ##
     start_time = time.time()
@@ -55,15 +55,24 @@ for rs, cutoff, fc_list, rev,backout,comp,mode,batch_size  in param_list:
     np.random.seed(rs)
     semantic_network = neo4j_network(config)
     filename = "".join(
-        [config['Paths']['csv_outputs'], "/",str(mode),"cProx_", str(focal_token), "_backout",
+        [config['Paths']['csv_outputs'], "/",str(mode),"relProx_", str(focal_token), "_backout",
          str(backout), "_context", str(context is not None), "_rev", str(rev), "_norm",
-         str(comp), "_cut",
+         str(comp), "_depth", str(depth), "_cut",
          str(cutoff), "_rs", str(rs),".xlsx"])
     logging.info("Proximities: {}, batch_size: {}".format(filename, batch_size))
-    semantic_network.condition(tokens=focal_token, times=None, context=context, depth=1, weight_cutoff=cutoff,
+    semantic_network.condition(tokens=focal_token, times=None, context=context, depth=depth, weight_cutoff=cutoff,
                  compositional=comp, reverse_ties=rev, query_mode=mode, batchsize=batch_size)
     df = proximities(semantic_network, focal_tokens=focal_token)
     df = semantic_network.pd_format(df)[0].T
+    df.iloc[:, 0]=df.iloc[:,0]/np.sum(df.iloc[:,0])
+    df.iloc[:, 1]=df.iloc[:,1]/np.sum(df.iloc[:,1])
+    df["diff"]=df.iloc[:,0]-df.iloc[:,1]
+    df["abs_diff"]=np.abs(df.iloc[:,0]-df.iloc[:,1])
+    df["sum"]=df.iloc[:,0]+df.iloc[:,1]
+    df["relative_diff"]=df["diff"]/df["sum"]
+    df["abs_rel_diff"]=df["abs_diff"]/df["sum"]
+    df["sum_same"]=df["sum"]/df["abs_diff"]
+    print(df)
     filename = check_create_folder(filename)
     logging.info("Time:{}".format(time.time() - start_time))
     df.to_excel(filename,merge_cells=False)

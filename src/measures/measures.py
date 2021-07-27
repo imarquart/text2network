@@ -188,6 +188,7 @@ def average_cluster_proximities(focal_token: str,  nw, levels: int,
                                 algorithm: Optional[Callable] = None,
                                 compositional: Optional[bool] = False,
                                 reverse_ties: Optional[bool] = False,
+                                symmetric: Optional[bool] = False,
                                 add_focal_to_clusters: Optional[bool] = False,
                                 mode: Optional[str] = "replacement", occurrence: Optional[bool] = False,
                                 seed: Optional[int] = None) -> pd.DataFrame:
@@ -296,7 +297,8 @@ def average_cluster_proximities(focal_token: str,  nw, levels: int,
         nw.sparsify(percentage)
     if to_back_out:
         nw.to_backout()
-
+    if symmetric:
+        nw.to_symmetric()
     # Populate alter tokens if not given
     if interest_list is None:
         interest_list=nw.ensure_tokens(list(nw.graph.nodes))
@@ -393,6 +395,8 @@ def average_cluster_proximities(focal_token: str,  nw, levels: int,
 
             if to_back_out:
                 nw.to_backout()
+            if symmetric:
+                nw.to_symmetric()
 
             if do_reverse is True:
                 year_proxim = nw.proximities()

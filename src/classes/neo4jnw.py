@@ -314,7 +314,7 @@ class neo4j_network(Sequence):
 
     def condition(self, times:Optional[Union[int,list]]=None, tokens:Optional[Union[int,str,list]]=None, weight_cutoff:Optional[float]=None, depth:Optional[int]=None, context:Optional[Union[int,str,list]]=None, compositional:Optional[bool]=None,
                   batchsize:Optional[int]=None, cond_type:Optional[str]=None, reverse_ties:Optional[bool]=False,
-                  post_cutoff:Optional[float]=None, post_norm:Optional[bool]=False, query_mode="old"):
+                  post_cutoff:Optional[float]=None, post_norm:Optional[bool]=False, query_mode="new"):
         """
 
         Condition the network: Pull ties from database and aggregate according to given parameters.
@@ -393,21 +393,23 @@ class neo4j_network(Sequence):
             self.__year_condition(years=times, weight_cutoff=weight_cutoff, context=context, norm=compositional, batchsize=batchsize)
         else:
             logging.debug("Conditioning dispatch: Ego")
-            if not depth:
+            if depth is None:
                 checkdepth=1000
             else:
                 checkdepth=depth
             if cond_type is None:
                 if checkdepth <= 2 and len(tokens) <= 5:
                     cond_type="search"
+                elif checkdepth == 0: # just need proximities
+                    cond_type="search"
                 else:
                     cond_type="subset"
             if cond_type=="subset":
-                logging.debug("Conditioning dispatch: Ego, new")
+                logging.debug("Conditioning dispatch: Ego, subset, depth {}".format(depth))
                 self.__ego_condition(years=times, token_ids=tokens, weight_cutoff=weight_cutoff, depth=depth,
                                      context=context, norm=compositional, batchsize=batchsize, query_mode=query_mode)
             elif cond_type=="search":
-                logging.debug("Conditioning dispatch: Ego, old")
+                logging.debug("Conditioning dispatch: Ego, search, depth {}".format(depth))
                 self.__ego_condition_old(years=times, token_ids=tokens, weight_cutoff=weight_cutoff, depth=depth,
                                          context=context, norm=compositional, batchsize=batchsize, query_mode=query_mode)
             else:
@@ -924,8 +926,8 @@ class neo4j_network(Sequence):
             # Build graph
             self.graph = self.create_empty_graph()
             self.db.open_session()
-            # Depth 0 and Depth 1 really mean the same thing here
-            if depth == 0 or depth is None:
+            if depth is None:
+                logging.debug("Depth is None, but search conditioning is requested. Setting depth to 1.")
                 depth = 1
             # Check one level deeper
             or_depth=depth
@@ -994,7 +996,8 @@ class neo4j_network(Sequence):
             self.db.close_session()
 
             # Create ego graph for each node and compose
-            self.graph = compose_all([nx.generators.ego.ego_graph(self.graph, x, radius=or_depth, center=True,
+            if or_depth > 0:
+                self.graph = compose_all([nx.generators.ego.ego_graph(self.graph, x, radius=or_depth, center=True,
                                                          undirected=False) for x in token_ids])
 
             # Set conditioning true
