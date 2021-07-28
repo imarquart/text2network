@@ -34,10 +34,11 @@ weight_list = [0.3,0.1,0.2]
 cl_clutoff_list = [80,90]
 depth_list = [1]
 rs_list = [100]
+ma_list = [(2, 2)]
 rev_ties_list = [False]
 algolist=[louvain_cluster,consensus_louvain]
 algolist=[consensus_louvain]
-focaladdlist=[True,False]
+focaladdlist=[True]
 comp_ties_list = [False]
 occ_list=[False]
 param_list = product(depth_list, level_list, rs_list, weight_list, rev_ties_list, comp_ties_list, cl_clutoff_list,algolist,focaladdlist,occ_list,occ_list)
@@ -58,20 +59,13 @@ for depth, level, rs, cutoff, rev, comp, cluster_cutoff,algo,focaladd,occ,backou
     #                          occurrence=occ, mode="context",to_back_out=backout,
     #                          depth=depth, algorithm=algo, filename=filename,
     #                          compositional=comp, reverse_ties=rev, seed=rs)
+    df = average_cluster_proximities(focal_token=focal_token, nw=semantic_network, levels=level, interest_list=alter_subset, times=years,do_reverse=True,
+                                     depth=depth, weight_cutoff=cutoff, cluster_cutoff=cluster_cutoff, year_by_year=False, include_all_levels=True, add_individual_nodes=True,
+                                     add_focal_to_clusters=focaladd, occurrence=occ,to_back_out=backout,filename=filename, compositional=comp, mode="context",
+                                     reverse_ties=rev, seed=rs)
 
 #### Cluster yearly proximities
 
-
-ma_list = [(2, 2)]
-level_list = [1]
-weight_list = [0.1]
-cl_clutoff_list = [0,100]
-depth_list = [1,2]
-rs_list = [200]
-rev_ties_list = [False]
-algolist=[consensus_louvain]
-focaladdlist=[True]
-comp_ties_list = [False]
 param_list = product(ma_list,depth_list, level_list, rs_list, weight_list, rev_ties_list, comp_ties_list, cl_clutoff_list,algolist,focaladdlist,comp_ties_list,comp_ties_list)
 logging.info("------------------------------------------------")
 for ma,depth, level, rs, cutoff, rev, comp, cluster_cutoff,algo,focaladd,occ,backout in param_list:

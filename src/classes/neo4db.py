@@ -233,7 +233,24 @@ class neo4j_database():
     # %% Query Functions
 
     def query_tie_context(self, occurring, replacing, times=None, weight_cutoff=None):
+        """
 
+        // dyadic context
+        Match p=(x:word {token:"leader"})-[:onto]->(r:edge)-[:onto]->(v {token:"coach"})
+        WITH  DISTINCT(r.run_index) as ridx, collect(DISTINCT r.pos) as rpos,sum(r.weight) as rweight MATCH (t:word)<-[:onto]-(q:edge {run_index:ridx})<-[:onto]-(x:word) WHERE NOT q.pos in rpos
+        WITH t.token as idx, q.weight as qweight, rweight, rpos, q.pos as qpos  Return DISTINCT(idx) as idx, COUNT(qpos) as nr, sum(qweight*rweight) as weight, sum(qweight) order by weight DESC
+
+        Parameters
+        ----------
+        occurring
+        replacing
+        times
+        weight_cutoff
+
+        Returns
+        -------
+
+        """
         logging.debug("Querying tie between {}->replacing->{}.".format(replacing, occurring))
 
         # Optimization for time
@@ -267,7 +284,7 @@ class neo4j_database():
         elif isinstance(times, list):
             where_query_1 = ''.join([where_query_1, " AND  r.time in $times "])
 
-        where_query_2 = " WHERE q.pos <> r.pos AND Not x.token_id  in [$occurring,$replacing] AND Not t.token_id  in [$occurring,$replacing] "
+        where_query_2 = "  WHERE NOT q.pos in rpos AND Not x.token_id  in [$occurring,$replacing] AND Not t.token_id  in [$occurring,$replacing] "
         # Allow cutoff value of (non-aggregated) weights
         if weight_cutoff is not None:
             where_query_2 = ''.join([where_query_2, " AND q.weight >=", str(weight_cutoff), " "])
@@ -278,9 +295,9 @@ class neo4j_database():
         else:
             match_query = "Match p=(s:word {token_id:$occurring})-[:onto]->(r:edge)-[:onto]->(v:word {token_id:$replacing}) "
 
-        match_query_2 = "WITH r MATCH (t:word)<-[:onto]-(q:edge {run_index:r.run_index})<-[:onto]-(x:word) "
+        match_query_2 = " WITH  DISTINCT(r.run_index) as ridx, collect(DISTINCT r.pos) as rpos,sum(r.weight) as rweight MATCH (t:word)<-[:onto]-(q:edge {run_index:ridx})<-[:onto]-(x:word) "
 
-        return_query = "WITH t.token_id as idx, q.weight as weight, r.weight as rweight  Return DISTINCT(idx) as idx, sum(weight)*sum(rweight) as weight order by idx"
+        return_query = "WITH t.token_id as idx, q.weight as weight, rweight  Return DISTINCT(idx) as idx, sum(weight*rweight) as weight order by idx"
 
         query = "".join([match_query, where_query_1, match_query_2, where_query_2, return_query])
         logging.debug("Tie Query: {}".format(query))
@@ -295,11 +312,7 @@ class neo4j_database():
     def query_context_of_node(self, ids, times=None, weight_cutoff=None, occurrence=False):
         """
 
-        //FIXED Context from Occurrence
-        Match p=(r:edge {time:1995})-[:onto]->(v {token:"leader"})
-        WITH DISTINCT(r.run_index) as ridx, collect(DISTINCT r.pos) as rpos  MATCH (t:word)<-[:onto]-(q:edge {run_index:ridx})<-[:onto]-(x:word) WHERE not q.pos in rpos
-        WITH t.token as idx, q.weight as qweight, ridx  Return idx as idx, COUNT(ridx) as nr, sum(qweight) as weight order by weight DESC
-
+        //Context from Replacement
         Match p=(r:edge)-[:onto]->(v:word)  WHERE v.token in ["leader"]  AND  r.time in [1995]
         WITH DISTINCT(r.run_index) as ridx, collect(DISTINCT r.pos) as rpos,sum(r.weight) as rweight, v.token as ego
         MATCH (t: word) < -[: onto]-  (q:edge {run_index:ridx}) WHERE not q.pos in rpos AND NOT t.token = ego
