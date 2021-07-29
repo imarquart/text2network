@@ -1122,8 +1122,9 @@ class neo4j_network(Sequence):
             if not isinstance(times, (list, np.ndarray)):
                 times=[times]
             if cond_type is None:
-                if (depth <= 2 and len(tokens) <= 5):
-                    cond_type="search"
+                if depth is not None:
+                    if (depth <= 2 and len(tokens) <= 5):
+                        cond_type="search"
                 else:
                     cond_type="subset"
             logging.info("Context clustering mode: {} and batch size: {}".format(cond_type, batchsize))
@@ -1132,7 +1133,7 @@ class neo4j_network(Sequence):
                 self.graph = self.create_empty_graph()
 
                 # Depth 0 and Depth 1 really mean the same thing here
-                if depth == 0 or depth is None:
+                if depth is None:
                     depth = 1
                 # Check one level deeper
 
