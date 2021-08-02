@@ -4,8 +4,6 @@ from typing import Union
 
 import numpy as np
 
-# import neo4j
-import neo4jCon as neo_connector
 
 try:
     from neo4j import GraphDatabase
@@ -34,8 +32,7 @@ class neo4j_database():
             self.read_session = None
 
         else:  # Fallback custom HTTP connector for Neo4j <= 4.02
-            self.driver = neo_connector.Connector(self.neo4j_connection, self.neo4j_credentials)
-            self.connection_type = "http"
+            raise NotImplementedError("HTTP connection is no longer supported!")
         logging.getLogger().setLevel(oldlevel)
         # Neo4J Internals
         # Pick Merge or Create. Create will double ties but Merge becomes very slow for large networks
@@ -985,14 +982,14 @@ class neo4j_database():
 
         if params is not None:
             assert isinstance(params, list)
-            statements = [neo_connector.Statement(q, p) for (q, p) in zip(query, params)]
+            statements = [{'statement': p, 'parameters':q} for (q, p) in zip(query, params)]
             self.neo_queue.extend(statements)
         else:
-            statements = [neo_connector.Statement(q) for (q) in query]
+            statements = [{'statement': q} for (q) in query]
             self.neo_queue.extend(statements)
 
         # Check for queue size if not conditioned!
-        if (len(self.neo_queue) > self.queue_size) and (self.conditioned == False):
+        if (len(self.neo_queue) > self.queue_size):
             self.write_queue()
 
     def write_queue(self):
@@ -1012,8 +1009,7 @@ class neo4j_database():
                         tx.commit()
                         tx.close()
             else:
-                ret = self.driver.run_multiple(self.neo_queue, self.neo_batch_size)
-                logging.debug(ret)
+                raise NotImplementedError("HTTP connector no longer supported")
 
             self.neo_queue = []
 
@@ -1056,104 +1052,6 @@ class neo4j_database():
         if clean_up:
             self.close_session()
         return res
-
-    def receive_query2(self, query, params=None):
-        oldlevel = logging.getLogger().getEffectiveLevel()
-        logging.getLogger().setLevel(30)
-        if self.connection_type == "bolt":
-            with self.driver.session() as session:
-                res = session.read_transaction(self.consume_result, query, params, self.consume_type)
-        else:
-            if params is not None:
-                res = self.driver.run(query, params)
-            else:
-                res = self.driver.run(query)
-        logging.getLogger().setLevel(oldlevel)
-        return res
-
-    async def areceive_query(self, query, params=None):
-        def aconsume_results(tx, query, params=None):
-            result = tx.run(query, params)
-            return [dict(x) for x in result]
-
-        def run():
-            with self.driver.session() as session:
-                res = session.read_transaction(aconsume_results, query, params)
-            return res
-
-        loop = asyncio.get_event_loop()
-        # Passing None uses the default executor
-        return await loop.run_in_executor(None, run)
-
-    async def aquery_context_of_node(self, ids, times=None, weight_cutoff=None, occurrence=False):
-
-        # New where query
-        where_query = " WHERE v.token_id in $ids"
-
-        # Optimization for time
-        if isinstance(times, list):
-            if len(times) == 1:
-                times = int(times[0])
-
-        # Allow cutoff value of (non-aggregated) weights and set up time-interval query
-        if weight_cutoff is not None:
-            where_query = ''.join([where_query, " AND r.weight >=", str(weight_cutoff), " "])
-        if isinstance(times, dict):
-            where_query = ''.join([where_query, " AND  $times.start <= r.time<= $times.end "])
-        elif isinstance(times, list):
-            where_query = ''.join([where_query, " AND  r.time in $times "])
-        elif isinstance(times, int):
-            where_query = ''.join([where_query, " AND  r.time = $times "])
-
-        if occurrence:
-            match_query_1 = "Match p=(r:edge)<-[:onto]-(v:word) "
-        else:
-            match_query_1 = "Match p=(r:edge)-[:onto]->(v:word) "
-        match_query_2 = "WITH r,v.token_id as ego MATCH (t: word) < -[: onto]-(q:edge {run_index:r.run_index}) < -[: onto]-(x:word) "
-        where_query_2 = "WHERE q.pos <> r.pos AND NOT t.token_id = ego "
-        if weight_cutoff is not None:
-            where_query_2 = ''.join([where_query_2, " AND q.weight >=", str(weight_cutoff), " "])
-
-        with_query = "WITH t.token_id as idx, q.weight as qweight, r.weight as rweight, ego "
-        # CHANGE NOTE, changed sum(qweight) * sum(rweight)
-        return_query = "Return DISTINCT(idx) as alter, ego, sum(qweight*rweight) as weight order by ego"
-
-        # Format time to set for network
-        if isinstance(times, int):
-            nw_time = {"s": times, "e": times, "m": times}
-        elif isinstance(times, dict):
-            nw_time = {"s": times['start'], "e": times['end'], "m": int((times['end'] + times['start']) / 2)}
-        elif isinstance(times, list):
-            sort_times = np.sort(times)
-            nw_time = {"s": sort_times[0], "e": sort_times[-1], "m": int((sort_times[0] + sort_times[-1]) / 2)}
-        else:
-            nw_time = {"s": 0, "e": 0, "m": 0}
-
-        # Create params with or without time
-        if isinstance(times, dict) or isinstance(times, int) or isinstance(times, list):
-            params = {"ids": ids, "times": times}
-        else:
-            params = {"ids": ids}
-
-        query = "".join([match_query_1, where_query, match_query_2, where_query_2, with_query, return_query])
-
-        res = await self.areceive_query(query, params)
-
-        tie_weights = np.array([x['weight'] for x in res], dtype=float)
-        egos = np.array([x['ego'] for x in res])
-        alters = np.array([x['alter'] for x in res])
-
-        unique_egos = np.unique(egos)
-        # Normalize
-        for ego in unique_egos:
-            mask = egos == ego
-            sum_weights = np.sum(tie_weights[mask])
-            tie_weights[mask] = tie_weights[mask] / sum_weights
-
-        ties = [(x[0], x[1], {'weight': x[2], 'time': nw_time['m'], 'start': nw_time['s'], 'end': nw_time['e']}) for x
-                in zip(egos, alters, tie_weights)]
-
-        return ties
 
     def close(self):
         if self.read_session is not None:
