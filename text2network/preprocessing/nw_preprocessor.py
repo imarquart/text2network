@@ -199,7 +199,7 @@ class nw_preprocessor():
             data_file.close()
         for dir in folders:
             year = int(os.path.split(dir)[-1])
-            if year >= 1980:
+            if year >= 0:
                 self.preprocess_files(dir, max_seq, False, year, excludelist)
 
     def preprocess_files(self, folder=None, max_seq=0, overwrite=True, ext_year=None, excludelist=[]):

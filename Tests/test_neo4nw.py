@@ -1,13 +1,4 @@
 import unittest
-from src.classes.nw_processor import nw_processor
-import glob
-import logging
-import os
-import time
-import configparser
-import json
-from src.classes.neo4jnw import neo4j_network
-from src.classes.neo4db import neo4j_database
 from Tests.test_setups import test_setup, test_cleanup
 import numpy as np
 

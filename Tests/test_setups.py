@@ -1,6 +1,6 @@
-from src.functions.file_helpers import check_create_folder
-from src.utils.logging_helpers import setup_logger
-from src.classes.neo4jnw import neo4j_network
+from text2network.functions.file_helpers import check_create_folder
+from text2network.utils.logging_helpers import setup_logger
+from text2network.classes.neo4jnw import neo4j_network
 
 
 def test_setup():

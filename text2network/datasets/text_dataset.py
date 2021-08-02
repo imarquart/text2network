@@ -12,7 +12,7 @@ import os
 import pickle
 import nltk
 
-from src.utils.load_bert import get_full_vocabulary
+from text2network.utils.load_bert import get_full_vocabulary
 
 
 class query_dataset(Dataset):
