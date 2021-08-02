@@ -1,4 +1,6 @@
-import asyncio
+#TODO: Redo Compositional ties
+#TODO: Take out context element fragments
+
 import logging
 from typing import Union
 
@@ -137,20 +139,11 @@ class neo4j_database():
         if 'timeindex' not in constr:
             query = "CREATE INDEX timeindex FOR (a:edge) ON (a.time)"
             self.add_query(query)
-        if 'contimeindex' not in constr:
-            query = "CREATE INDEX contimeindex FOR (a:context) ON (a.time)"
-            self.add_query(query)
         if 'runidxindex' not in constr:
             query = "CREATE INDEX runidxindex FOR (a:edge) ON (a.run_index)"
             self.add_query(query)
-        if 'conrunidxindex' not in constr:
-            query = "CREATE INDEX conrunidxindex FOR (a:context) ON (a.run_index)"
-            self.add_query(query)
         if 'posedgeindex' not in constr:
             query = "CREATE INDEX posedgeindex FOR (a:edge) ON (a.pos)"
-            self.add_query(query)
-        if 'posconindex' not in constr:
-            query = "CREATE INDEX posconindex FOR (a:context) ON (a.pos)"
             self.add_query(query)
         # Need to write first because create and structure changes can not be batched
         self.non_con_write_queue()
@@ -168,39 +161,27 @@ class neo4j_database():
     def clean_database(self, time=None, del_limit=1000000):
         # DEBUG
         nr_nodes = self.receive_query("MATCH (n:edge) RETURN count(n) AS nodes")[0]['nodes']
-        nr_context = self.receive_query("MATCH (n:context) RETURN count(*) AS nodes")[0]['nodes']
-        logging.info("Before cleaning: Network has %i edge-nodes and %i context-nodes" % (nr_nodes, nr_context))
+        logging.info("Before cleaning: Network has %i edge-nodes " % (nr_nodes))
 
         if time is not None:
             # Delete previous edges
             node_query = ''.join(
                 ["MATCH (p:edge {time:", str(time), "}) WITH p LIMIT ", str(del_limit), " DETACH DELETE p"])
-            # Delete previous context edges
-            context_query = ''.join(
-                ["MATCH (p:context {time:", str(time), "})  WITH p LIMIT ", str(del_limit), "  DETACH DELETE p"])
         else:
             # Delete previous edges
             node_query = ''.join(
                 ["MATCH (p:edge)  WITH p LIMIT ", str(del_limit), " DETACH DELETE p"])
-            # Delete previous context edges
-            context_query = ''.join(
-                ["MATCH (p:context)  WITH p LIMIT ", str(del_limit), " DETACH DELETE p"])
 
         while nr_nodes > 0:
             # Delete edge nodes
             self.add_query(node_query, run=True)
             nr_nodes = self.receive_query("MATCH (n:edge) RETURN count(n) AS nodes")[0]['nodes']
-            logging.info("Network has %i edge-nodes and %i context-nodes" % (nr_nodes, nr_context))
-        while nr_context > 0:
-            # Delete context nodes
-            self.add_query(context_query, run=True)
-            nr_context = self.receive_query("MATCH (n:context) RETURN count(*) AS nodes")[0]['nodes']
-            logging.info("Network has %i edge-nodes and %i context-nodes" % (nr_nodes, nr_context))
+            logging.info("Network has %i edge-nodes" % (nr_nodes))
+
 
         # DEBUG
         nr_nodes = self.receive_query("MATCH (n:edge) RETURN count(n) AS nodes")[0]['nodes']
-        nr_context = self.receive_query("MATCH (n:context) RETURN count(*) AS nodes")[0]['nodes']
-        logging.info("After cleaning: Network has %i nodes and %i ties" % (nr_nodes, nr_context))
+        logging.info("After cleaning: Network has %i nodes and %i ties" % (nr_nodes))
 
     # %% Initializations
     def init_tokens(self):
@@ -618,7 +599,6 @@ class neo4j_database():
 
         if context is not None:
             with_query = "WITH a,r,b "
-            #c_with = " WITH r.pos as rpos, r.run_index as ridx, b.token_id AS sender,a.token_id AS receiver, CASE WHEN sum(q.weight)>1.0 THEN 1 else sum(q.weight) END as cweight, head(collect(r.weight)) AS rweight WITH DISTINCT(rpos) as rp, ridx, sender, receiver,  cweight,rweight,cweight*rweight as weight "
             c_with = " WITH r.pos as rpos, r.run_index as ridx, b.token_id AS sender,a.token_id AS receiver, CASE WHEN sum(q.weight)>1.0 THEN 1 else sum(q.weight) END as cweight, head(collect(r.weight)) AS rweight WITH rpos as rp, ridx, sender, receiver,  cweight,rweight,cweight*rweight as weight "
         else:
             with_query = " "
@@ -652,9 +632,6 @@ class neo4j_database():
         # By default, a->b when ego->is_replaced_by->b
         # Given an id, we query b:id(sender)<-a(receiver)
         # This gives all ties where b -replaces-> a
-        # Enable this for occurrences
-        # return_query = ''.join([" RETURN b.token_id AS sender,a.token_id AS receiver,count(r.pos) AS occurrences,",
-        #                        self.aggregate_operator, "(r.weight) AS agg_weight order by receiver"])
         if context_weight and context is not None:
             if context_weight:
                 return_query = ''.join([" RETURN sender, receiver, ",
@@ -662,11 +639,8 @@ class neo4j_database():
             else:
                 return_query = ''.join([" RETURN sender, receiver, ",
                                         self.aggregate_operator, "(rweight) as agg_weight order by receiver"])
-            #return_query = ''.join([" RETURN b.token_id AS sender,a.token_id AS receiver, ",
-            #                        self.aggregate_operator, "(r.weight*qwd) AS agg_weight order by receiver"])
         else:
-            #return_query = ''.join([" RETURN b.token_id AS sender,a.token_id AS receiver, ",
-            #                        self.aggregate_operator, "(r.weight) AS agg_weight order by receiver"])
+
             return_query = ''.join([" RETURN sender, receiver, ", self.aggregate_operator,"(rweight) as agg_weight order by receiver"])
 
         query = "".join([match_query, where_query, with_query, c_match, c_where_query, c_with, return_query])
@@ -794,9 +768,8 @@ class neo4j_database():
 
 
     # %% Insert functions
-    def insert_edges_context(self, ego, ties, contexts, logging_level=logging.DEBUG, no_context=False):
-        if logging_level is not None:
-            logging.disable(logging_level)
+    def insert_edges(self, ego, ties):
+
         logging.debug("Insert {} ego nodes with {} ties".format(ego, len(ties)))
         # Tie direction matters
         # Ego by default is the focal token to be replaced. Normal insertion points the link accordingly.
@@ -805,20 +778,18 @@ class neo4j_database():
 
         egos = np.array([x[0] for x in ties])
         alters = np.array([x[1] for x in ties])
-        con_alters = np.array([x[1] for x in contexts])
+
 
         # token translation
         egos = np.array(self.translate_token_ids(egos))
         alters = np.array(self.translate_token_ids(alters))
-        con_alters = np.array(self.translate_token_ids(con_alters))
 
         times = np.array([x[2] for x in ties])
         dicts = np.array([x[3] for x in ties])
-        con_times = np.array([x[2] for x in contexts])
-        con_dicts = np.array([x[3] for x in contexts])
+
 
         # Delte just to make sure translation is taken
-        del ties, contexts
+        del ties
 
         unique_egos = np.unique(egos)
         if len(unique_egos) == 1:
@@ -831,30 +802,15 @@ class neo4j_database():
                                "p3": ((x[2]['p3']) if len(x[2]) > 6 else 0),
                                "p4": ((x[2]['p4']) if len(x[2]) > 7 else 0), }
                               for x in zip(alters.tolist(), times.tolist(), dicts.tolist())]
-            contexts_formatted = [{"alter": int(x[0]), "time": int(x[1]), "weight": float(x[2]['weight']),
-                                   "seq_id": int(x[2]['seq_id'] if len(x[2]) > 2 else 0),
-                                   "pos": int(x[2]['pos'] if len(x[2]) > 3 else 0),
-                                   "run_index": int(x[2]['run_index'] if len(x[2]) > 1 else 0),
-                                   "p1": ((x[2]['p1']) if len(x[2]) > 4 else 0),
-                                   "p2": ((x[2]['p2']) if len(x[2]) > 5 else 0),
-                                   "p3": ((x[2]['p3']) if len(x[2]) > 6 else 0),
-                                   "p4": ((x[2]['p4']) if len(x[2]) > 7 else 0), }
-                                  for x in zip(con_alters.tolist(), con_times.tolist(), con_dicts.tolist())]
-            params = {"ego": int(egos[0]), "ties": ties_formatted, "contexts": contexts_formatted}
+
+            params = {"ego": int(egos[0]), "ties": ties_formatted}
 
             # Select order of parameters
             p1 = np.array([str(x['p1']) if (len(x) > 4) else "0" for x in dicts])
             p2 = np.array([str(x['p2']) if (len(x) > 5) else "0" for x in dicts])
             p3 = np.array([str(x['p3']) if (len(x) > 6) else "0" for x in dicts])
             p4 = np.array([str(x['p4']) if (len(x) > 7) else "0" for x in dicts])
-            # Select order of context parameters
-            cseq_id = np.array([x['seq_id'] if len(x) > 2 else "0" for x in con_dicts], dtype=np.str)
-            cpos = np.array([x['pos'] if len(x) > 3 else "0" for x in con_dicts], dtype=np.str)
-            crun_index = np.array([x['run_index'] if len(x) > 1 else "0" for x in con_dicts], dtype=np.str)
-            cp1 = np.array([str(x['p1']) if (len(x) > 4) else "0" for x in con_dicts])
-            cp2 = np.array([str(x['p2']) if (len(x) > 5) else "0" for x in con_dicts])
-            cp3 = np.array([str(x['p3']) if (len(x) > 6) else "0" for x in con_dicts])
-            cp4 = np.array([str(x['p4']) if (len(x) > 7) else "0" for x in con_dicts])
+
 
             # Build parameter string
             parameter_string = ""
@@ -867,40 +823,14 @@ class neo4j_database():
             if not all(p4 == "0") and not all(p4 == ''):
                 parameter_string = parameter_string + ", p4:tie.p4 "
 
-            cparameter_string = ""
-            if not all(cseq_id == "0") and not all(cseq_id == ''):
-                cparameter_string = cparameter_string + ", seq_id:con.seq_id"
-            if not all(cpos == "0") and not all(cpos == ''):
-                cparameter_string = cparameter_string + ", pos:con.pos"
-            if not all(crun_index == "0") and not all(crun_index == ''):
-                cparameter_string = cparameter_string + ", run_index:con.run_index"
-            if not all(cp1 == "0") and not all(cp1 == ''):
-                cparameter_string = cparameter_string + ", p1:con.p1"
-            if not all(cp2 == "0") and not all(cp2 == ''):
-                cparameter_string = cparameter_string + ", p2:con.p2"
-            if not all(cp3 == "0") and not all(cp3 == ''):
-                cparameter_string = cparameter_string + ", p3:con.p3"
-            if not all(cp4 == "0") and not all(cp4 == ''):
-                cparameter_string = cparameter_string + ", p4:con.p4"
+            # Build Query
 
-            if not no_context:
-                query = ''.join(
-                    [
-                        " MATCH (a:word {token_id: $ego}) WITH a UNWIND $ties as tie MATCH (b:word {token_id: tie.alter}) ",
-                        self.creation_statement,
-                        " (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, seq_id:tie.seq_id,pos:tie.pos, run_index:tie.run_index ",
-                        parameter_string,
-                        "})<-[:onto]-(a) WITH r UNWIND $contexts as con MATCH (q:word {token_id: con.alter}) WITH r,q,con MERGE (c:context {weight:con.weight, time:con.time ",
-                        cparameter_string, "})-[:conto]->(q) WITH r,c ",
-                        self.context_creation_statement,
-                        " (r)-[:conto]->(c)"])
-            else:
-                query = ''.join(
-                    [
-                        " MATCH (a:word {token_id: $ego}) WITH a UNWIND $ties as tie MATCH (b:word {token_id: tie.alter}) ",
-                        self.creation_statement,
-                        " (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, seq_id:tie.seq_id,pos:tie.pos, run_index:tie.run_index ",
-                        parameter_string, "})<-[:onto]-(a)"])
+            query = ''.join(
+                [
+                    " MATCH (a:word {token_id: $ego}) WITH a UNWIND $ties as tie MATCH (b:word {token_id: tie.alter}) ",
+                    self.creation_statement,
+                    " (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, seq_id:tie.seq_id,pos:tie.pos, run_index:tie.run_index ",
+                    parameter_string, "})<-[:onto]-(a)"])
         else:
             logging.error("Batched edge creation with context for multiple egos not supported.")
             raise NotImplementedError
@@ -1045,7 +975,6 @@ class neo4j_database():
             clean_up=True
         oldlevel = logging.getLogger().getEffectiveLevel()
         logging.getLogger().setLevel(30)
-        #res = self.read_session.read_transaction(self.consume_result, query, params, self.consume_type)
         result=self.read_session.run(query,params)
         res=[dict(x) for x in result]
         logging.getLogger().setLevel(oldlevel)
