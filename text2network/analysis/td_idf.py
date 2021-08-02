@@ -2,13 +2,13 @@ from itertools import product
 
 from networkx.tests.test_convert_pandas import pd
 
-from src.functions.file_helpers import check_create_folder
-from src.measures.measures import average_cluster_proximities, extract_all_clusters, proximities
-from src.utils.logging_helpers import setup_logger
+from text2network.functions.file_helpers import check_create_folder
+from text2network.measures.measures import average_cluster_proximities, extract_all_clusters, proximities
+from text2network.utils.logging_helpers import setup_logger
 import logging
 import numpy as np
-from src.functions.graph_clustering import consensus_louvain, louvain_cluster
-from src.classes.neo4jnw import neo4j_network
+from text2network.functions.graph_clustering import consensus_louvain, louvain_cluster
+from text2network.classes.neo4jnw import neo4j_network
 
 # Set a configuration path
 configuration_path = '/config/config.ini'
@@ -30,7 +30,7 @@ os.environ['NUMEXPR_MAX_THREADS'] = '16'
 semantic_network = neo4j_network(config)
 
 
-focal_tokens=["bezos","zuckerberg","gates","page","jobs","musk"]
+focal_tokens=["bezos","zuckerberg","gates","page","jobs"]
 cutoff=0.1
 
 for focal_token in focal_tokens:

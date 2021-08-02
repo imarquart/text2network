@@ -7,11 +7,11 @@ import pandas as pd
 
 # from src.classes import neo4jnw
 # from src.classes.neo4jnw import neo4j_network
-from src.functions.file_helpers import check_create_folder
-from src.functions.graph_clustering import consensus_louvain
-from src.functions.node_measures import proximity, centrality
+from text2network.functions.file_helpers import check_create_folder
+from text2network.functions.graph_clustering import consensus_louvain
+from text2network.functions.node_measures import proximity, centrality
 # from src.classes import neo4jnw
-from src.utils.input_check import input_check
+from text2network.utils.input_check import input_check
 
 
 def centralities(snw, focal_tokens=None, types=["PageRank", "normedPageRank"], reverse_ties: Optional[bool] = False):

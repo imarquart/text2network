@@ -8,17 +8,17 @@ from networkx import compose_all
 from tqdm import tqdm
 
 # import neo4j utilities and classes
-from src.classes.neo4db import neo4j_database
-from src.functions.backout_measure import backout_measure
-from src.functions.file_helpers import check_create_folder
-from src.functions.format import pd_format
+from text2network.classes.neo4db import neo4j_database
+from text2network.functions.backout_measure import backout_measure
+from text2network.functions.file_helpers import check_create_folder
+from text2network.functions.format import pd_format
 # Clustering
-from src.functions.graph_clustering import *
-from src.functions.node_measures import proximity, centrality
-from src.measures.measures import proximities, centralities
-from src.utils.input_check import input_check
-from src.utils.network_tools import make_reverse, sparsify_graph
-from src.utils.twowaydict import TwoWayDict
+from text2network.functions.graph_clustering import *
+from text2network.functions.node_measures import proximity, centrality
+from text2network.measures.measures import proximities, centralities
+from text2network.utils.input_check import input_check
+from text2network.utils.network_tools import make_reverse, sparsify_graph
+from text2network.utils.twowaydict import TwoWayDict
 import pandas as pd
 
 # Type definition
