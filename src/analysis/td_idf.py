@@ -1,7 +1,9 @@
 from itertools import product
 
+from networkx.tests.test_convert_pandas import pd
+
 from src.functions.file_helpers import check_create_folder
-from src.measures.measures import average_cluster_proximities, extract_all_clusters
+from src.measures.measures import average_cluster_proximities, extract_all_clusters, proximities
 from src.utils.logging_helpers import setup_logger
 import logging
 import numpy as np
@@ -28,7 +30,29 @@ os.environ['NUMEXPR_MAX_THREADS'] = '16'
 semantic_network = neo4j_network(config)
 
 
-focal_token="bezos"
+focal_tokens=["bezos","zuckerberg","gates","page","jobs","musk"]
 cutoff=0.1
 
-semantic_network.context_condition(tokens=focal_token, times=None,  weight_cutoff=cutoff, occurrence=True, depth=1)
+for focal_token in focal_tokens:
+    qry="Match p=(r:edge)<-[:onto]-(v {token:'"+focal_token+"'}) WITH DISTINCT(r.run_index) as ridx, collect(DISTINCT r.pos) as rpos MATCH (q:edge {run_index:ridx})<-[:onto]-(x:word) WHERE not q.pos in rpos RETURN DISTINCT(x.token) as idx, sum(q.weight)"
+    asdf=pd.DataFrame(semantic_network.db.receive_query(qry))
+    asdf.columns=["idx","occ"]
+    asdf=asdf.sort_values(by="occ", ascending=False)
+
+    qry2="MATCH p=(r:edge)<-[:onto]-(v) WHERE v.token in "+str(list(asdf.idx))+" RETURN DISTINCT(v.token) as idx, sum(r.weight) as occ"
+    asdf2=pd.DataFrame(semantic_network.db.receive_query(qry2))
+    asdf2.columns=["idx","occ_all"]
+    asdf2=asdf2.sort_values(by="occ_all", ascending=False)
+
+    asdf3=pd.merge(left=asdf,right=asdf2, how="inner", on=["idx"])
+    asdf3['tdn']=100*asdf3['occ']/asdf3['occ_all']
+    asdf3['idf']=np.sum(asdf3['occ_all'])/asdf3['occ_all']
+    asdf3['tdidf']=asdf3['occ']*np.log(asdf3['idf'])
+    asdf3['ntdidf'] = asdf3['tdn'] * np.log(asdf3['idf'])
+    asdf3=asdf3.sort_values(by="tdidf", ascending=False)
+
+    filename = "".join(
+        [config['Paths']['csv_outputs'], "/tdidf_", str(focal_token), ".xlsx"])
+
+    filename = check_create_folder(filename)
+    asdf3.to_excel(filename, merge_cells=False)

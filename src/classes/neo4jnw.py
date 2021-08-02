@@ -1119,7 +1119,7 @@ class neo4j_network(Sequence):
         if not self.conditioned:  # This is the first conditioning
             # Save original depth variable
             or_depth = depth
-            if not isinstance(times, (list, np.ndarray)):
+            if not isinstance(times, (list, np.ndarray)) and times is not None:
                 times=[times]
             if cond_type is None:
                 if depth is not None:
