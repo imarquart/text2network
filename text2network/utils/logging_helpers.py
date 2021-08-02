@@ -1,5 +1,5 @@
 import logging
-from src.functions.file_helpers import check_create_folder
+from text2network.functions.file_helpers import check_create_folder
 
 def setup_logger(logging_path, logging_level,filename="log"):
     """

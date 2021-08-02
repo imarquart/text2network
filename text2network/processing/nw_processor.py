@@ -5,16 +5,16 @@ import tables
 import torch
 import tqdm
 import json
-from src.functions.file_helpers import check_create_folder
+from text2network.functions.file_helpers import check_create_folder
 from torch.utils.data import BatchSampler, SequentialSampler
-from src.datasets.dataloaderX import DataLoaderX
-from src.datasets.text_dataset import query_dataset, text_dataset_collate_batchsample
-from src.utils.delwords import create_stopword_list
-from src.utils.rowvec_tools import simple_norm
-from src.utils.get_uniques import get_uniques
-from src.utils.load_bert import get_bert_and_tokenizer, get_full_vocabulary
+from text2network.datasets.dataloaderX import DataLoaderX
+from text2network.datasets.text_dataset import query_dataset, text_dataset_collate_batchsample
+from text2network.utils.delwords import create_stopword_list
+from text2network.utils.rowvec_tools import simple_norm
+from text2network.utils.get_uniques import get_uniques
+from text2network.utils.load_bert import get_bert_and_tokenizer, get_full_vocabulary
 import gc
-from src.utils.hash_file import hash_string, check_step, complete_step
+from text2network.utils.hash_file import hash_string, check_step, complete_step
 
 
 class nw_processor():

@@ -4,13 +4,13 @@ import time
 
 import torch
 
-from src.datasets.text_dataset import bert_dataset
-from src.functions.file_helpers import check_create_folder
-from src.functions.run_bert import run_bert
-from src.utils.bert_args import bert_args
-from src.utils.get_uniques import get_uniques
-from src.utils.hash_file import hash_string, check_step, complete_step
-from src.utils.load_bert import get_bert_and_tokenizer
+from text2network.datasets.text_dataset import bert_dataset
+from text2network.functions.file_helpers import check_create_folder
+from text2network.functions.run_bert import run_bert
+from text2network.utils.bert_args import bert_args
+from text2network.utils.get_uniques import get_uniques
+from text2network.utils.hash_file import hash_string, check_step, complete_step
+from text2network.utils.load_bert import get_bert_and_tokenizer
 
 
 class bert_trainer():

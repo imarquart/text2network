@@ -1,12 +1,4 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Fri Dec 18 16:47:51 2020
-
-@author: marquart
-"""
-
 import networkx as nx
-import itertools
 import logging
 import numpy as np
 

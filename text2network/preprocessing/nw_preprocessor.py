@@ -1,16 +1,14 @@
 # TODO: Check Comments
 import logging
 import unicodedata
-from os import listdir, mkdir
 from os.path import isfile, join, abspath, exists, dirname, basename, normpath
 import os
 import re
 import glob
 import nltk
 import tables
-import configparser
-from src.functions.file_helpers import check_create_folder
-from src.utils.logging_helpers import setup_logger
+from text2network.functions.file_helpers import check_create_folder
+from text2network.utils.logging_helpers import setup_logger
 
 
 class nw_preprocessor():

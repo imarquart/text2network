@@ -38,9 +38,9 @@ from tqdm import tqdm, trange
 from transformers import (WEIGHTS_NAME, AdamW, WarmupLinearSchedule,
                           BertConfig, BertForMaskedLM, BertTokenizer)
 
-from src.utils.load_bert import get_bert_and_tokenizer
-from src.utils.bert_args import bert_args
-from src.datasets.text_dataset import bert_dataset
+from text2network.utils.load_bert import get_bert_and_tokenizer
+from text2network.utils.bert_args import bert_args
+from text2network.datasets.text_dataset import bert_dataset
 
 # try:
 #

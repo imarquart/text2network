@@ -7,7 +7,7 @@ import networkx as nx
 import scipy as sp
 import numpy as np
 
-from src.utils.rowvec_tools import cutoff_percentage
+from text2network.utils.rowvec_tools import cutoff_percentage
 
 
 def make_reverse(graph):
