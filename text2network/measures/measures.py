@@ -189,6 +189,7 @@ def average_cluster_proximities(focal_token: str,  nw, levels: int,
                                 compositional: Optional[bool] = False,
                                 reverse_ties: Optional[bool] = False,
                                 symmetric: Optional[bool] = False,
+                                export_network: Optional[bool] = False,
                                 add_focal_to_clusters: Optional[bool] = False,
                                 mode: Optional[str] = "replacement", occurrence: Optional[bool] = False,
                                 seed: Optional[int] = None) -> pd.DataFrame:
@@ -308,7 +309,7 @@ def average_cluster_proximities(focal_token: str,  nw, levels: int,
         add_ego_tokens = focal_token
     else:
         add_ego_tokens = None
-    clusters = nw.cluster(interest_list=interest_list, levels=levels, to_measure=[proximity],
+    clusters = nw.cluster(interest_list=interest_list, levels=levels, to_measure=[proximity, centrality],
                           algorithm=algorithm, add_ego_tokens=add_ego_tokens)
 
     cluster_dict = {}
@@ -327,22 +328,22 @@ def average_cluster_proximities(focal_token: str,  nw, levels: int,
                 rev_proximate_nodes = rev_proxim.reindex(nodes, fill_value=0)
                 # We only care about proximate nodes
                 proximate_nodes = proximate_nodes[proximate_nodes > cluster_cutoff]
+                rev_proximate_nodes = rev_proximate_nodes[rev_proximate_nodes > cluster_cutoff]
                 if len(proximate_nodes) > 0:
                     cluster_measures = return_measure_dict(proximate_nodes)
-                    mean_cluster_prox = np.mean(proximate_nodes)
-                    mean_cluster_rev_prox = np.mean(rev_proximate_nodes)
+                    rev_cluster_measures=return_measure_dict(rev_proximate_nodes, prefix="rev")
                     top_node = proximate_nodes.idxmax()
                     # Default cluster entry
                     year = -100
                     name = "-".join(list(proximate_nodes.nlargest(5).index))
                     df_dict = {'Year': year, 'Token': name, 'Prom_Node': top_node, 'Level': cl['level'],
                                'Cluster_Id': cl['name'],
-                               'Parent': cl['parent'], 'Cluster_Prox': mean_cluster_prox,
-                               'Cluster_Rev_Prox': mean_cluster_rev_prox, 'Nr_ProxNodes': len(proximate_nodes),
+                               'Parent': cl['parent'], 'Nr_ProxNodes': len(proximate_nodes),
                                'NrNodes': len(nodes), 'Ma': 0, 'Node_Proximity': 0,
                                'Node_Rev_Proximity': 0, 'Node_Delta_Proximity': -100}
                     cluster_dict.update({name: cl})
                     df_dict.update(cluster_measures)
+                    df_dict.update(rev_cluster_measures)
                     cluster_dataframe.append(df_dict.copy())
                     # Add each node
                     if add_individual_nodes:
@@ -355,8 +356,7 @@ def average_cluster_proximities(focal_token: str,  nw, levels: int,
                                 delta_prox = node_prox - node_rev_prox
                                 df_dict = {'Year': year, 'Token': node, 'Prom_Node': top_node, 'Level': cl['level'],
                                            'Cluster_Id': cl['name'],
-                                           'Parent': cl['parent'], 'Cluster_Prox': mean_cluster_prox,
-                                           'Cluster_Rev_Prox': mean_cluster_rev_prox,
+                                           'Parent': cl['parent'],
                                            'Nr_ProxNodes': len(proximate_nodes),
                                            'NrNodes': len(nodes), 'Ma': 0, 'Node_Proximity': node_prox,
                                            'Node_Rev_Proximity': node_rev_prox, 'Node_Delta_Proximity': delta_prox}
@@ -445,7 +445,8 @@ def average_cluster_proximities(focal_token: str,  nw, levels: int,
     if filename is not None:
         filename = check_create_folder(filename)
         df.to_excel(filename + ".xlsx")
-        # nw.export_gefx(filename=filename)
+        if export_network:
+            nw.export_gefx(filename=check_create_folder(filename + ".gexf"))
     return df
 
 
@@ -468,139 +469,8 @@ def extract_all_clusters(level: int, cutoff: float, focal_token: str,
                                        algorithm=algorithm, seed=seed)
 
 
-def old_extract_all_clusters(level: int, cutoff: float, focal_token: str,
-                             snw, depth: Optional[int] = None, context: Optional[list] = None,
-                             interest_list: Optional[list] = None, algorithm: Optional[Callable] = None,
-                             times: Optional[Union[list, int]] = None,
-                             filename: Optional[str] = None, compositional: Optional[bool] = False,
-                             reverse_ties: Optional[bool] = False, add_focal_to_clusters: Optional[bool] = False,
-                             mode: Optional[str] = "replacement", occurrence: Optional[bool] = False,
-                             seed: Optional[int] = None) -> pd.DataFrame:
-    """
-    Create and extract all clusters relative to a focal token until a given level.
 
-    Parameters
-    ----------
-    level : int
-        How many levels to cluster?
-    cutoff : float
-        Cutoff weight for querying network
-    depth : int
-        If nonzero, query an ego network of given depth instead of full network, default is None
-    focal_token : str
-        The focal token to consider for proximities and ego network
-    semantic_network : neo4jnw
-        Initiated semantic network
-    interest_list : list
-        List of tokens that are of interest. Clusters that do not contain these tokens are discarded and not further clustered for deeper levels
-    algorithm : callable
-        Clustering algorithm to use
-    times : list, int
-        Times to use when conditioning
-    filename : str
-        If not None, dataframe is saved to filename
-    compositional : bool
-        Whether to use compositional ties
-    reverse_ties : bool
-        Whether to reverse ties after conditioning
-    add_focal_to_clusters: bool
-        If true, add focal token to each cluster before clustering
-    mode: str
-        Whether to derive replacement or contextual clusters
-            "replacement" (Default)
-            "context"
-    occurrence: bool
-        When mode is set to "context", query either
-            False (Default): Context are those words that are plausible replacement in the sentence
-            True: Contexts are the words that actually occur in the sentence
-    Returns
-    -------
-    pd.DataFrame:
-        DataFrame with all cluster and all tokens by cluster levels.
-    """
-
-    if algorithm is None:
-        algorithm = consensus_louvain
-
-    if add_focal_to_clusters:
-        add_focal_to_clusters = focal_token
-    else:
-        add_focal_to_clusters = None
-
-    snw.decondition()
-
-    if seed is not None:
-        snw.set_random_seed(seed)
-
-    dataframe_list = []
-
-    # First, derive clusters
-    if mode == "context":
-        snw.context_condition(tokens=focal_token, times=times, depth=depth, weight_cutoff=cutoff, occurrence=occurrence)
-
-    else:
-        snw.condition(tokens=focal_token, times=times, context=context, depth=depth, weight_cutoff=cutoff,
-                      compositional=compositional, reverse_ties=reverse_ties)
-    # Get clusters
-    if add_focal_to_clusters:
-        add_ego_tokens = focal_token
-    else:
-        add_ego_tokens = None
-    clusters = snw.cluster(interest_list=interest_list, levels=level, to_measure=[proximity],
-                           algorithm=algorithm, add_ego_tokens=add_ego_tokens)
-    for cl in clusters:
-        if cl['level'] == 0:
-            rev_proxim = snw.pd_format(cl['measures'])[0].loc[:, focal_token]
-            proxim = snw.pd_format(cl['measures'])[0].loc[focal_token, :]
-        if len(cl['graph'].nodes) >= 1 and cl['level'] > 0:
-            nodes = snw.ensure_tokens(list(cl['graph'].nodes))
-            proximate_nodes = proxim.reindex(nodes, fill_value=0)
-            proximate_nodes = proximate_nodes[proximate_nodes > 0]
-            if len(proximate_nodes) > 0:
-                cluster_measures = return_measure_dict(proximate_nodes)
-
-                top_node = proximate_nodes.idxmax()
-                # Default cluster entry
-                node_prox = 0
-                node_rev_prox = 0
-                delta_prox = -100
-                name = "-".join(list(proximate_nodes.nlargest(5).index))
-                df_dict = {'Token': name, 'Level': cl['level'], 'Clustername': cl['name'], 'Prom_Node': top_node,
-                           'Parent': cl['parent'], 'Proximity': node_prox,
-                           'Rev_Proximity': node_rev_prox, 'Delta_Proximity': delta_prox,
-                           'Nr_ProxNodes': len(proximate_nodes), 'NrNodes': len(nodes)}
-                df_dict.update(cluster_measures)
-                dataframe_list.append(df_dict.copy())
-                # if len(proximate_nodes) > 0:
-                # logging.info("Name: {}, Level: {}, Parent: {}".format(cl['name'], cl['level'], cl['parent']))
-                # logging.info("Nodes: {}".format(nodes))
-                # Add focal node
-                if focal_token in nodes:
-                    proximate_nodes[focal_token] = -999
-                for node in list(proximate_nodes.index):
-                    if proxim.reindex([node], fill_value=0)[0] > 0 or node == focal_token:
-                        node_prox = proxim.reindex([node], fill_value=0)[0]
-                        node_rev_prox = rev_proxim.reindex([node], fill_value=0)[0]
-                        delta_prox = node_prox - node_rev_prox
-                        df_dict = {'Token': node, 'Level': cl['level'], 'Clustername': cl['name'],
-                                   'Prom_Node': top_node,
-                                   'Parent': cl['parent'],
-                                   'Proximity': node_prox,
-                                   'Rev_Proximity': node_rev_prox, 'Delta_Proximity': delta_prox,
-                                   'Nr_ProxNodes': len(proximate_nodes), 'NrNodes': len(nodes)}
-                        df_dict.update(cluster_measures)
-                        dataframe_list.append(df_dict.copy())
-
-    df = pd.DataFrame(dataframe_list)
-
-    if filename is not None:
-        df.to_excel(check_create_folder(filename + ".xlsx"))
-        snw.export_gefx(filename=check_create_folder(filename + ".gexf"))
-
-    return df
-
-
-def return_measure_dict(vec: Union[list, np.array]):
+def return_measure_dict(vec: Union[list, np.array], prefix=""):
     """
     Helper function to create cluster measures
 
@@ -615,13 +485,16 @@ def return_measure_dict(vec: Union[list, np.array]):
     """
     if isinstance(vec, list):
         vec = np.array(vec)
-    if sum(vec.shape) < 2:
+
         return {}
 
     avg = np.mean(vec)
     weights = vec / np.sum(vec)
     w_avg = np.average(vec, weights=weights)
     sum_vec = np.sum(vec)
-    sd = np.std(vec)
+    if sum(vec.shape) >= 2:
+        sd = np.std(vec)
+    else:
+        sd = 0
 
-    return {"Avg": avg, "w_Avg": w_avg, "Std": sd, "Sum": sum_vec}
+    return {prefix+"Avg": avg, prefix+"w_Avg": w_avg, prefix+"Std": sd, prefix+"Sum": sum_vec}

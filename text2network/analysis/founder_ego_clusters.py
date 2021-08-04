@@ -1,12 +1,12 @@
 from itertools import product
 
-from src.functions.file_helpers import check_create_folder
-from src.measures.measures import average_cluster_proximities, extract_all_clusters
-from src.utils.logging_helpers import setup_logger
+from text2network.functions.file_helpers import check_create_folder
+from text2network.measures.measures import average_cluster_proximities, extract_all_clusters
+from text2network.utils.logging_helpers import setup_logger
 import logging
 import numpy as np
-from src.functions.graph_clustering import consensus_louvain, louvain_cluster
-from src.classes.neo4jnw import neo4j_network
+from text2network.functions.graph_clustering import consensus_louvain, louvain_cluster
+from text2network.classes.neo4jnw import neo4j_network
 
 # Set a configuration path
 configuration_path = '/config/config.ini'
@@ -108,8 +108,8 @@ setup_logger(config['Paths']['log'], config['General']['logging_level'], "founde
 semantic_network = neo4j_network(config)
 
 level_list = [5]
-weight_list = [0, 0.01]
-cl_clutoff_list = [0,90]
+weight_list = [0.1,0, 0.01]
+cl_clutoff_list = [0,90,0.1]
 depth_list = [1]
 rs_list = [100]
 rev_ties_list = [False]
@@ -130,15 +130,10 @@ for depth, level, rs, cutoff, rev, comp, cluster_cutoff,algo,backout,sym,fadd,al
          "_lev", str(level), "_cut",
          str(cutoff), "_clcut", str(cluster_cutoff), "_algo", str(algo.__name__), "_depth", str(depth), "_rs", str(rs)])
     logging.info("Network clustering: {}".format(filename))
-    # Random Seed
-    #df = extract_all_clusters(level=level, cutoff=cutoff, times=years, cluster_cutoff=cluster_cutoff, focal_token=focal_token,
-    #                          interest_list=alter_subset, snw=semantic_network,
-    #                          depth=depth, algorithm=algo, filename=filename, to_back_out=backout, add_focal_to_clusters=fadd,
-    #                         compositional=comp, reverse_ties=rev, seed=rs)
     df = average_cluster_proximities(focal_token=focal_token, nw=semantic_network, levels=level, interest_list=alters, times=years,do_reverse=True,
                                      depth=depth, weight_cutoff=cutoff, cluster_cutoff=cluster_cutoff, year_by_year=False, add_focal_to_clusters=fadd,
                                      moving_average=None, filename=filename, compositional=comp, to_back_out=backout, include_all_levels=True, add_individual_nodes=True,
-                                     reverse_ties=rev, symmetric=sym, seed=rs)
+                                     reverse_ties=rev, symmetric=sym, seed=rs, export_network=True)
 #### Cluster yearly proximities
 
 

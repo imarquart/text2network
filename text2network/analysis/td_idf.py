@@ -1,7 +1,6 @@
 from itertools import product
 
-from networkx.tests.test_convert_pandas import pd
-
+import pandas as pd
 from text2network.functions.file_helpers import check_create_folder
 from text2network.measures.measures import average_cluster_proximities, extract_all_clusters, proximities
 from text2network.utils.logging_helpers import setup_logger
