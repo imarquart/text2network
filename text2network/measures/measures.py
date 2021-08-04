@@ -319,6 +319,7 @@ def average_cluster_proximities(focal_token: str,  nw, levels: int,
         if cl['level'] == 0:  # Use zero cluster, where all tokens are present, to get proximities
             rev_proxim = nw.pd_format(cl['measures'])[0].loc[:, focal_token]
             proxim = nw.pd_format(cl['measures'])[0].loc[focal_token, :]
+            overall_pagerank = nw.pd_format(cl['measures'])[1]['normedPageRank']
         if len(cl['graph'].nodes) > 0 and (cl['level'] == levels or include_all_levels):  # Consider only the last level
             # Get List of tokens
             nodes = nw.ensure_tokens(list(cl['graph'].nodes))
@@ -326,24 +327,29 @@ def average_cluster_proximities(focal_token: str,  nw, levels: int,
             if len(np.intersect1d(nodes, interest_list)) > 0:
                 proximate_nodes = proxim.reindex(nodes, fill_value=0)
                 rev_proximate_nodes = rev_proxim.reindex(nodes, fill_value=0)
+                cluster_pagerank = overall_pagerank.reindex(nodes, fill_value=0)
                 # We only care about proximate nodes
                 proximate_nodes = proximate_nodes[proximate_nodes > cluster_cutoff]
                 rev_proximate_nodes = rev_proximate_nodes[rev_proximate_nodes > cluster_cutoff]
                 if len(proximate_nodes) > 0:
                     cluster_measures = return_measure_dict(proximate_nodes)
-                    rev_cluster_measures=return_measure_dict(rev_proximate_nodes, prefix="rev")
-                    top_node = proximate_nodes.idxmax()
+                    rev_cluster_measures=return_measure_dict(rev_proximate_nodes, prefix="rev_")
+                    pagerank_measures=return_measure_dict(cluster_pagerank, prefix="pr_")
                     # Default cluster entry
                     year = -100
                     name = "-".join(list(proximate_nodes.nlargest(5).index))
-                    df_dict = {'Year': year, 'Token': name, 'Prom_Node': top_node, 'Level': cl['level'],
+                    name_pr = "-".join(list(cluster_pagerank.nlargest(5).index))
+                    top_node_pr = cluster_pagerank.idxmax()
+                    top_node = proximate_nodes.idxmax()
+                    df_dict = {'Year': year, 'Token': name, 'Token_pr': name_pr, 'Prom_Node_pr': top_node_pr,'Prom_Node': top_node, 'Level': cl['level'],
                                'Cluster_Id': cl['name'],
                                'Parent': cl['parent'], 'Nr_ProxNodes': len(proximate_nodes),
                                'NrNodes': len(nodes), 'Ma': 0, 'Node_Proximity': 0,
-                               'Node_Rev_Proximity': 0, 'Node_Delta_Proximity': -100}
+                               'Node_Rev_Proximity': 0, 'Node_Delta_Proximity': -100, 'Node_Centrality':0}
                     cluster_dict.update({name: cl})
                     df_dict.update(cluster_measures)
                     df_dict.update(rev_cluster_measures)
+                    df_dict.update(pagerank_measures)
                     cluster_dataframe.append(df_dict.copy())
                     # Add each node
                     if add_individual_nodes:
@@ -352,15 +358,18 @@ def average_cluster_proximities(focal_token: str,  nw, levels: int,
                         for node in list(proximate_nodes.index):
                             if proxim.reindex([node], fill_value=0)[0] > 0 or node == focal_token:
                                 node_prox = proxim.reindex([node], fill_value=0)[0]
+                                node_cent = cluster_pagerank.reindex([node], fill_value=0)[0]
                                 node_rev_prox = rev_proxim.reindex([node], fill_value=0)[0]
                                 delta_prox = node_prox - node_rev_prox
-                                df_dict = {'Year': year, 'Token': node, 'Prom_Node': top_node, 'Level': cl['level'],
+                                df_dict = {'Year': year, 'Token': node, 'Token_pr': node, 'Prom_Node_pr': top_node_pr,'Prom_Node': top_node, 'Level': cl['level'],
                                            'Cluster_Id': cl['name'],
                                            'Parent': cl['parent'],
                                            'Nr_ProxNodes': len(proximate_nodes),
                                            'NrNodes': len(nodes), 'Ma': 0, 'Node_Proximity': node_prox,
-                                           'Node_Rev_Proximity': node_rev_prox, 'Node_Delta_Proximity': delta_prox}
+                                           'Node_Rev_Proximity': node_rev_prox, 'Node_Delta_Proximity': delta_prox,'Node_Centrality':node_cent}
                                 df_dict.update(cluster_measures)
+                                df_dict.update(rev_cluster_measures)
+                                df_dict.update(pagerank_measures)
                                 cluster_dataframe.append(df_dict.copy())
 
     if year_by_year:
@@ -387,8 +396,6 @@ def average_cluster_proximities(focal_token: str,  nw, levels: int,
                                      occurrence=occurrence, batchsize=None)
 
             else:
-                #nw.condition(times=ma_years, weight_cutoff=weight_cutoff, context=context, compositional=compositional,
-                #             reverse_ties=reverse_ties)
                 nw.condition(tokens=focal_token, times=ma_years, weight_cutoff=weight_cutoff, context=context, compositional=compositional,
                              reverse_ties=reverse_ties)
 
@@ -403,41 +410,48 @@ def average_cluster_proximities(focal_token: str,  nw, levels: int,
                 year_proxim = nw.pd_format(year_proxim)[0]
                 rev_proxim = year_proxim.loc[:, focal_token]
                 proxim = year_proxim.loc[focal_token, :]
+                year_cent= nw.centralities()
+                year_cent = nw.pd_format(year_cent)[0]['normedPageRank']
             else:
                 year_proxim = nw.proximities(focal_tokens=[focal_token])
                 year_proxim = nw.pd_format(year_proxim)[0]
                 proxim = year_proxim.loc[focal_token, :]
                 rev_proxim = 0
+                year_pagerank= nw.centralities()
+                year_pagerank = nw.pd_format(year_pagerank)[0]['normedPageRank']
             for cl_name in cluster_dict:
                 cl = cluster_dict[cl_name]
                 nodes = nw.ensure_tokens(list(cl['graph'].nodes))
                 proximate_nodes = proxim.reindex(nodes, fill_value=0)
+                proximate_nodes = proximate_nodes[proximate_nodes > cluster_cutoff]
+                cluster_year_pagerank = year_pagerank.reindex(nodes, fill_value=0)
                 if do_reverse is True:
                     rev_proximate_nodes = rev_proxim.reindex(nodes, fill_value=0)
+                    rev_proximate_nodes = rev_proximate_nodes[rev_proximate_nodes > cluster_cutoff]
                 else:
                     rev_proximate_nodes = [0]
-                proximate_nodes = proximate_nodes[proximate_nodes > cluster_cutoff]
 
-                mean_cluster_prox = np.mean(proximate_nodes)
-                mean_cluster_rev_prox = np.mean(rev_proximate_nodes)
                 cluster_measures = return_measure_dict(proximate_nodes)
+                rev_cluster_measures = return_measure_dict(rev_proximate_nodes, prefix="rev_")
+                pagerank_measures = return_measure_dict(cluster_year_pagerank, prefix="pr_")
+
                 if len(proximate_nodes) > 0:
                     top_node = proximate_nodes.idxmax()
+
                 else:
                     top_node = "empty"
+                top_node_pr = cluster_year_pagerank.idxmax()
+                name_pr = "-".join(list(cluster_year_pagerank.nlargest(5).index))
 
-                df_dict = {'Year': year, 'Token': cl_name, 'Prom_Node': top_node, 'Level': cl['level'],
+                df_dict = {'Year': year, 'Token': cl_name, 'Token_pr': name_pr, 'Prom_Node_pr': top_node_pr,'Prom_Node': top_node, 'Level': cl['level'],
                            'Cluster_Id': cl['name'],
-                           'Parent': cl['parent'], 'Cluster_Prox': mean_cluster_prox,
-                           'Cluster_Rev_Prox': mean_cluster_rev_prox, 'Nr_ProxNodes': len(proximate_nodes),
+                           'Parent': cl['parent'], 'Nr_ProxNodes': len(proximate_nodes),
                            'NrNodes': len(nodes), 'Ma': len(ma_years), 'Node_Proximity': 0,
                            'Node_Rev_Proximity': 0, 'Node_Delta_Proximity': -100}
 
-                # df_dict = {'Year': year, 'Level': cl['level'], 'Clustername': cl_name, 'Prom_Node': top_node,
-                #           'Parent': cl['parent'], 'Cluster_Avg_Prox': mean_cluster_prox,
-                #           'Cluster_rev_proximity': mean_cluster_rev_prox, 'Nr_ProxNodes': len(proximate_nodes),
-                #           'NrNodes': len(nodes), 'Ma': len(ma_years)}
                 df_dict.update(cluster_measures)
+                df_dict.update(rev_cluster_measures)
+                df_dict.update(pagerank_measures)
                 cluster_dataframe.append(df_dict.copy())
 
     df = pd.DataFrame(cluster_dataframe)
