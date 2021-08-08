@@ -30,7 +30,7 @@ setup_logger(config['Paths']['log'], config['General']['logging_level'], "td_idf
 path="E:\\NLPHBR\\database\\db.h5"
 bert="E:\\NLPHBR\\trained_berts\\2020"
 focal_token="founder"
-focal_tokens=["musk","zuckerberg", "jobs","gates"]
+focal_tokens=["azerbaijani","cleric", "patriarch","sol", "sebastien"]
 for focal_token in focal_tokens:
 
 

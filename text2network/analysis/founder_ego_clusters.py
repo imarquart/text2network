@@ -106,19 +106,19 @@ setup_logger(config['Paths']['log'], config['General']['logging_level'], "founde
 
 # First, create an empty network
 semantic_network = neo4j_network(config)
-
+logging.info("first nw created")
 level_list = [5]
-weight_list = [0.1,0, 0.01]
+weight_list = [0, 0.01]
 cl_clutoff_list = [0,90,0.1]
 depth_list = [1]
 rs_list = [100]
-rev_ties_list = [False]
-algolist=[louvain_cluster,consensus_louvain]
+rev_ties_list = [True, False]
+algolist=[consensus_louvain]
 alter_set=[None]
 focaladdlist=[True]
-comp_ties_list = [False]
+comp_ties_list = [True]
 back_out_list= [False]
-symmetry_list=[False,True]
+symmetry_list=[False]
 param_list = product(depth_list, level_list, rs_list, weight_list, rev_ties_list, comp_ties_list, cl_clutoff_list,algolist,back_out_list,symmetry_list,focaladdlist,alter_set)
 logging.info("------------------------------------------------")
 for depth, level, rs, cutoff, rev, comp, cluster_cutoff,algo,backout,sym,fadd,alters in param_list:
@@ -137,19 +137,19 @@ for depth, level, rs, cutoff, rev, comp, cluster_cutoff,algo,backout,sym,fadd,al
 #### Cluster yearly proximities
 
 
-ma_list = [(2, 0)]
+ma_list = [(2, 0),(1, 0),(1, 1)]
 level_list = [5]
-weight_list = [0,0.01]
-cl_clutoff_list = [0,90]
+weight_list = [0, 0.01]
+cl_clutoff_list = [0,90,0.1]
 depth_list = [1]
 rs_list = [100]
-rev_ties_list = [False]
+rev_ties_list = [False, True]
 sym_list =[True,False]
-comp_ties_list = [False]
+comp_ties_list = [False, True]
 back_out_list= [False]
 algolist=[consensus_louvain]
 alter_set=[alter_subset]
-focal_set=["entrepreneur","manager","ceo","genius","star"]
+focal_set=[focal_token]
 focaladdlist=[True]
 param_list = product(depth_list, level_list, ma_list, weight_list, rev_ties_list,sym_list, comp_ties_list, rs_list,
                      cl_clutoff_list,back_out_list,focaladdlist,alter_set,focal_set)

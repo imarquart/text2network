@@ -17,7 +17,7 @@ from text2network.functions.graph_clustering import *
 from text2network.functions.node_measures import proximity, centrality
 from text2network.measures.measures import proximities, centralities
 from text2network.utils.input_check import input_check
-from text2network.utils.network_tools import make_reverse, sparsify_graph
+from text2network.utils.network_tools import make_reverse, sparsify_graph, renorm_graph
 from text2network.utils.twowaydict import TwoWayDict
 import pandas as pd
 
@@ -137,7 +137,7 @@ class neo4j_network(Sequence):
     # %% Interface
 
     def get_times_list(self):
-        query = "MATCH (n) WHERE EXISTS(n.time) RETURN DISTINCT  n.time AS time"
+        query = "MATCH (n) WHERE EXISTS(n.time) RETURN DISTINCT  n.time AS time ORDER BY time"
         res = self.db.receive_query(query)
         times = [x['time'] for x in res]
         return times
@@ -692,6 +692,41 @@ class neo4j_network(Sequence):
 
 
     # %% Graph manipulation
+
+    def norm_by_time(self, times:Union[list,int]):
+        """
+
+        If comparing values across different times, aggregate replacement ties
+        should be normed by the number of sequences in each context - so a time period
+
+        Parameters
+        ----------
+        time: list of ints or int
+            time parameter which to norm by
+
+        Returns
+        -------
+
+        """
+
+        if not self.conditioned:
+            self.__condition_error(call=inspect.stack()[1][3])
+
+        if not isinstance(times, list):
+            if isinstance(times, int):
+                times=[times]
+            else:
+                raise AttributeError("Please provide a list of ints, or an int as time variable")
+
+        query="MATCH(r: edge) WHERE r.time in "+str(times)+" RETURN count(DISTINCT r.run_index) as nrs"
+        res = self.db.receive_query(query)
+        nrs = [x['nrs'] for x in res][0]/1000
+        logging.info("Normalizing graph by dividing by {} sequences".format(nrs))
+        self.graph = renorm_graph(self.graph, nrs)
+
+
+
+
 
     def sparsify(self,percentage:int=100):
         """

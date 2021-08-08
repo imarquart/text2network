@@ -12,7 +12,7 @@ def proximity(nw_graph, focal_tokens=None, alter_subset=None):
     nw_graph : networkx graph
         semantic network to use.
     focal_tokens : list, str, optional
-        List of tokens of interest. If not provided, centralities for all tokens will be returned.
+        List of tokens of interest. If not provided, proximity for all tokens will be returned.
     alter_subset : TYPE, optional
         DESCRIPTION. The default is None.
 

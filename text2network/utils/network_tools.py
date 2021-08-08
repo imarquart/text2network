@@ -149,6 +149,27 @@ def merge_nodes(graph, u, v, method="sum"):
     return new_graph
 
 
+def renorm_graph(graph:Union[nx.DiGraph,nx.Graph], norm:Union[float,int]=1):
+    """
+
+    Simply divides all ties in the graph by the given number
+
+    Parameters
+    ----------
+    graph
+    norm
+
+    Returns
+    -------
+    normed graph
+    """
+
+    for u, v, a in graph.edges(data=True):
+        graph[u][v]['weight']=a['weight']/norm
+
+    return graph
+
+
 def sparsify_graph(graph:Union[nx.DiGraph,nx.Graph], percentage:int=99):
     """
     Sparsify graph as follows:
@@ -161,7 +182,7 @@ def sparsify_graph(graph:Union[nx.DiGraph,nx.Graph], percentage:int=99):
 
     Returns
     -------
-
+    sparsified graph
     """
     for v in graph.nodes:
         peers=np.array([z[1] for z in graph.out_edges(v, data="weight")])

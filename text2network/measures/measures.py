@@ -38,8 +38,8 @@ def centralities(snw, focal_tokens=None, types=["PageRank", "normedPageRank"], r
     """
 
     input_check(tokens=focal_tokens)
-
-    focal_tokens = snw.ensure_ids(focal_tokens)
+    if focal_tokens is not None:
+        focal_tokens = snw.ensure_ids(focal_tokens)
 
     if not snw.conditioned:
         snw.condition_error()
@@ -172,6 +172,121 @@ def yearly_centralities(snw, year_list, focal_tokens=None, types=["PageRank", "n
         cent_year.update({year: cent_measures})
 
     return {'yearly_centrality': cent_year}
+
+
+
+def yearly_proximities(snw, year_list, focal_tokens=None, top_k_allyears: Optional[int] = None, alter_subset: Optional[List] = None,symmetric=False,
+                        context=None, weight_cutoff=None, compositional=None, moving_average=None,
+                        reverse_ties: Optional[bool] = False, backout: Optional[bool]=False):
+    """
+    Compute directly year-by-year centralities for provided list.
+
+    This will decondition and re-condition the network across years
+
+    Parameters
+    ----------
+    snw : semantic network
+    year_list : list
+        List of years for which to calculate centrality.
+    focal_tokens : list, str
+        List of tokens of interest. If not provided, centralities for all tokens will be returned.
+    top_k_allyears: Optional, int
+        First recover the top k tokens across all years and use them as subset of interest
+    alter_subset: Optional[List] = None
+        List of alters to return proximities for. Others are discarded.
+    symmetric : bool, optional
+        Symmetrize Network?
+    context : list, optional - used when conditioning
+        List of tokens that need to appear in the context distribution of a tie. The default is None.
+    weight_cutoff : float, optional - used when conditioning
+        Only links of higher weight are considered in conditioning.. The default is None.
+    compositional : bool, optional - used when conditioning
+        Please see semantic network class. The default is True.
+    reverse_ties : bool, optional
+        Reverse all ties. The default is False.
+
+    Returns
+    -------
+    dict
+        Dict of years with dict of centralities for focal tokens.
+
+    """
+
+    cent_year = {}
+    assert isinstance(year_list, list), "Please provide list of years."
+
+    if not isinstance(focal_tokens,list):
+        focal_tokens=[focal_tokens]
+
+    all_tokens=[]
+    if top_k_allyears is not None:
+
+        logging.info("Extracting top {} proximate tokens across all years".format(top_k_allyears))
+        snw.decondition()
+        if reverse_ties or symmetric:
+            snw.condition(tokens=focal_tokens, times=year_list, depth=1, context=context, weight_cutoff=weight_cutoff,
+                          compositional=compositional)
+        else:
+            snw.condition(tokens=focal_tokens, times=year_list, depth=0, context=context, weight_cutoff=weight_cutoff,
+                          compositional=compositional)
+        if reverse_ties:
+            snw.to_reverse()
+        if symmetric:
+            snw.to_symmetric()
+        if backout:
+            snw.to_backout()
+
+        prox_df = snw.proximities(focal_tokens=focal_tokens, alter_subset=alter_subset)
+        if not prox_df==[]:
+            prox_df=snw.pd_format(prox_df)[0]
+            for ftoken in focal_tokens:
+                prox_list=prox_df.T[ftoken].sort_values(ascending=False).iloc[0:top_k_allyears-1]
+                all_tokens.extend(list(prox_list.index))
+                all_tokens=list(set(all_tokens))
+
+
+    if alter_subset is None:
+        alter_subset=all_tokens
+    else:
+        all_tokens.extend(alter_subset)
+        all_tokens=list(set(all_tokens))
+    all_tokens.extend(focal_tokens)
+
+    for year in year_list:
+        snw.decondition()
+        logging.info("Conditioning network on year {} with {} focal tokens and, with given/identified alters, {} conditioning tokens".format(year,len(focal_tokens),len(all_tokens)))
+
+        if moving_average is not None:
+            start_year = max(year_list[0], year - moving_average[0])
+            end_year = min(year_list[-1], year + moving_average[1])
+            ma_years = np.arange(start_year, end_year + 1)
+            logging.info(
+                "Calculating proximities for fixed relevant clusters for year {} with moving average -{} to {} over {}".format(
+                    year,
+                    moving_average[
+                        0],
+                    moving_average[
+                        1], ma_years))
+        else:
+            ma_years = year
+
+        snw.condition(tokens=all_tokens, times=ma_years, depth=0, context=context, weight_cutoff=weight_cutoff,
+                      compositional=compositional)
+        if not compositional:
+            snw.norm_by_time(ma_years)
+        if reverse_ties:
+            snw.to_reverse()
+        if symmetric:
+            snw.to_symmetric()
+        if backout:
+            snw.to_backout()
+        logging.debug("Computing proximities for year {}".format(year))
+        proximity_dict={}
+        # Get proximities from conditioned network
+        tie_dict = snw.proximities( focal_tokens=focal_tokens, alter_subset=alter_subset)
+        cent_year.update({year: tie_dict})
+
+    return {'yearly_proximity': cent_year}
 
 
 def average_cluster_proximities(focal_token: str,  nw, levels: int,
@@ -327,19 +442,27 @@ def average_cluster_proximities(focal_token: str,  nw, levels: int,
             if len(np.intersect1d(nodes, interest_list)) > 0:
                 proximate_nodes = proxim.reindex(nodes, fill_value=0)
                 rev_proximate_nodes = rev_proxim.reindex(nodes, fill_value=0)
-                cluster_pagerank = overall_pagerank.reindex(nodes, fill_value=0)
+                overall_cluster_pagerank = overall_pagerank.reindex(nodes, fill_value=0)
+                cluster_pagerank=nw.pd_format(cl['measures'])[1]['normedPageRank'].reindex(nodes, fill_value=0)
                 # We only care about proximate nodes
                 proximate_nodes = proximate_nodes[proximate_nodes > cluster_cutoff]
                 rev_proximate_nodes = rev_proximate_nodes[rev_proximate_nodes > cluster_cutoff]
                 if len(proximate_nodes) > 0:
                     cluster_measures = return_measure_dict(proximate_nodes)
                     rev_cluster_measures=return_measure_dict(rev_proximate_nodes, prefix="rev_")
-                    pagerank_measures=return_measure_dict(cluster_pagerank, prefix="pr_")
+                    overall_pagerank_measures=return_measure_dict(overall_cluster_pagerank, prefix="opr_")
+                    pagerank_measures = return_measure_dict(cluster_pagerank, prefix="pr_")
                     # Default cluster entry
                     year = -100
                     name = "-".join(list(proximate_nodes.nlargest(5).index))
-                    name_pr = "-".join(list(cluster_pagerank.nlargest(5).index))
-                    top_node_pr = cluster_pagerank.idxmax()
+
+                    topelements_pr = np.array(cluster_pagerank.nlargest(6).index)
+                    topelements_pr =list(topelements_pr[topelements_pr != focal_token])
+
+                    if topelements_pr==[]:
+                        topelements_pr=["empty"]
+                    name_pr = "-".join(topelements_pr[0:5])
+                    top_node_pr = topelements_pr[0]
                     top_node = proximate_nodes.idxmax()
                     df_dict = {'Year': year, 'Token': name, 'Token_pr': name_pr, 'Prom_Node_pr': top_node_pr,'Prom_Node': top_node, 'Level': cl['level'],
                                'Cluster_Id': cl['name'],
@@ -350,6 +473,7 @@ def average_cluster_proximities(focal_token: str,  nw, levels: int,
                     df_dict.update(cluster_measures)
                     df_dict.update(rev_cluster_measures)
                     df_dict.update(pagerank_measures)
+                    df_dict.update(overall_pagerank_measures)
                     cluster_dataframe.append(df_dict.copy())
                     # Add each node
                     if add_individual_nodes:
@@ -370,6 +494,7 @@ def average_cluster_proximities(focal_token: str,  nw, levels: int,
                                 df_dict.update(cluster_measures)
                                 df_dict.update(rev_cluster_measures)
                                 df_dict.update(pagerank_measures)
+                                df_dict.update(overall_pagerank_measures)
                                 cluster_dataframe.append(df_dict.copy())
 
     if year_by_year:
@@ -410,8 +535,8 @@ def average_cluster_proximities(focal_token: str,  nw, levels: int,
                 year_proxim = nw.pd_format(year_proxim)[0]
                 rev_proxim = year_proxim.loc[:, focal_token]
                 proxim = year_proxim.loc[focal_token, :]
-                year_cent= nw.centralities()
-                year_cent = nw.pd_format(year_cent)[0]['normedPageRank']
+                year_pagerank= nw.centralities()
+                year_pagerank = nw.pd_format(year_pagerank)[0]['normedPageRank']
             else:
                 year_proxim = nw.proximities(focal_tokens=[focal_token])
                 year_proxim = nw.pd_format(year_proxim)[0]
@@ -424,7 +549,7 @@ def average_cluster_proximities(focal_token: str,  nw, levels: int,
                 nodes = nw.ensure_tokens(list(cl['graph'].nodes))
                 proximate_nodes = proxim.reindex(nodes, fill_value=0)
                 proximate_nodes = proximate_nodes[proximate_nodes > cluster_cutoff]
-                cluster_year_pagerank = year_pagerank.reindex(nodes, fill_value=0)
+                overall_cluster_year_pagerank = year_pagerank.reindex(nodes, fill_value=0)
                 if do_reverse is True:
                     rev_proximate_nodes = rev_proxim.reindex(nodes, fill_value=0)
                     rev_proximate_nodes = rev_proximate_nodes[rev_proximate_nodes > cluster_cutoff]
@@ -433,15 +558,21 @@ def average_cluster_proximities(focal_token: str,  nw, levels: int,
 
                 cluster_measures = return_measure_dict(proximate_nodes)
                 rev_cluster_measures = return_measure_dict(rev_proximate_nodes, prefix="rev_")
-                pagerank_measures = return_measure_dict(cluster_year_pagerank, prefix="pr_")
+                overall_pagerank_measures = return_measure_dict(overall_cluster_year_pagerank, prefix="opr_")
+                pagerank_measures = return_measure_dict(overall_cluster_year_pagerank, prefix="pr_")
 
                 if len(proximate_nodes) > 0:
                     top_node = proximate_nodes.idxmax()
 
                 else:
                     top_node = "empty"
-                top_node_pr = cluster_year_pagerank.idxmax()
-                name_pr = "-".join(list(cluster_year_pagerank.nlargest(5).index))
+
+                topelements_pr = np.array(cluster_pagerank.nlargest(6).index)
+                topelements_pr =list(topelements_pr[topelements_pr != focal_token])
+                if topelements_pr == []:
+                    topelements_pr = ["empty"]
+                name_pr = "-".join(topelements_pr[0:5])
+                top_node_pr = topelements_pr[0]
 
                 df_dict = {'Year': year, 'Token': cl_name, 'Token_pr': name_pr, 'Prom_Node_pr': top_node_pr,'Prom_Node': top_node, 'Level': cl['level'],
                            'Cluster_Id': cl['name'],
@@ -452,15 +583,17 @@ def average_cluster_proximities(focal_token: str,  nw, levels: int,
                 df_dict.update(cluster_measures)
                 df_dict.update(rev_cluster_measures)
                 df_dict.update(pagerank_measures)
+                df_dict.update(overall_pagerank_measures)
                 cluster_dataframe.append(df_dict.copy())
 
     df = pd.DataFrame(cluster_dataframe)
 
     if filename is not None:
-        filename = check_create_folder(filename)
-        df.to_excel(filename + ".xlsx")
         if export_network:
             nw.export_gefx(filename=check_create_folder(filename + ".gexf"))
+        filename = check_create_folder(filename + ".xlsx")
+        df.to_excel(filename)
+
     return df
 
 
@@ -500,12 +633,14 @@ def return_measure_dict(vec: Union[list, np.array], prefix=""):
     if isinstance(vec, list):
         vec = np.array(vec)
 
-        return {}
 
     avg = np.mean(vec)
-    weights = vec / np.sum(vec)
-    w_avg = np.average(vec, weights=weights)
     sum_vec = np.sum(vec)
+    if sum_vec <= 0:
+        w_avg = 0
+    else:
+        weights = vec / sum_vec
+        w_avg = np.average(vec, weights=weights)
     if sum(vec.shape) >= 2:
         sd = np.std(vec)
     else:

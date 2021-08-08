@@ -60,7 +60,18 @@ def pd_format(format_list: Union[List, Dict])->List:
                         output=output.sort_values(output.columns[0], ascending = False)
                         output_dict.update({year: output})
                     output=pd.concat(output_dict)
-
+                    result_list.append(output)
+                elif ftype == "yearly_proximity":
+                    proxdict = fdict[ftype]
+                    year_list = list(proxdict.keys())
+                    output_dict = {}
+                    for year in year_list:
+                        # asdf=pd.MultiIndex.from_product([[year],list(proxdict[year]['centrality'].keys())])
+                        output = pd.DataFrame(proxdict[year]['proximity'])
+                        output = output.fillna(0)
+                        output = output.sort_values(output.columns[0], ascending=False)
+                        output_dict.update({year: output})
+                    output = pd.concat(output_dict)
                     result_list.append(output)
         else:
             pass
