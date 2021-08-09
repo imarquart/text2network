@@ -34,7 +34,7 @@ batch_sizes=[1000]
 rev_ties_list =[True,False]
 comp_ties_list = [True]
 back_out_list = [False]
-focal_context_list = [("founder",None)]
+focal_context_list = [("cofounder",None)]
 
 
 
@@ -45,7 +45,7 @@ for rs, cutoff, fc_list, rev,backout,comp  in param_list:
     focal_token, context = fc_list
     ##
     if rev:
-        depth=100000
+        depth=1
     else:
         depth=0
 

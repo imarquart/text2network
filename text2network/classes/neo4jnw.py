@@ -1006,6 +1006,7 @@ class neo4j_network(Sequence):
 
                 # Delete disconnected nodes
                 remove = [node for node, degree in dict(self.graph.degree).items() if degree <= 0]
+                remove=list(np.setdiff1d(remove,token_ids)) # Do not remove focal tokens
                 self.graph.remove_nodes_from(remove)
 
                 # Update IDs and Tokens to reflect conditioning
@@ -1033,7 +1034,7 @@ class neo4j_network(Sequence):
             # Create ego graph for each node and compose
             if or_depth > 0:
                 self.graph = compose_all([nx.generators.ego.ego_graph(self.graph, x, radius=or_depth, center=True,
-                                                         undirected=False) for x in token_ids])
+                                                         undirected=False) for x in token_ids  if x in self.graph.nodes])
 
             # Set conditioning true
             self.__complete_conditioning()

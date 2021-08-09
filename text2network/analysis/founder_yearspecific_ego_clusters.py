@@ -11,7 +11,7 @@ from text2network.classes.neo4jnw import neo4j_network
 # Set a configuration path
 configuration_path = '/config/config.ini'
 # Settings
-years = list(range(1980, 2021))
+years = list(range(1980, 2021,5))
 focal_token = "founder"
 
 import os
@@ -28,11 +28,11 @@ setup_logger(config['Paths']['log'], config['General']['logging_level'], "founde
 
 # First, create an empty network
 level_list = [5]
-weight_list = [0, 0.01]
-cl_clutoff_list = [0,90,0.1]
+weight_list = [0]
+cl_clutoff_list = [0]
 depth_list = [1]
 rs_list = [100]
-rev_ties_list = [True, False]
+rev_ties_list = [True]
 algolist=[consensus_louvain]
 alter_set=[None]
 focaladdlist=[True]
@@ -45,15 +45,19 @@ for depth, level, rs, cutoff, rev, comp, cluster_cutoff,algo,backout,sym,fadd,al
     df_list=[]
     for year in years:
         np.random.seed(rs)
+        start_year = max(years[0], year - 5)
+        end_year = min(years[-1], year)
+        ma_years = list(np.arange(start_year, end_year + 1))
         semantic_network = neo4j_network(config)
         filename = "".join(
-            [config['Paths']['csv_outputs'], "/YearSpecEgoCluster_", str(focal_token), "_y", str(year), "_sym", str(sym),"_rev", str(rev), "_norm", str(comp), str(level), "_cut",
+            [config['Paths']['csv_outputs'], "/5MA_YearSpecEgoCluster_", str(focal_token), "_y", "-".join([str(x) for x in ma_years]), "_sym", str(sym),"_rev", str(rev), "_norm", str(comp), str(level), "_cut",
              str(cutoff), "_clcut", str(cluster_cutoff), "_depth", str(depth), "_rs", str(rs)])
         logging.info("Network clustering: {}".format(filename))
-        df = average_cluster_proximities(focal_token=focal_token, nw=semantic_network, levels=level, interest_list=alters, times=[year],do_reverse=True,
+        df = average_cluster_proximities(focal_token=focal_token, nw=semantic_network, levels=level, interest_list=alters, times=ma_years,do_reverse=True,
                                          depth=depth, weight_cutoff=cutoff, cluster_cutoff=cluster_cutoff, year_by_year=False, add_focal_to_clusters=fadd,
                                          moving_average=None, filename=filename, compositional=comp, to_back_out=backout, include_all_levels=True, add_individual_nodes=True,
                                          reverse_ties=rev, symmetric=sym, seed=rs, export_network=True)
+        df["Year"]=year
         df_list.append(df.copy())
     filename = "".join(
         [config['Paths']['csv_outputs'], "/YearSpecEgoCluster_", str(focal_token), "_yALL", "_sym", str(sym),
