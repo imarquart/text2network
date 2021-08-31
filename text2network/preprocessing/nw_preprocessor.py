@@ -282,8 +282,8 @@ class nw_preprocessor():
             if ext_year is None:
                 logging.info("Loading file %s" % file_name)
                 year = re.split(self.split_symbol,
-                                file_name)[-(self.number_params + 1)]
-                year = int(year[-4:])
+                                file_name)[0]
+                year = int(year)
                 offset = 1
             else:
                 offset = 0
@@ -293,9 +293,12 @@ class nw_preprocessor():
             params = []
             exclude = False
             for i in range(offset, self.number_params + offset):
-                par = re.split(self.split_symbol, file_name)[-i]
+                par = re.split(self.split_symbol, file_name)[i]
                 if par in excludelist:
                     exclude = True
+                # If we have reached the last iteration, the rest of the string is the parameter
+                if i>=(self.number_params+offset-1):
+                    par = ''.join(re.split(self.split_symbol, file_name)[i:])
                 params.append(par)
 
             if exclude:
