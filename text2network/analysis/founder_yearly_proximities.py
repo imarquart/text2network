@@ -26,7 +26,7 @@ alter_subset and it instead tracks a defined subset of tokens
 years=list(range(1980,2021))
 #years=list(range(1980,1985))
 top_k_allyears=25
-focal_tokens="cofounder"
+focal_tokens="founder"
 moving_average=None
 tokens=["ceo", "cofounder", "owner", "leader", "insider", "director", "vice", "founding", "entrepreneur", "father", "head", "chair", "editor", "member", "pioneer", "man", "professor", "employee", "consultant", "boss", "visionary", "candidate", "inventor", "successor", "designer", "colleague", "son", "veteran", "builder", "creator", "donor", "champion", "incumbent", "coach", "husband", "salesman", "spokesperson", "predecessor", "governor", "victim", "star", "wizard", "writer", "speaker", "composer", "economist", "farmer", "brother", "cartoonist", "steward", "fellow", "alchemist", "poet", "devil", "facilitator", "historian", "deputy", "associate", "confidant", "actor", "driver", "chef", "ambassador", "daimyo", "superintendent", "songwriter", "advocate", "lawyer", "photographer", "commander", "millionaire", "undertaker", "comptroller", "teller", "treasurer", "blogger", "teammate", "pilgrim", "alpha", "citizen","founder"]
 tokens=["ceo", "chairman", "president", "cofounder", "leader", "owner", "director", "insider", "vice", "entrepreneur", "founding", "executive", "manager", "father", "head", "chair", "managing", "member", "editor", "partner", "man", "consultant", "employee", "professor", "pioneer"]
