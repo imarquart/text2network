@@ -317,18 +317,18 @@ class nw_preprocessor():
 
             # Some pre processing
             text = text.replace('<p>', ' ')
-            text = text.replace('@', '')
-            text = text.replace(" \'", "'")
+            text = text.replace('@', ' ')
+            text = text.replace(" \'", "' ")
             text = text.replace("n\'t", "not")
             text = text.replace(" .", ".")
-            text = text.replace(" ,", ",")
+            text = text.replace(" ,", ", ")
             text = text.replace("-", " ")
-            text = text.replace("...", ".")
+            text = text.replace("...", ". ")
             killchars = ['#', '<p>', '$', '%', '(', ')', '*', '/', '<', '>', '@', '\\', '{', '}', '[', ']', '+', '^',
                          '~',
                          '"']
             for k in killchars:
-                text = str.replace(text, k, '')
+                text = str.replace(text, k, ' ')
 
             text = text.strip()
             text = " ".join(re.split("\s+", text, flags=re.UNICODE))
