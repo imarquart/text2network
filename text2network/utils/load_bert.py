@@ -2,7 +2,6 @@ import torch
 import logging
 
 from torch import nn
-from transformers import BertTokenizer
 from transformers import BertForMaskedLM
 from transformers import BertConfig
 import os
