@@ -133,31 +133,14 @@ dmypy.json
 
 models/
 
-data/
-
 .vscode/
 
 Desktop.ini
-
-data-hbr/bert/
-
-data-hbr/text/
-
-data-hbr/networks/
-
-src/text_processing/runs/
-
-data_full/
 
 *.gexf
 
 runs/
 
-example/pretrained_bert/
 
-example/trained_berts/
 
-example/csv_output/
-/Tests/Test_Data/
-
-output/
+output/csv_output/
