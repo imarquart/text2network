@@ -7,6 +7,8 @@ import re
 import glob
 import nltk
 import tables
+from tqdm import tqdm
+
 from text2network.functions.file_helpers import check_create_folder
 from text2network.utils.logging_helpers import setup_logger
 
@@ -39,6 +41,7 @@ class nw_preprocessor():
                 logging.error(msg)
                 raise AttributeError(msg)
         # Set logging level
+        logging.info("Setting loggging level {}".format(self.logging_level))
         logging.disable(self.logging_level)
 
         if database is not None:
@@ -188,6 +191,7 @@ class nw_preprocessor():
         if folder is None:
             folder = self.import_folder
         folder = normpath(folder)
+        folder = check_create_folder(folder,create_folder=False)
         folders = [''.join([folder, '/', name]) for name in os.listdir(folder)]
         if overwrite:
             try:
@@ -270,7 +274,7 @@ class nw_preprocessor():
         files = glob.glob(''.join([folder, '/*.txt']))
 
         # Main loop over files
-        for file_path in files:
+        for file_path in tqdm(files, desc="Iterating files in {} ".format(folder), leave=False):
             # Derive file name and year
             file_dirname = dirname(file_path)
             file_name = os.path.split(file_path)[-1]
@@ -280,7 +284,7 @@ class nw_preprocessor():
             file_source = file_name
 
             if ext_year is None:
-                logging.info("Loading file %s" % file_name)
+                logging.debug("Loading file %s" % file_name)
                 year = re.split(self.split_symbol,
                                 file_name)[0]
                 year = int(year)
@@ -401,16 +405,16 @@ class nw_preprocessor():
                     particle['text'] = sent
                 except:
                     logging.error("Saving failed.")
-                    logging.info("Sentence: %s" % sent)
+                    logging.error("Sentence: %s" % sent)
 
                 if idx % 100000 == 0:
-                    logging.info(
+                    logging.debug(
                         "Sentence at idx {}, year {}, parameters {}:".format(idx, year, params))
-                    logging.info("Sentence {}".format(sent))
+                    logging.debug("Sentence {}".format(sent))
 
                 particle.append()
 
             data_file.flush()
 
         data_file.close()
-        f.close()
+        #f.close()

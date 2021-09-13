@@ -144,3 +144,11 @@ runs/
 
 
 output/csv_output/
+
+data/HBR/texts/
+
+data/HBR/inputs/
+
+data/HBR/pretrained_bert/
+
+data/

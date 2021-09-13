@@ -33,10 +33,15 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset, SequentialSampler, RandomSampler
 from torch.utils.data.distributed import DistributedSampler
-from torch.utils.tensorboard import SummaryWriter
+#from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm, trange
-from transformers import (WEIGHTS_NAME, AdamW, WarmupLinearSchedule,
-                          BertConfig, BertForMaskedLM, BertTokenizer)
+from transformers import (WEIGHTS_NAME, AdamW,BertConfig, BertForMaskedLM, BertTokenizer)
+try:
+    from transformers import WarmupLinearSchedule
+    schedule_old=True
+except:
+    from transformers import get_linear_schedule_with_warmup
+    schedule_old = False
 
 from text2network.utils.load_bert import get_bert_and_tokenizer
 from text2network.utils.bert_args import bert_args
@@ -124,7 +129,7 @@ def mask_tokens(inputs, tokenizer, args):
 def train(args, train_dataset, model, tokenizer):
     """ Train the model """
     if args.local_rank in [-1, 0]:
-        tb_writer = SummaryWriter()
+        tb_writer = None #SummaryWriter()
 
     logging.disable(args.logging_level)
 
@@ -146,8 +151,10 @@ def train(args, train_dataset, model, tokenizer):
         {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
     ]
     optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
-    scheduler = WarmupLinearSchedule(optimizer, warmup_steps=args.warmup_steps, t_total=t_total)
-    # scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=args.warmup_steps, num_training_steps = t_total)
+    if schedule_old:
+        scheduler = WarmupLinearSchedule(optimizer, warmup_steps=args.warmup_steps, t_total=t_total)
+    else:
+        scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=args.warmup_steps, num_training_steps = t_total)
     # Check if saved optimizer or scheduler states exist
     return_from_checkpoint = False
     if os.path.isfile(os.path.join(args.model_name_or_path, 'optimizer.pt')) and os.path.isfile(
@@ -256,10 +263,10 @@ def train(args, train_dataset, model, tokenizer):
                     # Log metrics
                     if args.local_rank == -1 and args.evaluate_during_training:  # Only evaluate when single GPU otherwise metrics may not average well
                         results = evaluate(args, model, tokenizer)
-                        for key, value in results.items():
-                            tb_writer.add_scalar('eval_{}'.format(key), value, global_step)
-                    tb_writer.add_scalar('lr', scheduler.get_lr()[0], global_step)
-                    tb_writer.add_scalar('loss', (tr_loss - logging_loss) / args.logging_steps, global_step)
+                        #for key, value in results.items():
+                        #    tb_writer.add_scalar('eval_{}'.format(key), value, global_step)
+                    #tb_writer.add_scalar('lr', scheduler.get_lr()[0], global_step)
+                    #tb_writer.add_scalar('loss', (tr_loss - logging_loss) / args.logging_steps, global_step)
                     eval_loss = results["eval_loss"]
                     logging_loss = tr_loss
                     logger.warning("Eval Step: Eval Loss at global step %i is %f compared to (eval) loss limit %f",
@@ -325,8 +332,8 @@ def train(args, train_dataset, model, tokenizer):
             train_iterator.close()
             break
 
-    if args.local_rank in [-1, 0]:
-        tb_writer.close()
+    #if args.local_rank in [-1, 0]:
+        #tb_writer.close()
 
     return global_step, tr_loss / global_step
 
