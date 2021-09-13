@@ -274,7 +274,7 @@ def average_cluster_proximities(focal_token: str,  nw, levels: int,
                                 algorithm: Optional[Callable] = None,
                                 compositional: Optional[bool] = False,
                                 reverse_ties: Optional[bool] = False,
-                                symmetric: Optional[bool] = False,
+                                symmetric: Optional[bool] = False, max_degree:Optional[int]=None,
                                 export_network: Optional[bool] = False,
                                 add_focal_to_clusters: Optional[bool] = False,
                                 mode: Optional[str] = "replacement", occurrence: Optional[bool] = False,
@@ -374,16 +374,18 @@ def average_cluster_proximities(focal_token: str,  nw, levels: int,
     # First, derive clusters
     if mode == "context":
         nw.context_condition(tokens=focal_token, times=query_times, depth=depth, weight_cutoff=weight_cutoff,
-                             occurrence=occurrence, batchsize=None)
+                             occurrence=occurrence, batchsize=None, max_degree=max_degree)
 
     else:
         nw.condition(tokens=focal_token, times=query_times, context=context, depth=depth, weight_cutoff=weight_cutoff,
-                     compositional=compositional, reverse_ties=reverse_ties)
+                     compositional=compositional,max_degree=max_degree)
 
     if percentage>0:
         nw.sparsify(percentage)
     if to_back_out:
         nw.to_backout()
+    if reverse_ties:
+        nw.to_reverse()
     if symmetric:
         nw.to_symmetric()
     # Populate alter tokens if not given
@@ -492,14 +494,15 @@ def average_cluster_proximities(focal_token: str,  nw, levels: int,
                                      occurrence=occurrence, batchsize=None)
 
             else:
-                nw.condition(tokens=focal_token, times=ma_years, weight_cutoff=weight_cutoff, context=context, compositional=compositional,
-                             reverse_ties=reverse_ties)
+                nw.condition(tokens=focal_token, times=ma_years, weight_cutoff=weight_cutoff, context=context, compositional=compositional)
 
 
             if to_back_out:
                 nw.to_backout()
             if symmetric:
                 nw.to_symmetric()
+            if reverse_ties:
+                nw.to_reverse()
 
             if do_reverse is True:
                 year_proxim = nw.proximities()

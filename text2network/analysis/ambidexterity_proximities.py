@@ -33,7 +33,7 @@ rs_list = [100]
 batch_sizes=[1000]
 rev_ties_list =[True,False]
 sym_ties_list =[True,False]
-comp_ties_list = [True,False]
+comp_ties_list = [False]
 back_out_list = [False]
 focal_context_list = [("agile",None),("agility",None)]
 
@@ -48,18 +48,18 @@ for rs, cutoff, fc_list, rev,backout,comp, sym  in param_list:
         depth=0
 
     start_time = time.time()
-
+    max_degree=200
     del semantic_network
     np.random.seed(rs)
     semantic_network = neo4j_network(config)
     filename = "".join(
         [config['Paths']['csv_outputs'], "/Prox_", str(focal_token), "_backout",
          str(backout), "_context", str(context is not None), "_sym", str(sym),"_rev", str(rev), "_norm",
-         str(comp), "_cut",
+         str(comp), "_maxd",str(max_degree), "_cut",
          str(cutoff), "_rs", str(rs),".xlsx"])
     logging.info("Focal token:{}, {}".format(focal_token, filename))
     semantic_network.condition(tokens=focal_token, times=None, context=context, depth=depth, weight_cutoff=cutoff,
-                 compositional=comp)
+                 compositional=comp, batchsize=5, max_degree=max_degree)
     if rev:
         semantic_network.to_reverse()
     if sym:
