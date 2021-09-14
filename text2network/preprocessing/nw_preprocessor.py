@@ -270,7 +270,8 @@ class nw_preprocessor():
         # Get list of files
         # files = [abspath(f) for f in listdir(folder) if isfile(join(folder, f))]
 
-        folder = normpath(folder)
+        #folder = normpath(folder)
+        folder = check_create_folder(folder, False)
         files = glob.glob(''.join([folder, '/*.txt']))
 
         # Main loop over files
@@ -338,6 +339,7 @@ class nw_preprocessor():
                 text = str.replace(text, k, ' ')
 
             text = text.strip()
+            # Replace all whitespaces by a single " "
             text = " ".join(re.split("\s+", text, flags=re.UNICODE))
 
             # Strip numeric from beginning and end.

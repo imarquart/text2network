@@ -21,6 +21,10 @@ def check_create_folder(folder,create_folder=True):
     """
 
     folder = Path(folder)
+    # Make absolute
+    if not folder.is_absolute():
+        folder = Path.cwd() / folder
+
 
     # check if file
     if not folder.suffix == '':
@@ -29,10 +33,6 @@ def check_create_folder(folder,create_folder=True):
     else:
         filename=""
         db_folder=str(folder)
-
-    if not folder.is_absolute():
-        db_folder = join(getcwd(), normpath(db_folder))
-        #db_folder=getcwd() + db_folder
 
     if not exists(db_folder):
         if create_folder:

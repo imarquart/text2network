@@ -20,14 +20,13 @@ if __name__ == '__main__':
     configuration_path = args.config
     # Load Configuration file
     config = configparser.ConfigParser()
-    logging.info("Loading config in {}".format(configuration_path))
+    print("Loading config in {}".format(configuration_path))
     try:
         config.read(check_create_folder(configuration_path))
     except:
         logging.error("Could not read config.")
     # Setup logging
-    logging.info("Setting up logger")
-    logger = setup_logger(config['Paths']['log'], config['General']['logging_level'], "preprocessing.py")
+    logger = setup_logger(config['Paths']['log'], config['General']['logging_level'], "training.py")
 
     ##################### Training
     trainer=bert_trainer(config)

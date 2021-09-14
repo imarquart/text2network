@@ -8,14 +8,16 @@ def setup_logger(logging_path, logging_level,filename="log"):
     -------
     None
     """
-    # Logging path
-    logging_path=check_create_folder(logging_path)
     logging_level=int(logging_level)
-    # Set up logging
-    logging.info("Setting loggging level {}".format(logging_level))
     logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                         datefmt='%m/%d/%Y %H:%M:%S',
                         level=logging_level)
+    # Logging path
+    logging_path=check_create_folder(logging_path)
+
+    # Set up logging
+    logging.info("Setting loggging level {}".format(logging_level))
+
     logging.getLogger().setLevel(logging_level)
     rootLogger = logging.getLogger()
     logFormatter = logging.Formatter(
@@ -24,6 +26,4 @@ def setup_logger(logging_path, logging_level,filename="log"):
         "{0}/{1}.log".format(logging_path, "".join(["text2network_",filename])))
     fileHandler.setFormatter(logFormatter)
     rootLogger.addHandler(fileHandler)
-    logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
-                        datefmt='%m/%d/%Y %H:%M:%S',
-                        level=logging_level)
+

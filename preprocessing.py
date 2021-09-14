@@ -3,16 +3,12 @@ import argparse
 import configparser
 import logging
 import json
-#from text2network.training.bert_trainer import bert_trainer
 import os
 
 from text2network.preprocessing.nw_preprocessor import nw_preprocessor
 from text2network.functions.file_helpers import check_create_folder
 from text2network.utils.logging_helpers import setup_logger
 
-##################### Training
-#trainer=bert_trainer(config)
-#trainer.train_berts()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Preprocess text files.')
@@ -24,14 +20,13 @@ if __name__ == '__main__':
     print("Loading config in {}".format(configuration_path))
     # Load Configuration file
     config = configparser.ConfigParser()
-    logging.info("Loading config in {}".format(configuration_path))
     try:
         config.read(check_create_folder(configuration_path))
     except:
         logging.error("Could not read config.")
+        raise
     # Setup logging
-    logging.info("Setting up logger")
-    logger = setup_logger(config['Paths']['log'], config['General']['logging_level'], "preprocessing.py")
+    logger = setup_logger(config['Paths']['log'], int(config['General']['logging_level']), "preprocessing.py")
 
     preprocessor = nw_preprocessor(config)
     exclude_list = json.loads(config.get('Preprocessing', 'exclude_list'))
@@ -48,6 +43,20 @@ if __name__ == '__main__':
         preprocessor.preprocess_folders(config['Paths']['import_folder'], overwrite=bool(config['Preprocessing']['overwrite_text_db']), excludelist=exclude_list)
 
     logging.info("Preprocessing of folder {} complete!".format(config['Paths']['import_folder']))
+
+    logging.info("Confirmation, printing the first sentences")
+    path=check_create_folder(config['Paths']['database'])
+    import tables
+    table = tables.open_file(path, mode="r")
+    data = table.root.textdata.table
+    for i,row in enumerate(data):
+        logging.info("Seq {}, Run_id: {}, Year: {}, p1: {}".format(i, row['run_index'], row['year'], row['p1']))
+        logging.info("Txt: {}".format(row['text']))
+        if i>5:
+            break
+
+    # items = data.read()[:]
+
 
 
 
