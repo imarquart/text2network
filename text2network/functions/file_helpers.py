@@ -1,5 +1,5 @@
 import logging
-from os import mkdir, getcwd
+from os import mkdir, getcwd, os
 from os.path import exists, normpath
 from pathlib import Path
 
@@ -31,7 +31,8 @@ def check_create_folder(folder,create_folder=True):
         db_folder=str(folder)
 
     if not folder.is_absolute():
-        db_folder=getcwd() + db_folder
+        db_folder = os.path.join(os.getcwd(), os.path.normpath(db_folder))
+        #db_folder=getcwd() + db_folder
 
     if not exists(db_folder):
         if create_folder:

@@ -38,7 +38,7 @@ if __name__ == '__main__':
 
     globpath=os.path.join(os.getcwd(),os.path.normpath(config['Paths']['import_folder']), os.sep, '*', os.sep)
     from glob import glob
-    print(globpath)
+    logging.info("Checking files and folders in {}".format(globpath))
     paths = glob(globpath)
     if paths == []:
         logging.info("Preprocessor in file mode: No subfolders found in {}".format(config['Paths']['import_folder']))
