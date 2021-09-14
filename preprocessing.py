@@ -35,8 +35,11 @@ if __name__ == '__main__':
 
     preprocessor = nw_preprocessor(config)
     exclude_list = json.loads(config.get('Preprocessing', 'exclude_list'))
+
+    globpath=os.path.join(os.getcwd(),os.path.normpath(config['Paths']['import_folder']), os.sep, '*', os.sep)
     from glob import glob
-    paths = glob(os.getcwd()+os.path.normpath(config['Paths']['import_folder'])+"/*/")
+    print(globpath)
+    paths = glob(globpath)
     if paths == []:
         logging.info("Preprocessor in file mode: No subfolders found in {}".format(config['Paths']['import_folder']))
         preprocessor.preprocess_files(config['Paths']['import_folder'], overwrite=bool(config['Preprocessing']['overwrite_text_db']), excludelist=exclude_list)
