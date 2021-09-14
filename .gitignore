@@ -152,3 +152,5 @@ data/HBR/inputs/
 data/HBR/pretrained_bert/
 
 data/
+
+output/HBR/trained_berts/

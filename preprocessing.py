@@ -21,6 +21,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     # Set a configuration path
     configuration_path = args.config
+    print("Loading config in {}".format(configuration_path))
     # Load Configuration file
     config = configparser.ConfigParser()
     logging.info("Loading config in {}".format(configuration_path))
