@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import time
 
 import torch
@@ -10,7 +11,7 @@ from text2network.functions.run_bert import run_bert
 from text2network.utils.bert_args import bert_args
 from text2network.utils.get_uniques import get_uniques
 from text2network.utils.hash_file import hash_string, check_step, complete_step
-from text2network.utils.load_bert import get_bert_and_tokenizer
+from text2network.utils.load_bert import get_bert_and_tokenizer, get_only_tokenizer
 
 
 class bert_trainer():
@@ -109,34 +110,53 @@ class bert_trainer():
 
         # Load necessary tokens
         missing_tokens = []
-        logging.info("Pre-Loading Data and Populating tokenizers")
-        import nltk
-        nltk.download('stopwords')
-        for idx, query_filename in enumerate(self.uniques["query_filename"]):
-            query = query_filename[0]
-            fname = query_filename[1]
 
-            # Prepare BERT and vocabulary
-            tokenizer, bert = get_bert_and_tokenizer(
-                self.pretrained_folder, True)
-            dataset = bert_dataset(tokenizer, self.db_folder, query,
-                                   block_size=self.bert_config.getint('max_seq_length'), check_vocab=True,
-                                   freq_cutoff=self.bert_config.getint('new_word_cutoff'),
-                                   logging_level=logging.DEBUG)
-            missing_tokens.extend(dataset.missing_tokens)
 
-        missing_tokens = list(set(missing_tokens))
-        # Setting up tokenizer
-        # We do this here to keep the IDs and Tokens consistent, although the network is able to translate
-        # if necessary
-        tokenizer, _ = get_bert_and_tokenizer(self.pretrained_folder, True)
-        # Add missing tokens
-        logging.info("Tokenizer vocabulary {} items.".format(len(tokenizer)))
-        logging.disable(logging.ERROR)
-        tokenizer.add_tokens(missing_tokens)
-        logging.disable(self.logging_level)
-        logging.info("After adding missing terms: Tokenizer vocabulary {} items.".format(
-            len(tokenizer)))
+        # Save the tokenizer such that training can continue.
+        token_folder=os.path.join(self.trained_folder, "tokenizer")
+        hash = hash_string(token_folder, hash_factory="md5")
+        if check_step(token_folder, hash):
+            logging.info("Pre-populated tokenizer found. Using!")
+            tokenizer= get_only_tokenizer(token_folder)
+            bert=None
+            logging.info("Loaded Tokenizer vocabulary {} items.".format(len(tokenizer)))
+        else:
+            logging.info("Pre-Loading Data and Populating tokenizers")
+            import nltk
+            nltk.download('stopwords')
+            for idx, query_filename in enumerate(self.uniques["query_filename"]):
+                query = query_filename[0]
+                fname = query_filename[1]
+
+                # Prepare BERT and vocabulary
+                tokenizer, bert = get_bert_and_tokenizer(
+                    self.pretrained_folder, True)
+                dataset = bert_dataset(tokenizer, self.db_folder, query,
+                                       block_size=self.bert_config.getint('max_seq_length'), check_vocab=True,
+                                       freq_cutoff=self.bert_config.getint('new_word_cutoff'),
+                                       logging_level=logging.DEBUG)
+                missing_tokens.extend(dataset.missing_tokens)
+
+            missing_tokens = list(set(missing_tokens))
+            # Setting up tokenizer
+            # We do this here to keep the IDs and Tokens consistent, although the network is able to translate
+            # if necessary
+            tokenizer, _ = get_bert_and_tokenizer(self.pretrained_folder, True)
+            # Add missing tokens
+            logging.info("Tokenizer vocabulary {} items.".format(len(tokenizer)))
+            logging.disable(logging.ERROR)
+            tokenizer.add_tokens(missing_tokens)
+            logging.disable(self.logging_level)
+            logging.info("After adding missing terms: Tokenizer vocabulary {} items.".format(
+                len(tokenizer)))
+
+            # Save the tokenizer such that training can continue.
+            token_folder=os.path.join(self.trained_folder, "tokenizer")
+            token_folder=check_create_folder(token_folder, create_folder=True)
+            logging.info("Saving tokenizer to {}".format(token_folder))
+            tokenizer.save_pretrained(token_folder)
+            hash = hash_string(token_folder, hash_factory="md5")
+            complete_step(token_folder, hash)
 
         # Train BERTS
         logging.info("With the current hierarchy, there are %i BERT models to train" % (
@@ -179,7 +199,7 @@ class bert_trainer():
 
                 # Prepare BERT and vocabulary
                 logging.info(
-                    "Before resizing, Tokenizer vocabulary {} items.".format(len(tokenizer)))
+                    "For this iteration, Tokenizer vocabulary {} items.".format(len(tokenizer)))
                 # Make sure old model is deleted!
                 del bert
 
@@ -188,7 +208,7 @@ class bert_trainer():
                 new_tokenizer = tokenizer
 
                 bert.resize_embedding_and_fc(len(new_tokenizer))
-                logging.info("After resizing, Tokenizer vocabulary {} items.".format(
+                logging.info("After resizing BERT, Tokenizer vocabulary {} items.".format(
                     len(new_tokenizer)))
 
                 logging.info("Training BERT on %s" % (query))

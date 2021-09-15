@@ -154,3 +154,5 @@ data/HBR/pretrained_bert/
 data/
 
 output/HBR/trained_berts/
+
+nohup.out

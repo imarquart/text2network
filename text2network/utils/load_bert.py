@@ -104,6 +104,19 @@ def get_full_vocabulary(tokenizer):
     tokens = list(tokenizer.vocab.keys())
     return ids+added_ids, tokens+added_tokens
 
+def get_only_tokenizer(modelpath):
+    try:
+        # tokenizer = BertTokenizer.from_pretrained(modelpath, do_lower_case=True)
+        tokenizer = CustomVocabBertTokenizer.from_pretrained(modelpath, do_lower_case=True)
+    except:
+        output_vocab_file = os.path.join(modelpath, 'bert-base-uncased-vocab.txt')
+        output_model_file = os.path.join(modelpath, 'bert-base-uncased-pytorch_model.bin')
+        output_config_file = os.path.join(modelpath, 'bert-base-uncased-config.json')
+
+        # tokenizer = BertTokenizer.from_pretrained(output_vocab_file)
+        tokenizer = CustomVocabBertTokenizer.from_pretrained(output_vocab_file)
+    return tokenizer
+
 
 
 def get_bert_and_tokenizer(modelpath,load_local=False,attentions=True,hidden=False):
