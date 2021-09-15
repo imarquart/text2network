@@ -223,3 +223,5 @@ class bert_trainer():
                 complete_step(bert_folder, hash)
                 logging.info(
                     "----------------------------------------------------------------------")
+
+        return 0

@@ -3,6 +3,9 @@ import argparse
 import configparser
 import logging
 import json
+import sys
+import traceback
+
 from text2network.training.bert_trainer import bert_trainer
 import os
 
@@ -30,8 +33,19 @@ if __name__ == '__main__':
 
     ##################### Training
     trainer=bert_trainer(config)
-    trainer.train_berts()
+    success=False
+    while success is not True:
+        try:
+            sucvar=trainer.train_berts()
+        except:
+            etype, value, _ = sys.exc_info()
+            logging.error("Error in train_berts(): {}".format(value))
+            logging.error("Traceback: {}".format(traceback.format_exc()))
 
-
+            logging.info("trying to continue")
+            continue
+        if sucvar == 0:
+            logging.info("Successfully trained BERTs, canceling")
+            success=True
 
 
