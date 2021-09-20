@@ -13,13 +13,23 @@ from text2network.utils.delwords import create_stopword_list
 from text2network.utils.rowvec_tools import simple_norm
 from text2network.utils.get_uniques import get_uniques
 from text2network.utils.load_bert import get_bert_and_tokenizer, get_full_vocabulary
+from text2network.processing.neo4j_insertion_interface import Neo4j_Insertion_Interface
 import gc
 from text2network.utils.hash_file import hash_string, check_step, complete_step
 
+try:
+    from flair.data import Sentence as flair_sentence
+    from flair.models import SequenceTagger as flair_tagger
+    from flair.models import TextClassifier as flair_classifier
+    flair_available=True
+except:
+    flair_sentence=None
+    flair_tagger
+    flair_available=False
 
 class nw_processor():
-    def __init__(self, neograph, config=None,trained_folder=None, MAX_SEQ_LENGTH=None, processing_options=None, text_db=None, maxn=None,
-                 nr_workers=0, split_hierarchy=None, processing_cache=None, prune_missing_tokens=True, logging_level=None):
+    def __init__(self, neo_interface=None, config=None,trained_folder=None, MAX_SEQ_LENGTH=None, processing_options=None, text_db=None, split_hierarchy=None, processing_cache=None,
+                 logging_level=None):
         """
         Extracts pre-processed sentences, gets predictions by BERT and creates a network
 
@@ -35,7 +45,16 @@ class nw_processor():
         :param method: "attention": Weigh by BERT attention; "context_element": Sum probabilities unweighted
         :param cutoff_percent: Amount of probability mass to use to create links. Smaller values, less ties.
         """
-        self.neograph = neograph    
+
+        if neo_interface == None:
+            if config is not None:
+                self.neo_interface = Neo4j_Insertion_Interface(config)
+            else:
+                msg="Please provide either a neo4j interface, or a valid configuration file."
+                logging.error(msg)
+                raise AttributeError(msg)
+        else:
+            self.neo_interface = neo_interface
         
         # Fill parameters from configuration file
         if logging_level is not None:
@@ -105,7 +124,21 @@ class nw_processor():
         self.maxn = int(self.processing_options['maxn'])
         self.nr_workers = int(self.processing_options['nr_workers'])
         self.cutoff_prob = float(self.processing_options['cutoff_prob'])
-        
+
+        # Set up POS and Sentiment
+        if self.pos_tagging:
+            if flair_available:
+                self.pos_tagger = flair_tagger.load("flair/upos-english")
+            else:
+                logging.warning("POS Tagging requested, but POS package is not available. Tagging will be deactivated!")
+                self.pos_tagging=False
+        if self.sentiment:
+            if flair_available:
+                self.sent_classifier = flair_classifier.load('sentiment')
+            else:
+                logging.warning("POS Tagging requested, but POS package is not available. Tagging will be deactivated!")
+                self.pos_tagging=False
+
         
         if MAX_SEQ_LENGTH is not None:
             self.MAX_SEQ_LENGTH = MAX_SEQ_LENGTH
@@ -176,7 +209,7 @@ class nw_processor():
         # Clean the database
         if delete_all:
             logging.info("Cleaning Neo4j Database of all prior connections")
-            self.neograph.db.clean_database()
+            self.neo_interface.clean_database()
 
         # Delete incompletes
         #TODO
@@ -206,7 +239,7 @@ class nw_processor():
         # Prune the database
         if prune_database:
             logging.info("Pruning Neo4j Database of all unused tokens")
-            self.neograph.db.prune_database()
+            self.neo_interface.prune_database()
 
     def process_query(self, query, fname, text_db=None, logging_level=None):
         """
@@ -224,7 +257,6 @@ class nw_processor():
         text_db
         logging_level
         """
-        tables.set_blosc_max_threads(15)
 
         # SEt up logging
         if logging_level is not None:
@@ -242,12 +274,11 @@ class nw_processor():
         # Setup Bert and tokenizer
         self.tokenizer, self.bert = self.setup_bert(fname)
 
-        # Setup Neo4j network
-        # Setup network
+        # Setup Neo4j network and token ids
+        # The tokenizer may have different token-token_id assignments than those present in the database
+        # This will be corrected by setting up the neograph db
         ids, tokens=get_full_vocabulary(self.tokenizer)
-
-
-        self.neograph.db.setup_neo_db(tokens, ids)
+        self.neo_interface.setup_neo_db(tokens, ids)
 
         # %% Initialize text dataset
         dataset = query_dataset(self.text_db, self.tokenizer, self.MAX_SEQ_LENGTH, maxn=self.maxn, query=query,
@@ -292,7 +323,7 @@ class nw_processor():
             predictions, attn = self.get_bert_tensor(0, self.bert, batch, self.tokenizer.pad_token_id,
                                                      self.tokenizer.mask_token_id, device)
 
-
+            unknown_token= self.tokenizer.unk_token_id
             # Deal with missing tokens due to elimination of word-pieces
             not_missing = token_ids != 100
             token_ids=token_ids[not_missing]
@@ -400,31 +431,21 @@ class nw_processor():
                                                           sequence_id, pos, p1=p1, p2=p2, p3=p3, p4=p4, run_index=run_index,
                                                           max_degree=self.max_degree, min_probability=self.cutoff_prob)
 
-                        # Context ties
-                        cutoff_number, cutoff_probability = self.calculate_cutoffs(context, method="percent",
-                                                                                   percent=self.context_cutoff_percent,
-                                                                                   max_degree=self.context_max_degree)
-                        context_ties = self.get_weighted_edgelist(token, context, year, cutoff_number,
-                                                                  cutoff_probability,
-                                                                  sequence_id, pos, p1=p1, p2=p2, p3=p3, p4=p4,
-                                                                  max_degree=self.context_max_degree,run_index=run_index,
-                                                                  simplify_context=True, min_probability=self.cutoff_prob)
-
-                        if (ties is not None) and (context_ties is not None):
-                            self.neograph.insert_edges_context(token, ties, context_ties)
+                        if (ties is not None):
+                            self.neo_interface.insert_edges_context(token, ties)
 
                 del dists
 
             del predictions, attn
             # compute processing time
             #process_timings.append(time.time() - start_time - prepare_time - load_time)
-            self.neograph.db.write_queue()
+            self.neo_interface.write_queue()
             # New start time
 
             #start_time = time.time()
 
         # Write remaining
-        self.neograph.db.write_queue()
+        self.neo_interface.write_queue()
         torch.cuda.empty_cache()
 
         # Reset batch size
