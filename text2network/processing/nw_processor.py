@@ -1,13 +1,15 @@
 import logging
 import time
+
+import nltk
 import numpy as np
 import tables
 import torch
 import tqdm
 import json
 from text2network.functions.file_helpers import check_create_folder
-from torch.utils.data import BatchSampler, SequentialSampler
-from text2network.datasets.dataloaderX import DataLoaderX
+from torch.utils.data import BatchSampler, SequentialSampler, DataLoader
+#from text2network.datasets.dataloaderX import DataLoaderX
 from text2network.datasets.text_dataset import query_dataset, text_dataset_collate_batchsample
 from text2network.utils.delwords import create_stopword_list
 from text2network.utils.rowvec_tools import simple_norm
@@ -18,14 +20,21 @@ import gc
 from text2network.utils.hash_file import hash_string, check_step, complete_step
 
 try:
-    from flair.data import Sentence as flair_sentence
-    from flair.models import SequenceTagger as flair_tagger
-    from flair.models import TextClassifier as flair_classifier
-    flair_available=True
+    from textblob import TextBlob
+    textblob_available=True
 except:
-    flair_sentence=None
-    flair_tagger
-    flair_available=False
+    TextBlob=None
+    textblob_available=False
+
+try:
+    nltk.download('vader_lexicon')
+    # Initialize the VADER sentiment analyzer
+    from nltk.sentiment.vader import SentimentIntensityAnalyzer
+    vader_analyzer = SentimentIntensityAnalyzer()
+    vader_available=True
+except:
+    vader_analyzer = None()
+    vader_available=False
 
 class nw_processor():
     def __init__(self, neo_interface=None, config=None,trained_folder=None, MAX_SEQ_LENGTH=None, processing_options=None, text_db=None, split_hierarchy=None, processing_cache=None,
@@ -293,8 +302,11 @@ class nw_processor():
 
         batch_sampler = BatchSampler(SequentialSampler(range(0, dataset.nitems)), batch_size=self.batch_size,
                                      drop_last=False)
-        dataloader = DataLoaderX(dataset=dataset, batch_size=None, sampler=batch_sampler, num_workers=self.nr_workers,
+        dataloader = DataLoader(dataset=dataset, batch_size=None, sampler=batch_sampler, num_workers=self.nr_workers,
                                  collate_fn=text_dataset_collate_batchsample, pin_memory=False)
+        # This version used prefetch
+        #dataloader = DataLoaderX(dataset=dataset, batch_size=None, sampler=batch_sampler, num_workers=self.nr_workers,
+        #                         collate_fn=text_dataset_collate_batchsample, pin_memory=False)
 
         # Push BERT to GPU
         torch.cuda.empty_cache()

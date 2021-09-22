@@ -2,14 +2,8 @@ import random
 from typing import Union
 
 import numpy as np
-from networkx import compose_all
-from tqdm import tqdm
 import logging
 
-# import neo4j utilities and classes
-from text2network.classes.neo4db import neo4j_database
-from text2network.utils.twowaydict import TwoWayDict
-import pandas as pd
 try:
     from neo4j import GraphDatabase
 except:
@@ -19,10 +13,10 @@ except:
 class Neo4j_Insertion_Interface():
 
     # %% Initialization functions
-    def __init__(self, config=None, neo4j_creds=None, graph_type="networkx", agg_operator="SUM",
+    def __init__(self, config=None, neo4j_creds=None,  agg_operator="SUM",
                  write_before_query=True,
-                 neo_batch_size=None, queue_size=100000, tie_query_limit=100000, tie_creation="UNSAFE",
-                 logging_level=None, norm_ties=False, connection_type=None, consume_type=None, seed=100):
+                 neo_batch_size=None, queue_size=100000,  tie_creation="UNSAFE",
+                 logging_level=None, connection_type=None, consume_type=None, seed=100):
         # Fill parameters from configuration file
         if logging_level is not None:
             self.logging_level = logging_level
@@ -74,12 +68,12 @@ class Neo4j_Insertion_Interface():
         self.seed=seed
         self.set_random_seed(seed)
 
-        self.neo4j_connection, self.neo4j_credentials = neo4j_creds
+        self.neo4j_connection, self.neo4j_credentials = self.neo4j_creds
         self.write_before_query = write_before_query
         oldlevel = logging.getLogger().getEffectiveLevel()
         logging.getLogger().setLevel(30)
         # Set up Neo4j driver
-        if connection_type == "bolt" and GraphDatabase is not None:
+        if self.connection_type == "bolt" and GraphDatabase is not None:
             self.driver = GraphDatabase.driver(self.neo4j_connection, auth=self.neo4j_credentials)
             self.connection_type = "bolt"
             self.neo_session = None
@@ -110,12 +104,6 @@ class Neo4j_Insertion_Interface():
         self.db_id_dict = {}
         self.reset_dictionary()
 
-
-        # Dictionaries and token/id from tokenizer
-        self.db_token_id_dict = TwoWayDict()
-        # Dictionaries and token/id from tokenizer
-        self.tokenizer_token_id_dict = TwoWayDict()
-
         # Tokenizer tokens and id's, if needed
         self.tokenizer_tokens = []
         self.tokenizer_ids = []
@@ -125,9 +113,9 @@ class Neo4j_Insertion_Interface():
         np.random.seed(seed)
         self.seed=seed
 
-   # %% Setup
+   # %% Setup, Initializations
 
-    def check_create_tokenid_dict(self, tokenizer_tokens, tokenizer_ids, fail_on_missing=False):
+    def check_create_tokenid_dict(self, tokenizer_tokens, tokenizer_ids, db_tokens, db_ids, fail_on_missing=False, debug=False):
         """
         This function creates a dictionary that translates tokens and ids from an external tokenizer
         with the ones found in the database.
@@ -150,9 +138,6 @@ class Neo4j_Insertion_Interface():
         tokenizer_tokens = np.array(tokenizer_tokens)
         tokenizer_ids = np.array(tokenizer_ids)
         assert len(tokenizer_tokens)==len(tokenizer_ids), logging.error("Tokenizer token and id arrays MUST be same length!")
-
-        db_tokens = self.db_tokens
-        db_ids = self.db_ids
 
         # Find overlapping and missing tokens / ids
         if len(db_ids) > 0:
@@ -183,7 +168,10 @@ class Neo4j_Insertion_Interface():
         if len(missing_tokenizer_tokens) > 0:
             # We create new Ids based on the maximum id previously in the database
             # This should work if the ids are consecutive, but also if they are not
-            added_ids = list(range(np.max(db_ids)+1, np.max(db_ids)+1 + len(missing_tokenizer_tokens)))
+            if len(db_ids)>0:
+                added_ids = list(range(np.max(db_ids)+1, np.max(db_ids)+1 + len(missing_tokenizer_tokens)))
+            else:
+                added_ids = list(range(0, len(missing_tokenizer_tokens)))
             # Create missing dictionary
             assert len(added_ids)==len(missing_tokenizer_ids), logging.error("Internal error: Length of newly defined ids for missing tokens does not equal array of tokenizer ids!")
             missing_db_id_dict = {x[0]: x[1] for x in zip(missing_tokenizer_ids, added_ids)}
@@ -194,7 +182,7 @@ class Neo4j_Insertion_Interface():
         # Unite both DBs
         db_id_dict=overlapping_db_id_dict
         db_id_dict.update(missing_db_id_dict)
-        db_tokens = np.array(list(db_tokens)+list(missing_tokenizer_tokens))
+        all_tokens = np.array(list(db_tokens)+list(missing_tokenizer_tokens))
         db_ids = np.array(list(db_ids)+list(added_ids))
 
         # Since we do this once per init and since this is so important,
@@ -202,36 +190,21 @@ class Neo4j_Insertion_Interface():
         for x in overlapping_tokenizer_ids:
             tokenizer_tk = tokenizer_tokens[np.where(tokenizer_ids == x)[0][0]]
             db_id = db_id_dict[x]
-            db_tk = db_tokens[np.where(db_ids == db_id)[0][0]]
+            db_tk = all_tokens[np.where(db_ids == db_id)[0][0]]
+            if debug:
+                logging.debug(
+                    "tokenizer-db translation for tokenizer token {}, (id: {}), assigned to database token {}, (id: {})".format(
+                        tokenizer_tk, x, db_tk, db_id))
             assert tokenizer_tk==db_tk, logging.error("Mismatch when creating tokenizer-db translation for tokenizer token {}, (id: {}), assigned to database token {}, (id: {})".format(tokenizer_tk,x,db_tk,db_id))
-            print("tokenizer-db translation for tokenizer token {}, (id: {}), assigned to database token {}, (id: {})".format(tokenizer_tk,x,db_tk,db_id))
         for x in missing_tokenizer_ids:
             tokenizer_tk = tokenizer_tokens[np.where(tokenizer_ids == x)[0][0]]
             db_id = db_id_dict[x]
             assert tokenizer_tk not in db_tokens, logging.error("Mismatch when creating tokenizer-db translation, assigned tokenizer token {}, (id: {}) with new id {}".format(tokenizer_tk,x,db_id))
-            logging.debug("Assigned tokenizer token {}, (id: {}) with new id {} as missing, but found in database".format(tokenizer_tk,x,db_id))
+            if debug:
+                logging.debug("Assigned tokenizer token {}, (id: {}) with new id {} as missing, but found in database".format(tokenizer_tk,x,db_id))
 
-        self.db_id_dict = db_id_dict
 
-        return db_ids, missing_tokenizer_tokens, added_ids
-
-    def reset_dictionary(self):
-        """
-        Usually, external token_ids differ from database ids. If the class is initialized with a dictionary,
-        a translation is kept.
-
-        This function resets this translation such that token ids correspond to the database.
-        """
-        self.db_id_dict = {x[0]: x[1] for x in zip(self.db_ids, self.db_ids)}
-
-    def translate_token_ids(self, ids):
-        try:
-            new_ids = [self.db_id_dict[x] for x in ids]
-        except:
-            msg = "Could not translate {} token ids: {}".format(len(ids), ids)
-            logging.error(msg)
-            raise ValueError(msg)
-        return new_ids
+        return db_id_dict, db_ids, missing_tokenizer_tokens, added_ids
 
     def setup_neo_db(self, tokens, token_ids):
         """
@@ -240,6 +213,13 @@ class Neo4j_Insertion_Interface():
         :param token_ids: list of corresponding token IDs
         :return: None
         """
+        # Get rid of signs that can not be used
+        tokens = [x.translate(x.maketrans({"\"": '#e1#', "'": '#e2#', "\\": '#e3#'})) for x in tokens]
+        # Retain tokenizer assignments
+        self.tokenizer_ids=np.array(token_ids).copy()
+        self.tokens=np.array(tokens).copy()
+
+        # Check that database is setup
         logging.debug("Creating indecies and nodes in Neo4j database.")
         constr = [x['name'] for x in self.receive_query("CALL db.constraints")]
         # Create uniqueness constraints
@@ -266,7 +246,8 @@ class Neo4j_Insertion_Interface():
         # Get rid of signs that can not be used
         tokens = [x.translate(x.maketrans({"\"": '#e1#', "'": '#e2#', "\\": '#e3#'})) for x in tokens]
         # Check if tokens are missing or if ids differ. Get new ids, create translation and get the missing tokens
-        token_ids, missing_tokens, missing_ids = self.check_create_tokenid_dict(tokens, token_ids)
+        db_id_dict,token_ids, missing_tokens, missing_ids = self.check_create_tokenid_dict(tokenizer_tokens=tokens, tokenizer_ids=token_ids,db_ids=self.db_ids,db_tokens=self.db_tokens)
+        self.db_id_dict=db_id_dict
         # Add the missing tokens with their new ids to the database
         if len(missing_tokens) > 0:
             queries = [''.join(["MERGE (n:word {token_id: ", str(id), ", token: '", tok, "'})"]) for tok, id in
@@ -278,7 +259,7 @@ class Neo4j_Insertion_Interface():
         self.db_ids = np.array(self.db_ids)
         self.db_tokens = np.array(self.db_tokens)
 
-    def clean_database(self, time=None, del_limit=1000000):
+    def delete_database(self, time=None, del_limit=1000000):
         # DEBUG
         nr_nodes = self.receive_query("MATCH (n:edge) RETURN count(n) AS nodes")[0]['nodes']
         logging.info("Before cleaning: Network has %i edge-nodes " % (nr_nodes))
@@ -303,7 +284,6 @@ class Neo4j_Insertion_Interface():
         nr_nodes = self.receive_query("MATCH (n:edge) RETURN count(n) AS nodes")[0]['nodes']
         logging.info("After cleaning: Network has %i nodes and %i ties" % (nr_nodes))
 
-    # %% Initializations
     def get_neo_tokens_and_ids(self):
         """
         Gets all tokens and token_ids in the database
@@ -328,6 +308,143 @@ class Neo4j_Insertion_Interface():
         logging.debug("Pruning disconnected tokens in database.")
         self.add_query("MATCH (n) WHERE size((n)--())=0 DELETE (n)", run=True)
 
+    # %% Tokens and IDS
+
+    def reset_dictionary(self):
+        """
+        Usually, external token_ids differ from database ids. If the class is initialized with a dictionary,
+        a translation is kept.
+
+        This function resets this translation such that token ids correspond to the database.
+        """
+        self.db_id_dict = {x[0]: x[1] for x in zip(self.db_ids, self.db_ids)}
+
+    def translate_token_ids(self, ids):
+        try:
+            new_ids = [self.db_id_dict[x] for x in ids]
+        except:
+            msg = "Could not translate {} token ids: {}".format(len(ids), ids)
+            logging.error(msg)
+            raise ValueError(msg)
+        return new_ids
+
+    def get_token_from_tokenizer_id(self,idx:Union[int, np.integer]):
+        """
+        Given an ID from the tokenizer, return the corresponding token
+        Parameters
+        ----------
+        idx: integer
+            ID (from tokenizer)
+
+        Returns
+        -------
+        token: str
+        """
+        assert isinstance(idx, (int, np.integer)), "Token IDs need to be of integer type."
+        try:
+            db_id=self.db_id_dict[idx]
+            pos = np.where(self.db_ids == db_id)[0][0]
+            token=self.db_tokens[pos]
+        except: # Not in translation dictionary, try via token
+            try:
+                logging.warning("Warning, tokenizer ID {} has no translation to any database ID. Returning tokenizer token.".format(idx))
+                pos=np.where(self.tokenizer_ids==idx)[0][0]
+                token=self.tokenizer_tokens[pos]
+            except:
+                logging.error("Provided ID not assigned to token in database or tokenizer!")
+                raise
+        return token
+
+    def get_token_from_db_id(self,idx:Union[int, np.integer])->str:
+        """
+
+        Parameters
+        ----------
+        idx: Union[int, np.integer]
+            ID from database
+
+        Returns
+        -------
+        token: str
+        """
+        assert isinstance(idx, (int, np.integer)), "Token IDs need to be of integer type."
+        try:
+            pos = np.where(self.db_ids == idx)[0][0]
+            token=self.db_tokens[pos]
+        except:
+            logging.error("Provided ID {} not assigned to token in database!".format(idx))
+            raise
+        return token
+
+    def get_db_id_from_token(self,token:Union[str, np.character])->int:
+        assert isinstance(token, (str, np.character)), "Tokens need to be string or char type."
+        try:
+            pos = np.where(self.db_tokens == token)[0][0]
+            idx=self.db_ids[pos]
+        except: # some error, try to do it via translation
+            try:
+                pos = np.where(self.tokenizer_tokens == token)[0][0]
+                tok_idx = self.tokenizer_ids[pos]
+                idx = self.db_id_dict[tok_idx]
+                logging.warning("Warning, Token {} not found in database. Returning via tokenizer data and translation dictionary. Please check consistency!".format(token))
+            except:
+                logging.error("Provided Token {} not assigned to token in database!".format(token))
+                raise
+        return idx
+
+    def get_tokenizer_id_from_token(self,token):
+        assert isinstance(token, (str, np.character)), "Tokens need to be string or char type."
+        try:
+            pos = np.where(self.tokenizer_tokens == token)[0][0]
+            idx=self.tokenizer_ids[pos]
+        except:
+            logging.error("Provided Token {} not assigned to tokenizer!".format(token))
+            raise
+        return idx
+
+    def ensure_db_ids(self,tokens):
+        """This is just to confirm mixed lists of tokens and ids get converted to ids"""
+        if isinstance(tokens, (list, tuple, np.ndarray)):
+            # Transform strings to corresponding IDs
+            tokens = [self.get_db_id_from_token(x) if not np.issubdtype(
+                type(x), np.integer) else x for x in tokens]
+            # Make sure np arrays get transformed to int lists
+            return [int(x) if not isinstance(x, int) else x for x in tokens]
+        else:
+            if not np.issubdtype(type(tokens), np.integer):
+                return self.get_db_id_from_token(tokens)
+            else:
+                return int(tokens)
+
+    def ensure_tokenizer_ids(self, tokens):
+        """This is just to confirm mixed lists of tokens and ids get converted to ids (tokenizer)"""
+        if isinstance(tokens, (list, tuple, np.ndarray)):
+            # Transform strings to corresponding IDs
+            tokens = [self.get_tokenizer_id_from_token(x) if not np.issubdtype(
+                type(x), np.integer) else x for x in tokens]
+            # Make sure np arrays get transformed to int lists
+            return [int(x) if not isinstance(x, int) else x for x in tokens]
+        else:
+            if not np.issubdtype(type(tokens), np.integer):
+                return self.get_tokenizer_id_from_token(tokens)
+            else:
+                return int(tokens)
+
+    def ensure_tokens(self,ids, tokenizer_ids=False):
+        """This is just to confirm mixed lists of tokens and ids get converted to ids"""
+        if isinstance(ids, list):
+            if tokenizer_ids:
+                return [self.get_token_from_id(x) if not isinstance(x, str) else x for x in ids]
+            else:
+                return [self.get_token_from_db_id(x) if not isinstance(x, str) else x for x in ids]
+        else:
+            if not isinstance(ids, str):
+                if tokenizer_ids:
+                    return self.get_token_from_tokenizer_id(ids)
+                else:
+                    return self.get_token_from_id(ids)
+            else:
+                return ids
 
     # %% Insert functions
     def insert_edges(self, ego, ties):
