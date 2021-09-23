@@ -5,10 +5,10 @@ import logging
 import json
 import sys
 import traceback
-
+import torch
 from text2network.training.bert_trainer import bert_trainer
 import os
-
+import gc
 from text2network.preprocessing.nw_preprocessor import nw_preprocessor
 from text2network.functions.file_helpers import check_create_folder
 from text2network.utils.logging_helpers import setup_logger
@@ -41,6 +41,17 @@ if __name__ == '__main__':
             etype, value, _ = sys.exc_info()
             logging.error("Error in train_berts(): {}".format(value))
             logging.error("Traceback: {}".format(traceback.format_exc()))
+
+            # Here we can try to release CUDA memory
+
+            del bert_trainer
+            gc.collect()
+            print(torch.cuda.is_available())
+            torch.cuda.empty_cache()
+
+            trainer=bert_trainer(config)
+
+
 
             logging.info("trying to continue")
             continue
