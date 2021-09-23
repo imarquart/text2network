@@ -434,7 +434,7 @@ class Neo4j_Insertion_Interface():
         """This is just to confirm mixed lists of tokens and ids get converted to ids"""
         if isinstance(ids, list):
             if tokenizer_ids:
-                return [self.get_token_from_id(x) if not isinstance(x, str) else x for x in ids]
+                return [self.get_token_from_tokenizer_id(x) if not isinstance(x, str) else x for x in ids]
             else:
                 return [self.get_token_from_db_id(x) if not isinstance(x, str) else x for x in ids]
         else:
@@ -442,7 +442,7 @@ class Neo4j_Insertion_Interface():
                 if tokenizer_ids:
                     return self.get_token_from_tokenizer_id(ids)
                 else:
-                    return self.get_token_from_id(ids)
+                    return self.get_token_from_tokenizer_id(ids)
             else:
                 return ids
 
