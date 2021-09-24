@@ -14,11 +14,7 @@ from text2network.functions.file_helpers import check_create_folder
 from text2network.utils.logging_helpers import setup_logger
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Preprocess text files.')
-    parser.add_argument('--config', metavar='path', required=True,
-                        help='the path to the configuration file')
-    args = parser.parse_args()
+def run_training(args):
     # Set a configuration path
     configuration_path = args.config
     # Load Configuration file
@@ -33,10 +29,18 @@ if __name__ == '__main__':
 
     ##################### Training
     trainer=bert_trainer(config)
+    return trainer.train_berts()
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Preprocess text files.')
+    parser.add_argument('--config', metavar='path', required=True,
+                        help='the path to the configuration file')
+    args = parser.parse_args()
+    
     success=False
     while success is not True:
         try:
-            sucvar=trainer.train_berts()
+            sucvar=run_training(args)
         except:
             etype, value, _ = sys.exc_info()
             logging.error("Error in train_berts(): {}".format(value))
@@ -44,15 +48,9 @@ if __name__ == '__main__':
 
             # Here we can try to release CUDA memory
 
-            del bert_trainer
             gc.collect()
             print(torch.cuda.is_available())
             torch.cuda.empty_cache()
-
-            trainer=bert_trainer(config)
-
-
-
             logging.info("trying to continue")
             continue
         if sucvar == 0:
