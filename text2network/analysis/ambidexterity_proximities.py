@@ -35,7 +35,7 @@ rev_ties_list =[True,False]
 sym_ties_list =[True,False]
 comp_ties_list = [False]
 back_out_list = [False]
-focal_context_list = [("agile",None),("agility",None)]
+focal_context_list = [("conflict",None)]
 
 param_list = product(rs_list, weight_list,focal_context_list,rev_ties_list,back_out_list,comp_ties_list, sym_ties_list)
 logging.info("------------------------------------------------")

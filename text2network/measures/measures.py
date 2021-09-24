@@ -120,8 +120,8 @@ def proximities(snw, focal_tokens: Optional[List] = None, alter_subset: Optional
 
 
 def yearly_centralities(snw, year_list, focal_tokens=None, types=["PageRank", "normedPageRank"],
-                        depth=None, context=None, weight_cutoff=None, compositional=None,
-                        reverse_ties: Optional[bool] = False, backout: Optional[bool]=False):
+                        depth=None, context=None, weight_cutoff=None, compositional=None, symmetric:Optional[bool] = False,
+                        reverse_ties: Optional[bool] = False, backout: Optional[bool]=False, max_degree=100):
     """
     Compute directly year-by-year centralities for provided list.
 
@@ -164,9 +164,11 @@ def yearly_centralities(snw, year_list, focal_tokens=None, types=["PageRank", "n
         logging.debug("Conditioning network on year {} with {} focal tokens and depth {}".format(year,len(focal_tokens),depth))
         snw.condition(tokens=focal_tokens, times=[
             year], depth=depth, context=context, weight_cutoff=weight_cutoff,
-                      compositional=compositional)
+                      compositional=compositional, max_degree=max_degree)
         if backout:
             snw.to_backout()
+        if symmetric:
+            snw.to_symmetric()
         logging.debug("Computing centralities for year {}".format(year))
         cent_measures = snw.centralities(focal_tokens=focal_tokens, types=types, reverse_ties=reverse_ties)
         cent_year.update({year: cent_measures})
@@ -371,6 +373,10 @@ def average_cluster_proximities(focal_token: str,  nw, levels: int,
     if cluster_cutoff==None:
         cluster_cutoff=0
 
+    if symmetric or reverse_ties:
+        if depth <= 1:
+            depth = 1
+
     # First, derive clusters
     if mode == "context":
         nw.context_condition(tokens=focal_token, times=query_times, depth=depth, weight_cutoff=weight_cutoff,
@@ -477,24 +483,25 @@ def average_cluster_proximities(focal_token: str,  nw, levels: int,
             if moving_average is not None:
                 start_year = max(times[0], year - moving_average[0])
                 end_year = min(times[-1], year + moving_average[1])
-                ma_years = np.arange(start_year, end_year + 1)
+                ma_years = list(np.arange(start_year, end_year + 1))
+                logging.info(
+                    "Calculating proximities for fixed relevant clusters for year {} with moving average -{} to {} over {}".format(
+                        year,
+                        moving_average[
+                            0],
+                        moving_average[
+                            1], ma_years))
             else:
-                ma_years = year
+                ma_years = [year]
 
-            logging.info(
-                "Calculating proximities for fixed relevant clusters for year {} with moving average -{} to {} over {}".format(
-                    year,
-                    moving_average[
-                        0],
-                    moving_average[
-                        1], ma_years))
+
 
             if mode == "context":
                 nw.context_condition(tokens=focal_token, times=ma_years, depth=depth, weight_cutoff=weight_cutoff,
-                                     occurrence=occurrence, batchsize=None)
+                                     occurrence=occurrence, max_degree=max_degree)
 
             else:
-                nw.condition(tokens=focal_token, times=ma_years, weight_cutoff=weight_cutoff, context=context, compositional=compositional)
+                nw.condition(tokens=focal_token, depth=depth, times=ma_years, weight_cutoff=weight_cutoff, context=context, compositional=compositional, max_degree=max_degree)
 
 
             if to_back_out:
