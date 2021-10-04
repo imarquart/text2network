@@ -549,7 +549,7 @@ class Neo4j_Insertion_Interface():
 
         if params is not None:
             assert isinstance(params, list)
-            statements = [{'statement': p, 'parameters':q} for (q, p) in zip(query, params)]
+            statements = [{'statement': p, 'parameters':q} for (p, q) in zip(query, params)]
             self.neo_queue.extend(statements)
         else:
             statements = [{'statement': q} for (q) in query]
@@ -608,11 +608,19 @@ class Neo4j_Insertion_Interface():
 
     def open_session(self, fetch_size=50):
         logging.debug("Opening Session!")
-        self.neo_session=self.driver.session(fetch_size=fetch_size)
+        try:
+            self.neo_session=self.driver.session(fetch_size=fetch_size)
+        except:
+            self.error("Could not open Neo Session")
+            raise
 
     def close_session(self):
-        self.neo_session.close()
-        self.neo_session=None
+        try:
+            self.neo_session.close()
+            self.neo_session=None
+        except:
+            logging.warning("Tried closing neo session, was unable to. Continuing for now.")
+            self.neo_session=None
 
     def receive_query(self, query, params=None):
         clean_up=False

@@ -7,7 +7,7 @@ import tables
 import torch
 import tqdm
 import json
-from text2network.functions.file_helpers import check_create_folder
+from text2network.functions.file_helpers import check_create_folder, check_folder
 from torch.utils.data import BatchSampler, SequentialSampler, DataLoader
 #from text2network.datasets.dataloaderX import DataLoaderX
 from text2network.datasets.text_dataset import query_dataset, text_dataset_collate_batchsample
@@ -19,25 +19,9 @@ from text2network.processing.neo4j_insertion_interface import Neo4j_Insertion_In
 import gc
 from text2network.utils.hash_file import hash_string, check_step, complete_step
 
-try:
-    from textblob import TextBlob
-    textblob_available=True
-except:
-    TextBlob=None
-    textblob_available=False
-
-try:
-    nltk.download('vader_lexicon')
-    # Initialize the VADER sentiment analyzer
-    from nltk.sentiment.vader import SentimentIntensityAnalyzer
-    vader_analyzer = SentimentIntensityAnalyzer()
-    vader_available=True
-except:
-    vader_analyzer = None()
-    vader_available=False
 
 class nw_processor():
-    def __init__(self, neo_interface=None, config=None,trained_folder=None, MAX_SEQ_LENGTH=None, processing_options=None, text_db=None, split_hierarchy=None, processing_cache=None,
+    def __init__(self, config=None,neo_interface=None, trained_folder=None, MAX_SEQ_LENGTH=None, processing_options=None, text_db=None, split_hierarchy=None, processing_cache=None,
                  logging_level=None):
         """
         Extracts pre-processed sentences, gets predictions by BERT and creates a network
@@ -88,7 +72,7 @@ class nw_processor():
                 logging.error(msg)
                 raise AttributeError(msg)        
         # Check and create folder
-        self.trained_folder=check_create_folder(self.trained_folder, create_folder=True)
+        self.trained_folder=check_create_folder(self.trained_folder, create_folder=False)
         
         if processing_cache is not None:
             self.processing_cache = processing_cache
@@ -133,20 +117,6 @@ class nw_processor():
         self.maxn = int(self.processing_options['maxn'])
         self.nr_workers = int(self.processing_options['nr_workers'])
         self.cutoff_prob = float(self.processing_options['cutoff_prob'])
-
-        # Set up POS and Sentiment
-        if self.pos_tagging:
-            if flair_available:
-                self.pos_tagger = flair_tagger.load("flair/upos-english")
-            else:
-                logging.warning("POS Tagging requested, but POS package is not available. Tagging will be deactivated!")
-                self.pos_tagging=False
-        if self.sentiment:
-            if flair_available:
-                self.sent_classifier = flair_classifier.load('sentiment')
-            else:
-                logging.warning("POS Tagging requested, but POS package is not available. Tagging will be deactivated!")
-                self.pos_tagging=False
 
         
         if MAX_SEQ_LENGTH is not None:
@@ -199,6 +169,7 @@ class nw_processor():
         del self.tokenizer
 
         bert_folder = ''.join([self.trained_folder, '/', fname])
+        bert_folder = check_folder(bert_folder)
         tokenizer, bert = get_bert_and_tokenizer(bert_folder, True)
         self.DICT_SIZE = len(tokenizer)
         return tokenizer, bert
@@ -229,6 +200,7 @@ class nw_processor():
             fname = query_filename[1]
             if self.processing_cache is not None:
                 processing_folder= ''.join([self.processing_cache, '/', fname])
+                processing_folder = check_create_folder(processing_folder)
             else:
                 processing_folder = 'None'
             # Set up Hash
@@ -323,7 +295,7 @@ class nw_processor():
         #process_timings = []
         #load_timings = []
         #start_time = time.time()
-        for batch, token_ids, index_vec, seq_id_vec, runindex_vec, year_vec, p1_vec, p2_vec, p3_vec, p4_vec in tqdm.tqdm(dataloader,
+        for batch, token_ids, index_vec, seq_id_vec, runindex_vec, year_vec, p1_vec, p2_vec, p3_vec, p4_vec,  pos_vec, sentiment_vec, subject_vec in tqdm.tqdm(dataloader,
                                                                                                         desc="Iteration"):
             # batch, seq_ids, token_ids
             # Data spent on loading batch
@@ -347,6 +319,9 @@ class nw_processor():
             p2_vec = p2_vec[not_missing]
             p3_vec = p3_vec[not_missing]
             p4_vec = p4_vec[not_missing]
+            pos_vec = pos_vec[not_missing]
+            sentiment_vec = sentiment_vec[not_missing]
+            subject_vec = subject_vec[not_missing]
 
             # %% Sequence Table
             # Iterate over sequences
@@ -363,6 +338,9 @@ class nw_processor():
                 seq_p2 = p2_vec[sequence_mask]
                 seq_p3 = p3_vec[sequence_mask]
                 seq_p4 = p4_vec[sequence_mask]
+                seq_pos = pos_vec[sequence_mask]
+                seq_sentiment = sentiment_vec[sequence_mask]
+                seq_subject = subject_vec[sequence_mask]
 
                 # Pad and add sequence of IDs
                 # TODO: Sanity check I don't need this anymore
@@ -396,6 +374,9 @@ class nw_processor():
                     p2 = seq_p2[pos]
                     p3 = seq_p3[pos]
                     p4 = seq_p4[pos]
+                    sentiment = float(seq_sentiment[pos].numpy())
+                    subjectivity = float(seq_subject[pos].numpy())
+                    part_of_speech = seq_pos[pos]
 
                     # Ignore stopwords for network creation
                     if token not in delwords:
@@ -417,22 +398,22 @@ class nw_processor():
                         replacement = self.norm(replacement, min_zero=False)
 
                         # %% Context Element
-                        context = (
-                            torch.sum((seq_ce[pos] * dists[context_index, :].transpose(-1, 0)).transpose(-1, 0),
-                                      dim=0).unsqueeze(0))
+                        #context = (
+                        #    torch.sum((seq_ce[pos] * dists[context_index, :].transpose(-1, 0)).transpose(-1, 0),
+                        #              dim=0).unsqueeze(0))
                         # Flatten, since it is one row each
-                        context = context.numpy().flatten()
+                        #context = context.numpy().flatten()
                         # Sparsify
                         # TODO: try without setting own-link to zero!
-                        context[token] = 0
-                        context[context == np.min(context)] = 0
+                        #context[token] = 0
+                        #context[context == np.min(context)] = 0
                         # Get rid of delnorm links
-                        context[delwords] = 0
+                        #context[delwords] = 0
                         # Get rid of tokens not in text
-                        if self.prune_missing_tokens:
-                            context[dataset.id_mask] = 0
+                        #if self.prune_missing_tokens:
+                        #    context[dataset.id_mask] = 0
                         # We norm the distributions here
-                        context = self.norm(context, min_zero=False)
+                        #context = self.norm(context, min_zero=False)
 
                         # Add values to network
                         # Replacement ties
@@ -440,11 +421,11 @@ class nw_processor():
                                                                                    percent=self.cutoff_percent,
                                                                                    max_degree=self.max_degree)
                         ties = self.get_weighted_edgelist(token, replacement, year, cutoff_number, cutoff_probability,
-                                                          sequence_id, pos, p1=p1, p2=p2, p3=p3, p4=p4, run_index=run_index,
+                                                          sequence_id, pos, p1=p1, p2=sentiment, p3=subjectivity, p4=part_of_speech, run_index=run_index,
                                                           max_degree=self.max_degree, min_probability=self.cutoff_prob)
 
                         if (ties is not None):
-                            self.neo_interface.insert_edges_context(token, ties)
+                            self.neo_interface.insert_edges(token, ties)
 
                 del dists
 

@@ -12,6 +12,24 @@ import os
 import pickle
 import nltk
 
+
+try:
+    from textblob import TextBlob
+    textblob_available=True
+except:
+    TextBlob=None
+    textblob_available=False
+
+try:
+    nltk.download('vader_lexicon')
+    # Initialize the VADER sentiment analyzer
+    from nltk.sentiment.vader import SentimentIntensityAnalyzer
+    vader_analyzer = SentimentIntensityAnalyzer()
+    vader_available=True
+except:
+    vader_analyzer = None
+    vader_available=False
+
 from text2network.utils.load_bert import get_full_vocabulary
 
 
@@ -76,7 +94,7 @@ class query_dataset(Dataset):
         :return: One batch for data ingest
                     token_input_vec: k,n+2 tensor with fixed length sequences
                     token_id_vec: 1,k*n tensor giving a sequence of all token_ids in batch
-                    seq_vec: 1,k*n tensor giving the sequence id (in db) for each token in batch
+                    seq_vec, run_index: 1,k*n tensor giving the sequence id (in db) and run_index for each token in batch
                     index_vec: 1,k*n tensor giving the index (in dataset) for each token in batch
                     year_vec: 1,k*n tensor, giving the year for each token in batch
                     p1_vec: 1,k*n array, giving p1 parameter for each token in batch
@@ -110,8 +128,14 @@ class query_dataset(Dataset):
 
         token_input_vec = []  # tensor of padded inputs with special tokens
         token_id_vec = []  # List of token ids for each sequence, later transformed to 1-dim tensor over batch
+
+        pos_vec = []
+        sentiment_vec = []
+        subject_vec = []
         for text in texts:
 
+            # Text tokenization
+            ##
             indexed_tokens = self.tokenizer.encode(text, add_special_tokens=False)
             # Need fixed size, so we need to cut and pad
             indexed_tokens = indexed_tokens[:self.fixed_seq_length]
@@ -121,6 +145,22 @@ class query_dataset(Dataset):
             token_input_vec.append(inputs)
             # Also save list of tokens
             token_id_vec.append(inputs[1:-1])
+
+            # Sentiment analysis and POS
+            if textblob_available:
+                txtblb = TextBlob(text)
+                pos = np.array([x[1] for x in txtblb.tags], dtype=str)
+                # textblob does not have anything for dots etc.
+                pos_diff = inputs[1:-1].shape[0]-pos.shape[0]
+                pos = np.concatenate([pos, np.repeat("DOT", pos_diff)])
+                assert pos.shape[0]==inputs[1:-1].shape[0]
+
+                sentiment= torch.tensor(txtblb.sentiment.polarity)
+                subject = torch.tensor(txtblb.sentiment.subjectivity)
+
+                pos_vec.append(pos)
+                sentiment_vec.append(sentiment)
+                subject_vec.append(subject)
 
         # Add padding sequence
         token_input_vec.append(torch.zeros([self.fixed_seq_length + 2], dtype=torch.int))
@@ -134,6 +174,8 @@ class query_dataset(Dataset):
         seq_vec = torch.repeat_interleave(torch.as_tensor(seq_vec), torch.as_tensor(lengths))
         runindex_vec = torch.repeat_interleave(torch.as_tensor(runindex_vec), torch.as_tensor(lengths))
         year_vec = torch.repeat_interleave(torch.as_tensor(year_vec), torch.as_tensor(lengths))
+        sentiment_vec =  torch.repeat_interleave(torch.as_tensor(sentiment_vec), torch.as_tensor(lengths))
+        subject_vec =  torch.repeat_interleave(torch.as_tensor(subject_vec), torch.as_tensor(lengths))
         p1_vec = p1_vec.repeat(lengths)
         p2_vec = p2_vec.repeat(lengths)
         p3_vec = p3_vec.repeat(lengths)
@@ -141,8 +183,9 @@ class query_dataset(Dataset):
 
         # Cat token_id_vec list into a single tensor for the whole batch
         token_id_vec = torch.cat([x for x in token_id_vec])
+        pos_vec= np.concatenate([x for x in pos_vec])
 
-        return token_input_vec, token_id_vec, index_vec, seq_vec, runindex_vec, year_vec, p1_vec, p2_vec, p3_vec, p4_vec
+        return token_input_vec, token_id_vec, index_vec, seq_vec, runindex_vec, year_vec, p1_vec, p2_vec, p3_vec, p4_vec, pos_vec, sentiment_vec, subject_vec
 
     def __len__(self):
         return len(self.data)
