@@ -188,8 +188,8 @@ class nw_processor():
 
         # Clean the database
         if delete_all:
-            logging.info("Cleaning Neo4j Database of all prior connections")
-            self.neo_interface.clean_database()
+            logging.warning("Cleaning Neo4j Database of all prior connections")
+            self.neo_interface.delete_database()
 
         # Delete incompletes
         #TODO
@@ -266,6 +266,7 @@ class nw_processor():
                                 logging_level=self.logging_level)
         logging.info("Number of sentences found: %i" % dataset.nitems)
         logging.info("Number of unique tokens in dataset: {}".format(self.tokenizer.vocab_size-len(dataset.id_mask)))
+        logging.info("Number of tokens in tokenizer: {}".format(self.tokenizer.vocab_size))
         # Error fix: Batch size must not be larger than dataset size
         original_batch_size = self.batch_size
         if dataset.nitems < self.batch_size:

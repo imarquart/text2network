@@ -148,12 +148,30 @@ class query_dataset(Dataset):
 
             # Sentiment analysis and POS
             if textblob_available:
-                txtblb = TextBlob(text)
-                pos = np.array([x[1] for x in txtblb.tags], dtype=str)
+                reform_text=self.tokenizer.convert_ids_to_tokens(list(inputs[1:-1].numpy()))
+                joined_text = " ".join(reform_text)
+                txtblb = TextBlob(joined_text)
+
+                i=0
+                j=0
+                txtblb_tags=txtblb.tags
+                pos=[]
+                for i,token in enumerate(reform_text):
+                    if j < len(txtblb_tags):
+                        txtblb_token=txtblb_tags[j][0]
+                    else:
+                        txtblb_token="[[dot]]"
+                    if txtblb_token==token:
+                        pos.append(txtblb_tags[j][1])
+                        j += 1
+                    else:
+                        pos.append("DOT")
                 # textblob does not have anything for dots etc.
+                pos=np.array(pos)
                 pos_diff = inputs[1:-1].shape[0]-pos.shape[0]
-                pos = np.concatenate([pos, np.repeat("DOT", pos_diff)])
-                assert pos.shape[0]==inputs[1:-1].shape[0]
+                #if pos_diff >0:
+                #    pos = np.concatenate([pos, np.repeat("DOT", pos_diff)])
+                assert pos.shape[0]==inputs[1:-1].shape[0], "Pos Shape: {}, Inputs Shape: {} \n pos: {} \n inputs[1:-1]: {} \n Sequence: {} \n Text: {} \n Textblob: {}".format(pos.shape[0],inputs[1:-1].shape[0],pos,inputs[1:-1], self.tokenizer.convert_ids_to_tokens(list(inputs.numpy())),text,txtblb)
 
                 sentiment= torch.tensor(txtblb.sentiment.polarity)
                 subject = torch.tensor(txtblb.sentiment.subjectivity)
@@ -161,6 +179,8 @@ class query_dataset(Dataset):
                 pos_vec.append(pos)
                 sentiment_vec.append(sentiment)
                 subject_vec.append(subject)
+            else:
+                raise NotImplementedError("POS NLTK Tagging implementation")
 
         # Add padding sequence
         token_input_vec.append(torch.zeros([self.fixed_seq_length + 2], dtype=torch.int))

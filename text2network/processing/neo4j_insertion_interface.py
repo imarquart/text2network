@@ -195,11 +195,11 @@ class Neo4j_Insertion_Interface():
                 logging.debug(
                     "tokenizer-db translation for tokenizer token {}, (id: {}), assigned to database token {}, (id: {})".format(
                         tokenizer_tk, x, db_tk, db_id))
-            assert tokenizer_tk==db_tk, logging.error("Mismatch when creating tokenizer-db translation for tokenizer token {}, (id: {}), assigned to database token {}, (id: {})".format(tokenizer_tk,x,db_tk,db_id))
+            assert tokenizer_tk==db_tk, "Mismatch when creating tokenizer-db translation for tokenizer token {}, (id: {}), assigned to database token {}, (id: {})".format(tokenizer_tk,x,db_tk,db_id)
         for x in missing_tokenizer_ids:
             tokenizer_tk = tokenizer_tokens[np.where(tokenizer_ids == x)[0][0]]
             db_id = db_id_dict[x]
-            assert tokenizer_tk not in db_tokens, logging.error("Mismatch when creating tokenizer-db translation, assigned tokenizer token {}, (id: {}) with new id {}".format(tokenizer_tk,x,db_id))
+            assert tokenizer_tk not in list(db_tokens), "Mismatch when creating tokenizer-db translation, assigned tokenizer token {}, (id: {}) with new id {}".format(tokenizer_tk,x,db_id)
             if debug:
                 logging.debug("Assigned tokenizer token {}, (id: {}) with new id {} as missing, but found in database".format(tokenizer_tk,x,db_id))
 
@@ -282,7 +282,7 @@ class Neo4j_Insertion_Interface():
 
         # DEBUG
         nr_nodes = self.receive_query("MATCH (n:edge) RETURN count(n) AS nodes")[0]['nodes']
-        logging.info("After cleaning: Network has %i nodes and %i ties" % (nr_nodes))
+        logging.info("After cleaning: Network has %i nodes ties" % (nr_nodes))
 
     def get_neo_tokens_and_ids(self):
         """

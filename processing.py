@@ -31,7 +31,7 @@ if __name__ == '__main__':
     # Setup logging
     logger = setup_logger(config['Paths']['log'], int(config['General']['logging_level']), "processing.py")
     processor = nw_processor(config=config)
-    print("done")
+
     #a=dataset[1]
 
     processor.run_all_queries(delete_incomplete=True, delete_all=False)
