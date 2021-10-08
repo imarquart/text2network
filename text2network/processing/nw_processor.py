@@ -9,7 +9,7 @@ import tqdm
 import json
 from text2network.functions.file_helpers import check_create_folder, check_folder
 from torch.utils.data import BatchSampler, SequentialSampler, DataLoader
-#from text2network.datasets.dataloaderX import DataLoaderX
+# from text2network.datasets.dataloaderX import DataLoaderX
 from text2network.datasets.text_dataset import query_dataset, text_dataset_collate_batchsample
 from text2network.utils.delwords import create_stopword_list
 from text2network.utils.rowvec_tools import simple_norm
@@ -21,7 +21,8 @@ from text2network.utils.hash_file import hash_string, check_step, complete_step
 
 
 class nw_processor():
-    def __init__(self, config=None,neo_interface=None, trained_folder=None, MAX_SEQ_LENGTH=None, processing_options=None, text_db=None, split_hierarchy=None, processing_cache=None,
+    def __init__(self, config=None, neo_interface=None, trained_folder=None, MAX_SEQ_LENGTH=None,
+                 processing_options=None, text_db=None, split_hierarchy=None, processing_cache=None,
                  logging_level=None):
         """
         Extracts pre-processed sentences, gets predictions by BERT and creates a network
@@ -43,20 +44,20 @@ class nw_processor():
             if config is not None:
                 self.neo_interface = Neo4j_Insertion_Interface(config)
             else:
-                msg="Please provide either a neo4j interface, or a valid configuration file."
+                msg = "Please provide either a neo4j interface, or a valid configuration file."
                 logging.error(msg)
                 raise AttributeError(msg)
         else:
             self.neo_interface = neo_interface
-        
+
         # Fill parameters from configuration file
         if logging_level is not None:
-            self.logging_level=logging_level
+            self.logging_level = logging_level
         else:
             if config is not None:
-                self.logging_level=config['General'].getint('logging_level')
+                self.logging_level = config['General'].getint('logging_level')
             else:
-                msg="Please provide valid logging level."
+                msg = "Please provide valid logging level."
                 logging.error(msg)
                 raise AttributeError(msg)
         # Set logging level
@@ -70,10 +71,10 @@ class nw_processor():
             else:
                 msg = "Please provide valid trained_folder."
                 logging.error(msg)
-                raise AttributeError(msg)        
-        # Check and create folder
-        self.trained_folder=check_create_folder(self.trained_folder, create_folder=False)
-        
+                raise AttributeError(msg)
+                # Check and create folder
+        self.trained_folder = check_create_folder(self.trained_folder, create_folder=False)
+
         if processing_cache is not None:
             self.processing_cache = processing_cache
         else:
@@ -82,10 +83,10 @@ class nw_processor():
             else:
                 msg = "Please provide valid processing_cache."
                 logging.error(msg)
-                raise AttributeError(msg)        
-        # Check and create folder
-        self.processing_cache=check_create_folder(self.processing_cache, create_folder=True)
-        
+                raise AttributeError(msg)
+                # Check and create folder
+        self.processing_cache = check_create_folder(self.processing_cache, create_folder=True)
+
         if text_db is not None:
             self.text_db = text_db
         else:
@@ -94,10 +95,10 @@ class nw_processor():
             else:
                 msg = "Please provide valid databse."
                 logging.error(msg)
-                raise AttributeError(msg)        
-        # Check and create folder
-        self.text_db=check_create_folder(self.text_db, create_folder=False)
-        
+                raise AttributeError(msg)
+                # Check and create folder
+        self.text_db = check_create_folder(self.text_db, create_folder=False)
+
         if processing_options is not None:
             self.processing_options = processing_options
         else:
@@ -106,8 +107,8 @@ class nw_processor():
             else:
                 msg = "Please provide valid processing_options."
                 logging.error(msg)
-                raise AttributeError(msg)      
-        
+                raise AttributeError(msg)
+
         self.batch_size = int(self.processing_options['batch_size'])
         self.cutoff_percent = int(self.processing_options['cutoff_percent'])
         self.max_degree = int(self.processing_options['max_degree'])
@@ -118,7 +119,6 @@ class nw_processor():
         self.nr_workers = int(self.processing_options['nr_workers'])
         self.cutoff_prob = float(self.processing_options['cutoff_prob'])
 
-        
         if MAX_SEQ_LENGTH is not None:
             self.MAX_SEQ_LENGTH = MAX_SEQ_LENGTH
         else:
@@ -129,26 +129,21 @@ class nw_processor():
                 logging.error(msg)
                 raise AttributeError(msg)
         self.DICT_SIZE = 0
-        
 
         if split_hierarchy is not None:
-            self.split_hierarchy=split_hierarchy
+            self.split_hierarchy = split_hierarchy
         else:
             if config is not None:
-                self.split_hierarchy=json.loads(config.get('General', 'split_hierarchy'))
+                self.split_hierarchy = json.loads(config.get('General', 'split_hierarchy'))
             else:
                 msg = "Please provide valid split_hierarchy."
                 logging.error(msg)
-                raise AttributeError(msg)      
-        # Set uniques
+                raise AttributeError(msg)
+                # Set uniques
         self.setup_uniques(self.split_hierarchy)
-
 
         self.tokenizer = None
         self.bert = None
-
-
-
 
     def setup_uniques(self, split_hierarchy=None):
         """
@@ -162,7 +157,6 @@ class nw_processor():
 
         self.uniques = get_uniques(self.split_hierarchy, self.text_db)
 
-
     def setup_bert(self, fname):
 
         del self.bert
@@ -174,7 +168,8 @@ class nw_processor():
         self.DICT_SIZE = len(tokenizer)
         return tokenizer, bert
 
-    def run_all_queries(self, delete_all=False, delete_incomplete=True, split_hierarchy=None, logging_level=None, prune_database=True):
+    def run_all_queries(self, delete_all=False, delete_incomplete=True, split_hierarchy=None, logging_level=None,
+                        prune_database=True):
 
         # SEt up logging
         if logging_level is not None:
@@ -192,14 +187,14 @@ class nw_processor():
             self.neo_interface.delete_database()
 
         # Delete incompletes
-        #TODO
+        # TODO
 
-        for idx,query_filename in enumerate(self.uniques['query_filename']):
+        for idx, query_filename in enumerate(self.uniques['query_filename']):
             # Get File name
             query = query_filename[0]
             fname = query_filename[1]
             if self.processing_cache is not None:
-                processing_folder= ''.join([self.processing_cache, '/', fname])
+                processing_folder = ''.join([self.processing_cache, '/', fname])
                 processing_folder = check_create_folder(processing_folder)
             else:
                 processing_folder = 'None'
@@ -213,7 +208,7 @@ class nw_processor():
                 logging.info("Processing query {}".format(query))
                 start_time = time.time()
                 self.process_query(query, fname)
-                logging.info("Processing Time: %s seconds" % (time.time()-start_time))
+                logging.info("Processing Time: %s seconds" % (time.time() - start_time))
                 if self.processing_cache is not None:
                     complete_step(processing_folder, hash)
 
@@ -258,14 +253,14 @@ class nw_processor():
         # Setup Neo4j network and token ids
         # The tokenizer may have different token-token_id assignments than those present in the database
         # This will be corrected by setting up the neograph db
-        ids, tokens=get_full_vocabulary(self.tokenizer)
+        ids, tokens = get_full_vocabulary(self.tokenizer)
         self.neo_interface.setup_neo_db(tokens, ids)
 
         # %% Initialize text dataset
         dataset = query_dataset(self.text_db, self.tokenizer, self.MAX_SEQ_LENGTH, maxn=self.maxn, query=query,
                                 logging_level=self.logging_level)
         logging.info("Number of sentences found: %i" % dataset.nitems)
-        logging.info("Number of unique tokens in dataset: {}".format(self.tokenizer.vocab_size-len(dataset.id_mask)))
+        logging.info("Number of unique tokens in dataset: {}".format(self.tokenizer.vocab_size - len(dataset.id_mask)))
         logging.info("Number of tokens in tokenizer: {}".format(self.tokenizer.vocab_size))
         # Error fix: Batch size must not be larger than dataset size
         original_batch_size = self.batch_size
@@ -276,9 +271,9 @@ class nw_processor():
         batch_sampler = BatchSampler(SequentialSampler(range(0, dataset.nitems)), batch_size=self.batch_size,
                                      drop_last=False)
         dataloader = DataLoader(dataset=dataset, batch_size=None, sampler=batch_sampler, num_workers=self.nr_workers,
-                                 collate_fn=text_dataset_collate_batchsample, pin_memory=False)
+                                collate_fn=text_dataset_collate_batchsample, pin_memory=False)
         # This version used prefetch
-        #dataloader = DataLoaderX(dataset=dataset, batch_size=None, sampler=batch_sampler, num_workers=self.nr_workers,
+        # dataloader = DataLoaderX(dataset=dataset, batch_size=None, sampler=batch_sampler, num_workers=self.nr_workers,
         #                         collate_fn=text_dataset_collate_batchsample, pin_memory=False)
 
         # Push BERT to GPU
@@ -292,26 +287,27 @@ class nw_processor():
         delwords = create_stopword_list(self.tokenizer)
 
         # Counter for timing
-        #model_timings = []
-        #process_timings = []
-        #load_timings = []
-        #start_time = time.time()
-        for batch, token_ids, index_vec, seq_id_vec, runindex_vec, year_vec, p1_vec, p2_vec, p3_vec, p4_vec,  pos_vec, sentiment_vec, subject_vec in tqdm.tqdm(dataloader,
-                                                                                                        desc="Iteration"):
+        # model_timings = []
+        # process_timings = []
+        # load_timings = []
+        # start_time = time.time()
+        for batch, token_ids, index_vec, seq_id_vec, runindex_vec, year_vec, p1_vec, p2_vec, p3_vec, p4_vec, pos_vec, sentiment_vec, subject_vec in tqdm.tqdm(
+                dataloader,
+                desc="Iteration"):
             # batch, seq_ids, token_ids
             # Data spent on loading batch
-            #load_time = time.time() - start_time
-            #load_timings.append(load_time)
+            # load_time = time.time() - start_time
+            # load_timings.append(load_time)
             # This seems to allow slightly higher batch sizes on my GPU
             # torch.cuda.empty_cache()
             # Run BERT and get predictions
             predictions, attn = self.get_bert_tensor(0, self.bert, batch, self.tokenizer.pad_token_id,
                                                      self.tokenizer.mask_token_id, device)
 
-            unknown_token= self.tokenizer.unk_token_id
+            unknown_token = self.tokenizer.unk_token_id
             # Deal with missing tokens due to elimination of word-pieces
             not_missing = token_ids != 100
-            token_ids=token_ids[not_missing]
+            token_ids = token_ids[not_missing]
             index_vec = index_vec[not_missing]
             seq_id_vec = seq_id_vec[not_missing]
             runindex_vec = runindex_vec[not_missing]
@@ -330,7 +326,6 @@ class nw_processor():
                 # Extract only current sequence
                 sequence_mask = runindex_vec == run_index
                 sequence_size = sum(sequence_mask)
-
 
                 # Get parameters
                 seq_year = year_vec[sequence_mask]
@@ -375,9 +370,9 @@ class nw_processor():
                     p2 = seq_p2[pos]
                     p3 = seq_p3[pos]
                     p4 = seq_p4[pos]
-                    sentiment = float(seq_sentiment[pos].numpy())
-                    subjectivity = float(seq_subject[pos].numpy())
-                    part_of_speech = seq_pos[pos]
+                    sentiment = round(float(seq_sentiment[pos].numpy()),4)
+                    subjectivity = round(float(seq_subject[pos].numpy()),4)
+                    part_of_speech = str(seq_pos[pos])
 
                     # Ignore stopwords for network creation
                     if token not in delwords:
@@ -399,22 +394,22 @@ class nw_processor():
                         replacement = self.norm(replacement, min_zero=False)
 
                         # %% Context Element
-                        #context = (
+                        # context = (
                         #    torch.sum((seq_ce[pos] * dists[context_index, :].transpose(-1, 0)).transpose(-1, 0),
                         #              dim=0).unsqueeze(0))
                         # Flatten, since it is one row each
-                        #context = context.numpy().flatten()
+                        # context = context.numpy().flatten()
                         # Sparsify
                         # TODO: try without setting own-link to zero!
-                        #context[token] = 0
-                        #context[context == np.min(context)] = 0
+                        # context[token] = 0
+                        # context[context == np.min(context)] = 0
                         # Get rid of delnorm links
-                        #context[delwords] = 0
+                        # context[delwords] = 0
                         # Get rid of tokens not in text
-                        #if self.prune_missing_tokens:
+                        # if self.prune_missing_tokens:
                         #    context[dataset.id_mask] = 0
                         # We norm the distributions here
-                        #context = self.norm(context, min_zero=False)
+                        # context = self.norm(context, min_zero=False)
 
                         # Add values to network
                         # Replacement ties
@@ -422,8 +417,13 @@ class nw_processor():
                                                                                    percent=self.cutoff_percent,
                                                                                    max_degree=self.max_degree)
                         ties = self.get_weighted_edgelist(token, replacement, year, cutoff_number, cutoff_probability,
-                                                          sequence_id, pos, p1=p1, p2=sentiment, p3=subjectivity, p4=part_of_speech, run_index=run_index,
-                                                          max_degree=self.max_degree, min_probability=self.cutoff_prob)
+                                                          sequence_id, pos, p1=p1, p2=p2, p3=p3,
+                                                          p4=p4, run_index=run_index,
+                                                          max_degree=self.max_degree,
+                                                          part_of_speech=part_of_speech,
+                                                          sentiment=sentiment,
+                                                          subjectivity=subjectivity,
+                                                          min_probability=self.cutoff_prob)
 
                         if (ties is not None):
                             self.neo_interface.insert_edges(token, ties)
@@ -432,11 +432,11 @@ class nw_processor():
 
             del predictions, attn
             # compute processing time
-            #process_timings.append(time.time() - start_time - prepare_time - load_time)
+            # process_timings.append(time.time() - start_time - prepare_time - load_time)
             self.neo_interface.write_queue()
             # New start time
 
-            #start_time = time.time()
+            # start_time = time.time()
 
         # Write remaining
         self.neo_interface.write_queue()
@@ -448,10 +448,10 @@ class nw_processor():
             self.batch_size = original_batch_size
 
         del dataloader, dataset, batch_sampler
-        #logging.debug("Average Load Time: %s seconds" % (np.mean(load_timings)))
-        #logging.debug("Average Model Time: %s seconds" % (np.mean(model_timings)))
-        #logging.debug("Average Processing Time: %s seconds" % (np.mean(process_timings)))
-        #logging.debug(
+        # logging.debug("Average Load Time: %s seconds" % (np.mean(load_timings)))
+        # logging.debug("Average Model Time: %s seconds" % (np.mean(model_timings)))
+        # logging.debug("Average Processing Time: %s seconds" % (np.mean(process_timings)))
+        # logging.debug(
         #    "Ratio Load/Operations: %s seconds" % (np.mean(load_timings) / np.mean(process_timings + model_timings)))
 
     def get_bert_tensor(self, args, bert, tokens, pad_token_id, mask_token_id, device=torch.device("cpu")):
@@ -595,7 +595,8 @@ class nw_processor():
         return min(cutoff_degree, max_degree), cutoff_probability
 
     def get_weighted_edgelist(self, token, x, time, cutoff_number=100, cutoff_probability=0, seq_id=0, pos=0, p1="0",
-                              p2="0", p3="0", p4="0", run_index=0,max_degree=100, simplify_context=False, min_probability=0):
+                              p2="0", p3="0", p4="0", run_index=0, max_degree=100, part_of_speech="DOT", sentiment=0,
+                              subjectivity=0, min_probability=0):
         """
         Sort probability distribution to get the most likely neighbor nodes.
         Return a networksx weighted edge list for a given focal token as node.
@@ -639,14 +640,12 @@ class nw_processor():
             if min_probability > 0:
                 selector = weights >= min_probability
                 neighbors = neighbors[selector]
-                weights = weights[selector] # no renormalization now!
-            if not simplify_context:
-                return [(int(token), int(x[0]), int(time),
-                         {'weight': float(x[1]),'run_index': int(run_index), 'seq_id': int(seq_id), 'pos': int(pos),  'p1': str(p1), 'p2': str(p2),
-                          'p3': str(p3), 'p4': str(p4)}) for x in list(zip(neighbors, weights))]
-            else:
-                return [(int(token), int(x[0]), int(time),
-                         {'weight': float(x[1]), 'run_index': int(run_index)}) for x in list(zip(neighbors, weights))]
+                weights = weights[selector]  # no renormalization now!
+            return [(int(token), int(x[0]), int(time),
+                     {'weight': float(x[1]), 'run_index': int(run_index), 'seq_id': int(seq_id), 'pos': int(pos),
+                      'part_of_speech': str(part_of_speech), 'sentiment': float(sentiment),
+                      'subjectivity': float(subjectivity), 'p1': str(p1), 'p2': str(p2),
+                      'p3': str(p3), 'p4': str(p4)}) for x in list(zip(neighbors, weights))]
         else:
             return None
 

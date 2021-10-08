@@ -476,6 +476,9 @@ class Neo4j_Insertion_Interface():
                                "seq_id": int(x[2]['seq_id']),
                                "pos": int(x[2]['pos']),
                                "run_index": int(x[2]['run_index']),
+                               "part_of_speech": x[2]['part_of_speech'],
+                               "sentiment": x[2]['sentiment'],
+                               "subjectivity": x[2]['subjectivity'],
                                "p1": ((x[2]['p1']) if len(x[2]) > 4 else 0),
                                "p2": ((x[2]['p2']) if len(x[2]) > 5 else 0),
                                "p3": ((x[2]['p3']) if len(x[2]) > 6 else 0),
@@ -503,13 +506,14 @@ class Neo4j_Insertion_Interface():
                 parameter_string = parameter_string + ", p4:tie.p4 "
 
             # Build Query
-
             query = ''.join(
                 [
                     " MATCH (a:word {token_id: $ego}) WITH a UNWIND $ties as tie MATCH (b:word {token_id: tie.alter}) ",
                     self.creation_statement,
-                    " (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, seq_id:tie.seq_id,pos:tie.pos, run_index:tie.run_index ",
-                    parameter_string, "})<-[:onto]-(a)"])
+                    " (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, seq_id:tie.seq_id,pos:tie.pos, run_index:tie.run_index, part_of_speech:tie.part_of_speech, sentiment:tie.sentiment, subjectivity:tie.subjectivity ",
+                    parameter_string, "})<-[:onto]-(a) "])
+            query2 = ''.join(" WITH r CREATE (r:edge)-[:seq]-(:sequence {seq_id:tie.seq_id}) WITH r CREATE (r:edge)-[:seq]-(:part_of_speech {part_of_speech:tie.part_of_speech})")
+            query = ''.join(query,query2)
         else:
             logging.error("Batched edge creation with context for multiple egos not supported.")
             raise NotImplementedError
