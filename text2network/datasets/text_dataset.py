@@ -12,6 +12,8 @@ import os
 import pickle
 import nltk
 from nltk.tag import pos_tag, map_tag
+from tqdm.auto import tqdm
+
 nltk.download('universal_tagset')
 try:
     from textblob import TextBlob
@@ -31,6 +33,8 @@ except:
     vader_available=False
 
 from text2network.utils.load_bert import get_full_vocabulary
+
+
 
 
 class query_dataset(Dataset):
@@ -197,6 +201,93 @@ class query_dataset(Dataset):
 
 
 class bert_dataset(Dataset):
+    # TODO: Padd sentences instead of joining and splitting!
+    def __init__(self, tokenizer, database, where_string, block_size=30, check_vocab=False, freq_cutoff=10,
+                 logging_level=logging.DEBUG):
+        """
+        Loads data from database according to where string.
+
+        This is the new version that is based on sentences. In fact, it uses internally the dataset class used for inference
+
+
+        Parameters
+        ----------
+        tokenizer: PyTorch tokenizer
+        database: str
+            HDFS data of sentences
+        where_string: str
+            query on database
+        block_size: int
+            length of distinct sentences
+        check_vocab: bool
+            If true, will not tokenize data but only check vocabulary
+        freq_cutoff: int
+            Number of occurrences required for a token to be considered for vocabulary check
+        logging_level: logging.level
+        """
+        self.database = database
+        logging.disable(logging_level)
+        logging.info("Creating features from database file at {} with query {}".format(database, where_string))
+
+        self.tables = tables.open_file(self.database, mode="r")
+        self.data = self.tables.root.textdata.table
+        self.where_string = where_string
+        # Get text
+        items = self.data.read_where(where_string)['text']
+
+        # Because of pyTables, we have to encode.
+        items = [x.decode("utf-8") for x in items]
+
+        text = ' '.join(items)
+
+        self.examples = []
+
+        if check_vocab:
+            # Get unique tokens
+
+            nltk_tokens = nltk.word_tokenize(text)
+            nltk_tokens = [w.lower() for w in nltk_tokens if (w.isalpha() and len(w) > 3)]
+            stop_words = set(stopwords.words('english'))
+            nltk_tokens = [w for w in nltk_tokens if not w in stop_words]
+            # nltk_tokens=list(np.setdiff1d(nltk_tokens,['']))
+            # Get frequencies
+            freq_table = {}
+            for word in nltk_tokens:
+                # word=ps.stem(word)
+                if word in freq_table:
+                    freq_table[word] += 1
+                else:
+                    freq_table[word] = 1
+            if len(freq_table) > 0:
+                freq_table = pd.DataFrame(list(freq_table.values()), index=list(freq_table.keys()))
+                freq_table = freq_table.sort_values(by=0, ascending=False)
+                freq_table = freq_table[freq_table > freq_cutoff].dropna()
+                nltk_tokens = list(freq_table.index)
+                ids, tokenizer_vocab = get_full_vocabulary(tokenizer)
+                self.missing_tokens = list(np.setdiff1d(nltk_tokens, tokenizer_vocab))
+                if len(self.missing_tokens) > 1:
+                    logging.warning("{} missing tokens in vocabulary".format(len(self.missing_tokens)))
+            else:
+                logging.warning("Text with query {} has no words".format(where_string))
+                self.missing_tokens = []
+            self.examples = []
+        else:
+            logging.info("Setting up sentence-based dataset for BERT training examples")
+            queryds=query_dataset(data_path=database, tokenizer=tokenizer, fixed_seq_length=block_size, maxn=None, query=where_string,
+                 logging_level=logging_level)
+            self.examples = []
+            for data in tqdm(queryds, desc="Tokenized sentence for query {}".format(where_string)):
+                self.examples.append(data[0][0])
+        self.tables.close()
+
+    def __len__(self):
+        return len(self.examples)
+
+    def __getitem__(self, item):
+        return self.examples[item]
+
+
+class bert_dataset_old(Dataset):
     # TODO: Padd sentences instead of joining and splitting!
     def __init__(self, tokenizer, database, where_string, block_size=30, check_vocab=False, freq_cutoff=10, logging_level=logging.DEBUG):
         """

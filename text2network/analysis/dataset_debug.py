@@ -5,7 +5,7 @@ import tables
 from text2network.functions.file_helpers import check_create_folder
 from text2network.utils.load_bert import get_only_tokenizer
 from text2network.utils.logging_helpers import setup_logger
-from text2network.datasets.text_dataset import query_dataset
+from text2network.datasets.text_dataset import query_dataset, bert_dataset, bert_dataset_old
 
 # Set a configuration path
 configuration_path = 'config/2021/HBR40.ini'
@@ -29,10 +29,13 @@ bert=check_create_folder(bert, False)
 
 tokenizer=get_only_tokenizer(bert)
 
-dataset=query_dataset(data_path=path, tokenizer=tokenizer, fixed_seq_length=40, maxn=None, query="year==2020")
+#dataset=query_dataset(data_path=path, tokenizer=tokenizer, fixed_seq_length=40, maxn=None, query="year==2020")
+
+b_dataset=bert_dataset(tokenizer=tokenizer,database=path,where_string="year==2020",block_size=40)
+b_dataset_old=bert_dataset_old(tokenizer=tokenizer,database=path,where_string="year==2020",block_size=40)
 
 
-for i in range(0,15):
-    print(tokenizer.convert_ids_to_tokens(dataset[i][1].tolist()))
-    print(dataset[i][-3])
-    print("-----------------------------------------")
+for i in range (0,10):
+    print(tokenizer.convert_ids_to_tokens(b_dataset[i].tolist()))
+    print(tokenizer.convert_ids_to_tokens(b_dataset_old[i].tolist()))
+    print("--------------------------------")
