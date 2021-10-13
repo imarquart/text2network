@@ -11,8 +11,8 @@ import logging
 import os
 import pickle
 import nltk
-
-
+from nltk.tag import pos_tag, map_tag
+nltk.download('universal_tagset')
 try:
     from textblob import TextBlob
     textblob_available=True
@@ -145,38 +145,23 @@ class query_dataset(Dataset):
             token_input_vec.append(inputs)
             # Also save list of tokens
             token_id_vec.append(inputs[1:-1])
-
-            # Sentiment analysis and POS
+            reform_text = self.tokenizer.convert_ids_to_tokens(list(inputs[1:-1].numpy()))
+            pos_tags=pos_tag(reform_text)
+            assert len(reform_text)==len(pos_tags), "NLTK POS Tagger could not tag all tokens!"
+            # Use simplified Tag Set instead of Penn
+            pos_tags= [(word, map_tag('en-ptb', 'universal', tag)) for word, tag in pos_tags]
+            # Get rid of unknown stuff
+            pos = [x[1] if x[0]!=x[1] else "UNKNOWN" for x in pos_tags]
+            pos = np.array(pos)
+            pos_vec.append(pos)
+            # Sentiment analysis
             if textblob_available:
                 reform_text=self.tokenizer.convert_ids_to_tokens(list(inputs[1:-1].numpy()))
                 joined_text = " ".join(reform_text)
                 txtblb = TextBlob(joined_text)
 
-                i=0
-                j=0
-                txtblb_tags=txtblb.tags
-                pos=[]
-                for i,token in enumerate(reform_text):
-                    if j < len(txtblb_tags):
-                        txtblb_token=txtblb_tags[j][0]
-                    else:
-                        txtblb_token="[[dot]]"
-                    if txtblb_token==token:
-                        pos.append(txtblb_tags[j][1])
-                        j += 1
-                    else:
-                        pos.append("DOT")
-                # textblob does not have anything for dots etc.
-                pos=np.array(pos)
-                pos_diff = inputs[1:-1].shape[0]-pos.shape[0]
-                #if pos_diff >0:
-                #    pos = np.concatenate([pos, np.repeat("DOT", pos_diff)])
-                assert pos.shape[0]==inputs[1:-1].shape[0], "Pos Shape: {}, Inputs Shape: {} \n pos: {} \n inputs[1:-1]: {} \n Sequence: {} \n Text: {} \n Textblob: {}".format(pos.shape[0],inputs[1:-1].shape[0],pos,inputs[1:-1], self.tokenizer.convert_ids_to_tokens(list(inputs.numpy())),text,txtblb)
-
                 sentiment= torch.tensor(txtblb.sentiment.polarity)
                 subject = torch.tensor(txtblb.sentiment.subjectivity)
-
-                pos_vec.append(pos)
                 sentiment_vec.append(sentiment)
                 subject_vec.append(subject)
             else:
