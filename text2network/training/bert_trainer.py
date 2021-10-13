@@ -101,6 +101,89 @@ class bert_trainer():
         # Create hierarchy splits
         return get_uniques(split_hierarchy, self.db_folder)
 
+    def get_consistent_vocabulary(self, hd5_queries):
+        """
+
+        Returns
+        -------
+
+        """
+
+        missing_tokens=[]
+        import nltk
+        nltk.download('stopwords')
+        for idx, query in enumerate(hd5_queries):
+            #query = query_filename[0]
+            #fname = query_filename[1]
+
+            # Prepare BERT and vocabulary
+            tokenizer, bert = get_bert_and_tokenizer(
+                self.pretrained_folder, True)
+            dataset = bert_dataset(tokenizer, self.db_folder, query,
+                                   block_size=self.bert_config.getint('max_seq_length'), check_vocab=True,
+                                   freq_cutoff=self.bert_config.getint('new_word_cutoff'),
+                                   logging_level=logging.DEBUG)
+            missing_tokens.extend(dataset.missing_tokens)
+
+        missing_tokens = list(set(missing_tokens))
+        # Setting up tokenizer
+        # We do this here to keep the IDs and Tokens consistent, although the network is able to translate
+        # if necessary
+        tokenizer, _ = get_bert_and_tokenizer(self.pretrained_folder, True)
+        # Add missing tokens
+        logging.info("Tokenizer vocabulary {} items.".format(len(tokenizer)))
+        logging.disable(logging.ERROR)
+        tokenizer.add_tokens(missing_tokens)
+        logging.disable(self.logging_level)
+        logging.info("After adding missing terms: Tokenizer vocabulary {} items.".format(
+            len(tokenizer)))
+
+        # Save the tokenizer such that training can continue.
+        token_folder = os.path.join(self.trained_folder, "tokenizer")
+        token_folder = check_create_folder(token_folder, create_folder=True)
+        logging.info("Saving tokenizer to {}".format(token_folder))
+        return tokenizer, missing_tokens, len(tokenizer)
+
+    def train_one_bert(self, query, bert_folder, tokenizer_folder):
+        tokenizer = get_only_tokenizer(tokenizer_folder)
+        logging.info("Loaded Tokenizer vocabulary {} items.".format(len(tokenizer)))
+        args = bert_args(self.db_folder, query, bert_folder, self.pretrained_folder,
+                         mlm_probability=self.bert_config.getfloat(
+                             'mlm_probability'),
+                         block_size=self.bert_config.getint(
+                             'max_seq_length'),
+                         loss_limit=self.bert_config.getfloat(
+                             'loss_limit'),
+                         gpu_batch=self.bert_config.getint(
+                             'gpu_batch'),
+                         epochs=self.bert_config.getint('epochs'),
+                         warmup_steps=self.bert_config.getint(
+                             'warmup_steps'),
+                         save_steps=self.bert_config.getint(
+                             'save_steps'),
+                         eval_steps=self.bert_config.getint(
+                             'eval_steps'),
+                         eval_loss_limit=self.bert_config.getfloat(
+                             'eval_loss_limit'),
+                         logging_level=logging.INFO)
+
+        # Prepare BERT and vocabulary
+        logging.info(
+            "For this iteration, Tokenizer vocabulary {} items.".format(len(tokenizer)))
+
+        _, bert = get_bert_and_tokenizer(self.pretrained_folder, True)
+        # Make a copy just to be safe
+        new_tokenizer = tokenizer
+
+        bert.resize_embedding_and_fc(len(new_tokenizer))
+        logging.info("After resizing BERT, Tokenizer vocabulary {} items.".format(
+            len(new_tokenizer)))
+
+        logging.info("Training BERT on %s" % (query))
+        torch.cuda.empty_cache()
+        results = run_bert(args, tokenizer=new_tokenizer, model=bert)
+        return results
+
     def train_berts(self, split_hierarchy=None):
 
         # If uniques are not defined, create them according to provided split_hierarchy
@@ -122,38 +205,8 @@ class bert_trainer():
             logging.info("Loaded Tokenizer vocabulary {} items.".format(len(tokenizer)))
         else:
             logging.info("Pre-Loading Data and Populating tokenizers")
-            import nltk
-            nltk.download('stopwords')
-            for idx, query_filename in enumerate(self.uniques["query_filename"]):
-                query = query_filename[0]
-                fname = query_filename[1]
-
-                # Prepare BERT and vocabulary
-                tokenizer, bert = get_bert_and_tokenizer(
-                    self.pretrained_folder, True)
-                dataset = bert_dataset(tokenizer, self.db_folder, query,
-                                       block_size=self.bert_config.getint('max_seq_length'), check_vocab=True,
-                                       freq_cutoff=self.bert_config.getint('new_word_cutoff'),
-                                       logging_level=logging.DEBUG)
-                missing_tokens.extend(dataset.missing_tokens)
-
-            missing_tokens = list(set(missing_tokens))
-            # Setting up tokenizer
-            # We do this here to keep the IDs and Tokens consistent, although the network is able to translate
-            # if necessary
-            tokenizer, _ = get_bert_and_tokenizer(self.pretrained_folder, True)
-            # Add missing tokens
-            logging.info("Tokenizer vocabulary {} items.".format(len(tokenizer)))
-            logging.disable(logging.ERROR)
-            tokenizer.add_tokens(missing_tokens)
-            logging.disable(self.logging_level)
-            logging.info("After adding missing terms: Tokenizer vocabulary {} items.".format(
-                len(tokenizer)))
-
-            # Save the tokenizer such that training can continue.
-            token_folder=os.path.join(self.trained_folder, "tokenizer")
-            token_folder=check_create_folder(token_folder, create_folder=True)
-            logging.info("Saving tokenizer to {}".format(token_folder))
+            queries = [x[0] for x in self.uniques["query_filename"]]
+            tokenizer, missing_tokens, total_tokens = self.get_consistent_vocabulary(queries)
             tokenizer.save_pretrained(token_folder)
             hash = hash_string(token_folder, hash_factory="md5")
             complete_step(token_folder, hash)
@@ -177,45 +230,9 @@ class bert_trainer():
                 logging.info("Found trained BERT for %s. Skipping" %
                              bert_folder)
             else:
-                args = bert_args(self.db_folder, query, bert_folder, self.pretrained_folder,
-                                 mlm_probability=self.bert_config.getfloat(
-                                     'mlm_probability'),
-                                 block_size=self.bert_config.getint(
-                                     'max_seq_length'),
-                                 loss_limit=self.bert_config.getfloat(
-                                     'loss_limit'),
-                                 gpu_batch=self.bert_config.getint(
-                                     'gpu_batch'),
-                                 epochs=self.bert_config.getint('epochs'),
-                                 warmup_steps=self.bert_config.getint(
-                                     'warmup_steps'),
-                                 save_steps=self.bert_config.getint(
-                                     'save_steps'),
-                                 eval_steps=self.bert_config.getint(
-                                     'eval_steps'),
-                                 eval_loss_limit=self.bert_config.getfloat(
-                                     'eval_loss_limit'),
-                                 logging_level=logging.INFO)
-
-                # Prepare BERT and vocabulary
-                logging.info(
-                    "For this iteration, Tokenizer vocabulary {} items.".format(len(tokenizer)))
-                # Make sure old model is deleted!
-                del bert
-
-                _, bert = get_bert_and_tokenizer(self.pretrained_folder, True)
-                # Make a copy just to be safe
-                new_tokenizer = tokenizer
-
-                bert.resize_embedding_and_fc(len(new_tokenizer))
-                logging.info("After resizing BERT, Tokenizer vocabulary {} items.".format(
-                    len(new_tokenizer)))
-
-                logging.info("Training BERT on %s" % (query))
                 start_time = time.time()
-                torch.cuda.empty_cache()
                 # logging.disable(logging.ERROR)
-                results = run_bert(args, tokenizer=new_tokenizer, model=bert)
+                results = self.train_one_bert(self, query, bert_folder, token_folder)
                 logging.disable(self.logging_level)
                 logging.info("BERT training finished in %s seconds" %
                              (time.time() - start_time))

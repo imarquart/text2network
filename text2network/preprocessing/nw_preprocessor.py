@@ -199,8 +199,10 @@ class nw_preprocessor():
                     self.database, mode="w", title="Sequence Data")
             except:
                 logging.error("Could not open existing database file.")
-                raise IOError("Could not open existing database file.")
-            data_file.close()
+                raise
+                #raise IOError("Could not open existing database file.")
+            finally:
+                data_file.close()
         for dir in folders:
             year = int(os.path.split(dir)[-1])
             if year >= 0:
@@ -340,7 +342,7 @@ class nw_preprocessor():
 
             text = text.strip()
             # Replace all whitespaces by a single " "
-            text = " ".join(re.split("\s+", text, flags=re.UNICODE))
+            text = " ".join(re.split("\\s+", text, flags=re.UNICODE))
 
             # Strip numeric from beginning and end.
             text = re.sub(r'^\d+|\d+$', '', text)
@@ -363,7 +365,7 @@ class nw_preprocessor():
                 # Create table row
                 particle = data_table.row
                 # Do not add sentences which are too short
-                if len(sent) < 3:
+                if len(sent) < 2:
                     continue
                 # Increment run index if we actually seek to add row
                 run_index = run_index + 1

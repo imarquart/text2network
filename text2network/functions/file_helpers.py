@@ -3,6 +3,8 @@ from os import mkdir, getcwd
 from os.path import exists, normpath,join
 from pathlib import Path
 
+def check_folder(folder):
+    return check_create_folder(folder,False)
 
 def check_create_folder(folder,create_folder=True):
     """

@@ -1617,7 +1617,3 @@ class neo4j_network(Sequence):
         Old interface
         """
         return self.query_nodes(ids, context, times, weight_cutoff, norm_ties)
-
-    def insert_edges_context(self, ego, ties, contexts):
-        return self.db.insert_edges_context(ego, ties, contexts)
-
