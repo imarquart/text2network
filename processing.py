@@ -34,7 +34,7 @@ if __name__ == '__main__':
 
     #a=dataset[1]
 
-    processor.run_all_queries(delete_incomplete=True, delete_all=False)
+    processor.run_all_queries(delete_incomplete=True, delete_all=True)
 
 
 

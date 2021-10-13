@@ -230,6 +230,12 @@ class Neo4j_Insertion_Interface():
         if 'tk_con' not in constr:
             query = "CREATE CONSTRAINT tk_con ON(n:word) ASSERT n.token IS UNIQUE"
             self.add_query(query)
+        if 'seq_runindex_con' not in constr:
+            query = "CREATE CONSTRAINT seq_runindex_con ON(n:sequence) ASSERT n.run_index IS UNIQUE"
+            self.add_query(query)
+        if 'pos_con' not in constr:
+            query = "CREATE CONSTRAINT pos_con ON(n:part_of_speech) ASSERT n.part_of_speech IS UNIQUE"
+            self.add_query(query)
         constr = [x['name'] for x in self.receive_query("CALL db.indexes")]
         if 'timeindex' not in constr:
             query = "CREATE INDEX timeindex FOR (a:edge) ON (a.time)"
@@ -281,6 +287,11 @@ class Neo4j_Insertion_Interface():
 
 
         # DEBUG
+
+        #Prune Sequence
+        self.add_query("MATCH (n:sequence) WHERE size((n)--())=0 DELETE (n)", run=True)
+        self.add_query("MATCH (n:part_of_speech) WHERE size((n)--())=0 DELETE (n)", run=True)
+
         nr_nodes = self.receive_query("MATCH (n:edge) RETURN count(n) AS nodes")[0]['nodes']
         logging.info("After cleaning: Network has %i nodes ties" % (nr_nodes))
 
@@ -512,8 +523,10 @@ class Neo4j_Insertion_Interface():
                     self.creation_statement,
                     " (b)<-[:onto]-(r:edge {weight:tie.weight, time:tie.time, seq_id:tie.seq_id,pos:tie.pos, run_index:tie.run_index, part_of_speech:tie.part_of_speech, sentiment:tie.sentiment, subjectivity:tie.subjectivity ",
                     parameter_string, "})<-[:onto]-(a) "])
-            query2 = ''.join(" WITH r CREATE (r:edge)-[:seq]-(:sequence {seq_id:tie.seq_id}) WITH r CREATE (r:edge)-[:seq]-(:part_of_speech {part_of_speech:tie.part_of_speech})")
-            query = ''.join(query,query2)
+            query2 = ''.join([" WITH r, tie MERGE (h:sequence {run_index:tie.run_index,seq_id:tie.seq_id}) WITH r, tie, h CREATE (r)-[:seq]->(h) WITH r, tie  MERGE (f:part_of_speech {part_of_speech:tie.part_of_speech}) WITH r, tie, f CREATE (r)-[:pos]->(f)"])
+            #query2 = ''.join([" WITH r, tie MERGE (r)-[:seq]->(h:sequence {seq_id:tie.run_index}) WITH r, tie MERGE (r)-[:seq]->(f:part_of_speech {part_of_speech:tie.part_of_speech})"])
+
+            query = ''.join([query,query2])
         else:
             logging.error("Batched edge creation with context for multiple egos not supported.")
             raise NotImplementedError
