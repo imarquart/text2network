@@ -223,7 +223,7 @@ def train(args, train_dataset, model, tokenizer):
 
         idx=int(len(train_dataloader)/2)
 
-        last_batch = train_dataloader[idx]
+        last_batch = train_dataloader.dataset[idx]
         last_batch = last_batch[0:10].tolist()
         last_batch = tokenizer.decode(last_batch)
         logging.warning("Example Sentence before start: {}...".format(last_batch))
