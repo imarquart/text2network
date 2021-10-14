@@ -111,7 +111,7 @@ class bert_trainer():
 
         missing_tokens=[]
         import nltk
-        nltk.download('stopwords')
+        #nltk.download('stopwords')
         for idx, query in enumerate(hd5_queries):
             #query = query_filename[0]
             #fname = query_filename[1]

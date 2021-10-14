@@ -14,7 +14,7 @@ import nltk
 from nltk.tag import pos_tag, map_tag
 from tqdm.auto import tqdm
 
-nltk.download('universal_tagset')
+
 try:
     from textblob import TextBlob
     textblob_available=True
@@ -23,7 +23,7 @@ except:
     textblob_available=False
 
 try:
-    nltk.download('vader_lexicon')
+    #nltk.download('vader_lexicon')
     # Initialize the VADER sentiment analyzer
     from nltk.sentiment.vader import SentimentIntensityAnalyzer
     vader_analyzer = SentimentIntensityAnalyzer()

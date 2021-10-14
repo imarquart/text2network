@@ -123,7 +123,7 @@ class nw_preprocessor():
         self.logging_path = check_create_folder(self.logging_path)
 
         # Get nltk stuff
-        nltk.download('punkt')
+        #nltk.download('punkt')
 
     def setup_logger(self):
         """
