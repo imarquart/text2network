@@ -28,8 +28,8 @@ if __name__ == '__main__':
     # Setup logging
     logger = setup_logger(config['Paths']['log'], int(config['General']['logging_level']), "preprocessing.py")
     logging.info("Preprocessing of folder {} complete!".format(config['Paths']['import_folder']))
-    path = check_create_folder(config['Paths']['database'], create_folder=False)
-    logging.info("Confirmation, printing the first sentences in {}".format(path))
+    paths = check_create_folder(config['Paths']['database'], create_folder=False)
+    logging.info("Confirmation, printing the first sentences in {}".format(paths))
 
     import tables
     table = tables.open_file(paths, mode="r")
