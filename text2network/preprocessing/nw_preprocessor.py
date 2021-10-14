@@ -323,16 +323,15 @@ class nw_preprocessor():
                         raise ImportError(
                             "Could not open file. Make sure, only .txt files in folder!")
 
-            text = text.replace('\n', ' ')
 
-            # Some pre processing
-            text = text.replace('<p>', ' ')
-            text = text.replace('@', ' ')
+            # Get rid of line-breaks
+            text = text.replace('\n', ' ')
             text = text.replace(" \'", "' ")
-            text = text.replace("n\'t", "not")
-            text = text.replace(" .", ".")
+            # Other replacements
+            #text = text.replace("n\'t", " not")
+            text = text.replace(" .", ". ")
             text = text.replace(" ,", ", ")
-            text = text.replace("-", " ")
+            #text = text.replace("-", " ")
             text = text.replace("...", ". ")
             killchars = ['#', '<p>', '$', '%', '(', ')', '*', '/', '<', '>', '@', '\\', '{', '}', '[', ']', '+', '^',
                          '~',
