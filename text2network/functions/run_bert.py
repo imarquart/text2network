@@ -220,7 +220,6 @@ def train(args, train_dataset, model, tokenizer):
     set_seed(args)  # Added here for reproducibility (even between python 2 and 3)
 
     idx = int(len(train_dataloader) / 2)
-
     last_batch = train_dataloader.dataset[idx]
     last_batch = last_batch[0:10].tolist()
     last_batch = tokenizer.decode(last_batch)
@@ -379,6 +378,12 @@ def evaluate(args, model, tokenizer, prefix=""):
     nb_eval_steps = 0
     model.eval()
 
+    idx = int(len(eval_dataloader) / 2)
+    last_batch = eval_dataloader.dataset[idx]
+    last_batch = last_batch[0:10].tolist()
+    last_batch = tokenizer.decode(last_batch)
+    logging.warning("Example Sentence before eval: {}...".format(last_batch))
+
     for batch in tqdm(eval_dataloader, leave=False, position=0, desc="Evaluating"):
         inputs, labels = mask_tokens(batch, tokenizer, args) if args.mlm else (batch, batch)
         inputs = inputs.to(args.device)
@@ -390,7 +395,7 @@ def evaluate(args, model, tokenizer, prefix=""):
             eval_loss += lm_loss.mean().item()
         nb_eval_steps += 1
 
-    last_batch=batch[-1][0:10].tolist()
+    last_batch=batch[0][0:10].tolist()
     last_batch=tokenizer.decode(last_batch)
     logging.warning("Example Batch from Eval: {}".format(last_batch))
 
