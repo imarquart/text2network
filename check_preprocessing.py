@@ -27,23 +27,7 @@ if __name__ == '__main__':
         raise
     # Setup logging
     logger = setup_logger(config['Paths']['log'], int(config['General']['logging_level']), "preprocessing.py")
-
-    preprocessor = nw_preprocessor(config)
-    exclude_list = json.loads(config.get('Preprocessing', 'exclude_list'))
-
-    globpath=os.path.join(os.getcwd(),os.path.normpath(config['Paths']['import_folder']), os.sep, '*', os.sep)
-    from glob import glob
-    logging.info("Checking files and folders in {}".format(globpath))
-    paths = glob(globpath)
-    if paths == []:
-        logging.info("Preprocessor in file mode: No subfolders found in {}".format(config['Paths']['import_folder']))
-        preprocessor.preprocess_files(config['Paths']['import_folder'], overwrite=bool(config['Preprocessing']['overwrite_text_db']), excludelist=exclude_list)
-    else:
-        logging.info("Preprocessing subfolders in {}".format(config['Paths']['import_folder']))
-        preprocessor.preprocess_folders(config['Paths']['import_folder'], overwrite=bool(config['Preprocessing']['overwrite_text_db']), excludelist=exclude_list)
-
     logging.info("Preprocessing of folder {} complete!".format(config['Paths']['import_folder']))
-
     path = check_create_folder(config['Paths']['database'], create_folder=False)
     logging.info("Confirmation, printing the first sentences in {}".format(path))
 

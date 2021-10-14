@@ -220,6 +220,14 @@ def train(args, train_dataset, model, tokenizer):
     set_seed(args)  # Added here for reproducibility (even between python 2 and 3)
     for _ in train_iterator:
         descr = "Epoch %i, Batch: " % max(1, global_step / len(train_dataloader))
+
+        idx=int(len(train_dataloader)/2)
+
+        last_batch = train_dataloader[idx]
+        last_batch = last_batch[0:10].tolist()
+        last_batch = tokenizer.decode(last_batch)
+        logging.warning("Example Sentence before start: {}...".format(last_batch))
+
         epoch_iterator = tqdm(train_dataloader, desc=descr, leave=False, position=0,
                               disable=args.local_rank not in [-1, 0])
         for step, batch in enumerate(epoch_iterator):
@@ -310,6 +318,8 @@ def train(args, train_dataset, model, tokenizer):
                 epoch_iterator.close()
                 break
 
+
+
         if 0 < args.max_steps < global_step:
             logger.info("Global step %i larger than max steps %i", global_step, args.max_steps)
             train_iterator.close()
@@ -376,6 +386,10 @@ def evaluate(args, model, tokenizer, prefix=""):
             lm_loss = outputs[0]
             eval_loss += lm_loss.mean().item()
         nb_eval_steps += 1
+
+    last_batch=batch[-1][0:10].tolist()
+    last_batch=tokenizer.decode(last_batch)
+    logging.warning("Example Batch from Eval: {}".format(last_batch))
 
     eval_loss = eval_loss / nb_eval_steps
     perplexity = torch.exp(torch.tensor(eval_loss))
