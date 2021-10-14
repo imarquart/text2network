@@ -218,15 +218,18 @@ def train(args, train_dataset, model, tokenizer):
     train_iterator = trange(epochs_trained, int(args.num_train_epochs), desc="Epoch",
                             disable=args.local_rank not in [-1, 0])
     set_seed(args)  # Added here for reproducibility (even between python 2 and 3)
+
+    idx = int(len(train_dataloader) / 2)
+
+    last_batch = train_dataloader.dataset[idx]
+    last_batch = last_batch[0:10].tolist()
+    last_batch = tokenizer.decode(last_batch)
+    logging.warning("Example Sentence before start: {}...".format(last_batch))
+
     for _ in train_iterator:
         descr = "Epoch %i, Batch: " % max(1, global_step / len(train_dataloader))
 
-        idx=int(len(train_dataloader)/2)
 
-        last_batch = train_dataloader.dataset[idx]
-        last_batch = last_batch[0:10].tolist()
-        last_batch = tokenizer.decode(last_batch)
-        logging.warning("Example Sentence before start: {}...".format(last_batch))
 
         epoch_iterator = tqdm(train_dataloader, desc=descr, leave=False, position=0,
                               disable=args.local_rank not in [-1, 0])
