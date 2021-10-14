@@ -39,7 +39,7 @@ from text2network.utils.load_bert import get_full_vocabulary
 
 class query_dataset(Dataset):
     def __init__(self, data_path, tokenizer=None, fixed_seq_length=None, maxn=None, query=None,
-                 logging_level=logging.DEBUG):
+                 logging_level=logging.DEBUG, pos=True, sentiment=True):
         # TODO: Redo out of memory if necessary
         # TODO: Add maxn option
         self.data_path = data_path
@@ -47,6 +47,8 @@ class query_dataset(Dataset):
         self.fixed_seq_length = fixed_seq_length
         self.query = query
         self.logging_level = logging_level
+        self.pos=pos
+        self.sentiment=sentiment
         logging.disable(logging_level)
         logging.info("Creating features from database file at %s", self.data_path)
 
@@ -149,27 +151,31 @@ class query_dataset(Dataset):
             token_input_vec.append(inputs)
             # Also save list of tokens
             token_id_vec.append(inputs[1:-1])
-            reform_text = self.tokenizer.convert_ids_to_tokens(list(inputs[1:-1].numpy()))
-            pos_tags=pos_tag(reform_text)
-            assert len(reform_text)==len(pos_tags), "NLTK POS Tagger could not tag all tokens!"
-            # Use simplified Tag Set instead of Penn
-            pos_tags= [(word, map_tag('en-ptb', 'universal', tag)) for word, tag in pos_tags]
-            # Get rid of unknown stuff
-            pos = [x[1] if x[0]!=x[1] else "UNKNOWN" for x in pos_tags]
-            pos = np.array(pos)
+
+            if self.pos:
+                reform_text = self.tokenizer.convert_ids_to_tokens(list(inputs[1:-1].numpy()))
+                pos_tags=pos_tag(reform_text)
+                assert len(reform_text)==len(pos_tags), "NLTK POS Tagger could not tag all tokens!"
+                # Use simplified Tag Set instead of Penn
+                pos_tags= [(word, map_tag('en-ptb', 'universal', tag)) for word, tag in pos_tags]
+                # Get rid of unknown stuff
+                pos = [x[1] if x[0]!=x[1] else "UNKNOWN" for x in pos_tags]
+                pos = np.array(pos)
+            else:
+                pos = np.zeros_like(inputs[1:-1].numpy())
             pos_vec.append(pos)
             # Sentiment analysis
-            if textblob_available:
+            if self.sentiment and textblob_available:
                 reform_text=self.tokenizer.convert_ids_to_tokens(list(inputs[1:-1].numpy()))
                 joined_text = " ".join(reform_text)
                 txtblb = TextBlob(joined_text)
-
                 sentiment= torch.tensor(txtblb.sentiment.polarity)
                 subject = torch.tensor(txtblb.sentiment.subjectivity)
-                sentiment_vec.append(sentiment)
-                subject_vec.append(subject)
             else:
-                raise NotImplementedError("POS NLTK Tagging implementation")
+                sentiment = torch.tensor(0)
+                subject = torch.tensor(0)
+            sentiment_vec.append(sentiment)
+            subject_vec.append(subject)
 
         # Add padding sequence
         token_input_vec.append(torch.zeros([self.fixed_seq_length + 2], dtype=torch.int))
@@ -274,7 +280,7 @@ class bert_dataset(Dataset):
         else:
             logging.info("Setting up sentence-based dataset for BERT training examples")
             queryds=query_dataset(data_path=database, tokenizer=tokenizer, fixed_seq_length=block_size, maxn=None, query=where_string,
-                 logging_level=logging_level)
+                 logging_level=logging_level, pos=False, sentiment=False)
             self.examples = []
             for data in tqdm(queryds, desc="Tokenized sentence for query {}".format(where_string)):
                 self.examples.append(data[0][0])
