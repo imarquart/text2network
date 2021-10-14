@@ -232,7 +232,7 @@ class bert_trainer():
             else:
                 start_time = time.time()
                 # logging.disable(logging.ERROR)
-                results = self.train_one_bert(self, query, bert_folder, token_folder)
+                results = self.train_one_bert(query=query, bert_folder=bert_folder, tokenizer_folder=token_folder)
                 logging.disable(self.logging_level)
                 logging.info("BERT training finished in %s seconds" %
                              (time.time() - start_time))
