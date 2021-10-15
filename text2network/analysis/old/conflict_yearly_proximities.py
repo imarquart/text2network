@@ -11,7 +11,7 @@ config = configparser.ConfigParser()
 print(check_create_folder(configuration_path))
 config.read(check_create_folder(configuration_path))
 # Setup logging
-setup_logger(config['Paths']['log'],config['General']['logging_level'], "founder_yearly_proximities.py")
+setup_logger(config['Paths']['log'], config['General']['logging_level'], "founder_yearly_proximities.py")
 # First, create an empty network
 semantic_network = neo4j_network(config, logging_level=10)
 

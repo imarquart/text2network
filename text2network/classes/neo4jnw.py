@@ -1301,7 +1301,7 @@ class neo4j_network(Sequence):
             fn=fn+"EGO-"
             fn=fn+'-'.join([str(x) for x in cond_dict['tokens']])+'-'
 
-        if cond_dict['years'] is not "ALL":
+        if cond_dict['years'] != "ALL":
             if not isinstance(cond_dict['years'],list):
                 cond_dict['years']=[cond_dict['years']]
             fn = fn + 'Y-' + '-'.join([str(x) for x in cond_dict['years']])
