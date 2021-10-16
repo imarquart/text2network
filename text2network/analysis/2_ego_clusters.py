@@ -1,11 +1,11 @@
 from itertools import product
 
-from text2network.functions.file_helpers import check_create_folder
-from text2network.measures.measures import average_cluster_proximities, extract_all_clusters
+from text2network.utils.file_helpers import check_create_folder
+from text2network.measures.measures import average_cluster_proximities
 from text2network.utils.logging_helpers import setup_logger
 import logging
 import numpy as np
-from text2network.functions.graph_clustering import consensus_louvain, louvain_cluster
+from text2network.functions.graph_clustering import consensus_louvain
 from text2network.classes.neo4jnw import neo4j_network
 
 # Set a configuration path
@@ -30,7 +30,7 @@ semantic_network = neo4j_network(config)
 
 
 
-level_list = [7]
+level_list = [15]
 weight_list = [0]
 max_degree_list = [50,100,200,None]
 cl_clutoff_list = [0,99]

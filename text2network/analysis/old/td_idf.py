@@ -1,12 +1,7 @@
-from itertools import product
-
 import pandas as pd
-from text2network.functions.file_helpers import check_create_folder
-from text2network.measures.measures import average_cluster_proximities, extract_all_clusters, proximities
+from text2network.utils.file_helpers import check_create_folder
 from text2network.utils.logging_helpers import setup_logger
-import logging
 import numpy as np
-from text2network.functions.graph_clustering import consensus_louvain, louvain_cluster
 from text2network.classes.neo4jnw import neo4j_network
 
 # Set a configuration path

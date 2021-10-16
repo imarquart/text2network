@@ -6,7 +6,7 @@ import time
 import torch
 
 from text2network.datasets.text_dataset import bert_dataset
-from text2network.functions.file_helpers import check_create_folder
+from text2network.utils.file_helpers import check_create_folder
 from text2network.functions.run_bert import run_bert
 from text2network.utils.bert_args import bert_args
 from text2network.utils.get_uniques import get_uniques
@@ -110,7 +110,6 @@ class bert_trainer():
         """
 
         missing_tokens=[]
-        import nltk
         #nltk.download('stopwords')
         for idx, query in enumerate(hd5_queries):
             #query = query_filename[0]

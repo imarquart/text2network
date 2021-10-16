@@ -1,9 +1,6 @@
-import logging
 import pytest
 
-from text2network.functions.file_helpers import check_create_folder
-from text2network.training.bert_trainer import bert_trainer
-from text2network.utils.bert_args import bert_args
+from text2network.utils.file_helpers import check_create_folder
 
 
 @pytest.mark.usefixtures("get_bert_trainer")

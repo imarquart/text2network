@@ -3,9 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from text2network.functions.file_helpers import check_create_folder
+from text2network.utils.file_helpers import check_create_folder
 from text2network.preprocessing.nw_preprocessor import nw_preprocessor
-import numpy as np
 import tables
 
 @pytest.mark.usefixtures("test_config")

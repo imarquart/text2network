@@ -1,5 +1,5 @@
-from text2network.functions.file_helpers import check_create_folder
-from text2network.measures.measures import yearly_proximities
+from text2network.utils.file_helpers import check_create_folder
+from text2network.measures.proximity import yearly_proximities
 from text2network.utils.logging_helpers import setup_logger
 from text2network.classes.neo4jnw import neo4j_network
 

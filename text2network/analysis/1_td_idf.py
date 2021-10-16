@@ -1,7 +1,5 @@
-from itertools import product
-
 import pandas as pd
-from text2network.functions.file_helpers import check_create_folder
+from text2network.utils.file_helpers import check_create_folder
 from text2network.utils.logging_helpers import setup_logger
 import numpy as np
 from text2network.classes.neo4jnw import neo4j_network
@@ -30,12 +28,12 @@ focal_tokens=["leader","manager"]
 cutoff=0.1
 
 for focal_token in focal_tokens:
-    qry="Match p=(r:edge)<-[:onto]-(v {token:'"+focal_token+"'}) WITH DISTINCT(r.run_index) as ridx, collect(DISTINCT r.pos) as rpos MATCH (q:edge {run_index:ridx})<-[:onto]-(x:word) WHERE not q.pos in rpos RETURN DISTINCT(x.token) as idx, sum(q.weight)"
+    qry="Match p=(r:edge)<-[:onto]-(v:word {token:'"+focal_token+"'}) WITH DISTINCT(r.run_index) as ridx, collect(DISTINCT r.pos) as rpos MATCH (q:edge {run_index:ridx})<-[:onto]-(x:word) WHERE not q.pos in rpos RETURN DISTINCT(x.token) as idx, sum(q.weight)"
     asdf=pd.DataFrame(semantic_network.db.receive_query(qry))
     asdf.columns=["idx","occ"]
     asdf=asdf.sort_values(by="occ", ascending=False)
 
-    qry2="MATCH p=(r:edge)<-[:onto]-(v) WHERE v.token in "+str(list(asdf.idx))+" RETURN DISTINCT(v.token) as idx, sum(r.weight) as occ"
+    qry2="MATCH p=(r:edge)<-[:onto]-(v:word) WHERE v.token in "+str(list(asdf.idx))+" RETURN DISTINCT(v.token) as idx, sum(r.weight) as occ"
     asdf2=pd.DataFrame(semantic_network.db.receive_query(qry2))
     asdf2.columns=["idx","occ_all"]
     asdf2=asdf2.sort_values(by="occ_all", ascending=False)

@@ -9,7 +9,7 @@ from _collections import defaultdict
 import logging
 from typing import Optional, Callable, Tuple, List, Dict, Union
 
-from text2network.utils.network_tools import make_symmetric
+from text2network.functions.network_tools import make_symmetric
 import networkx as nx
 from community import best_partition
 

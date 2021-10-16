@@ -1,11 +1,7 @@
-from itertools import product
-
-import pandas as pd
-import tables
-from text2network.functions.file_helpers import check_create_folder
+from text2network.utils.file_helpers import check_create_folder
 from text2network.utils.load_bert import get_only_tokenizer
 from text2network.utils.logging_helpers import setup_logger
-from text2network.datasets.text_dataset import query_dataset, bert_dataset, bert_dataset_old
+from text2network.datasets.text_dataset import bert_dataset, bert_dataset_old
 
 # Set a configuration path
 configuration_path = 'config/2021/HBR40.ini'

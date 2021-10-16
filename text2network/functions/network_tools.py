@@ -1,13 +1,11 @@
 import itertools
-import logging
-import os
 from typing import Union
 
 import networkx as nx
 import scipy as sp
 import numpy as np
 
-from text2network.utils.rowvec_tools import cutoff_percentage
+from text2network.functions.rowvec_tools import cutoff_percentage
 
 
 def make_reverse(graph):
@@ -108,7 +106,20 @@ def make_symmetric(graph, technique="avg-sym"):
 
                 wt = wt / 2
                 new_graph[u][v]['weight'] = wt
+    elif technique == "sum":
+        new_graph = graph.to_undirected()
+        nodepairs = itertools.combinations(list(graph.nodes), r=2)
+        for u, v in nodepairs:
+            if graph.has_edge(u, v) or graph.has_edge(v, u):
+                wt = 0
 
+                if graph.has_edge(u, v):
+                    wt = wt + graph.edges[u, v]['weight']
+
+                if graph.has_edge(v, u):
+                    wt = wt + graph.edges[v, u]['weight']
+
+                new_graph[u][v]['weight'] = wt
     else:
         raise AttributeError("Method parameter not recognized")
 

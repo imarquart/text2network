@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from text2network.functions.file_helpers import check_create_folder
+from text2network.utils.file_helpers import check_create_folder
 from text2network.preprocessing.nw_preprocessor import nw_preprocessor
 from text2network.training.bert_trainer import bert_trainer
 from text2network.utils.hash_file import hash_string, check_step, complete_step

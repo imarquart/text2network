@@ -1,4 +1,21 @@
 
+
+# Import the os module
+import os
+
+path = "d:\\NLP\\t2nDeployment\\t2n"
+
+try:
+    os.chdir(path)
+    print("Current working directory: {0}".format(os.getcwd()))
+except FileNotFoundError:
+    print("Directory: {0} does not exist".format(path))
+except NotADirectoryError:
+    print("{0} is not a directory".format(path))
+except PermissionError:
+    print("You do not have permissions to change to {0}".format(path))
+
+
 from itertools import product
 
 from text2network.utils.file_helpers import check_create_folder
@@ -33,16 +50,16 @@ semantic_network = neo4j_network(config)
 
 #### Cluster yearly proximities
 ma_list = [None, (2, 0),(1, 0),(1, 1)]
-level_list = [3,4,5,6]
+level_list = [5,7,10,12]
 weight_list = [0]
 max_degree_list = [50,100,200]
-cl_clutoff_list = [0]
+cl_clutoff_list = [0,99]
 depth_list = [1]
 rs_list = [100]
 rev_ties_list = [True, False]
 algolist=[consensus_louvain]
 alter_set=[None]
-focaladdlist=[False]
+focaladdlist=[True,False]
 comp_ties_list = [False]
 back_out_list= [False]
 symmetry_list=[True, False]

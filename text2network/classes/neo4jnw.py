@@ -10,14 +10,14 @@ from tqdm import tqdm
 # import neo4j utilities and classes
 from text2network.classes.neo4db import neo4j_database
 from text2network.functions.backout_measure import backout_measure
-from text2network.functions.file_helpers import check_create_folder
+from text2network.utils.file_helpers import check_create_folder
 from text2network.functions.format import pd_format
 # Clustering
 from text2network.functions.graph_clustering import *
-from text2network.functions.node_measures import proximity, centrality
-from text2network.measures.measures import proximities, centralities
+from text2network.measures.centrality import centralities
+from text2network.measures.proximity import proximities
 from text2network.utils.input_check import input_check
-from text2network.utils.network_tools import make_reverse, sparsify_graph, renorm_graph
+from text2network.functions.network_tools import make_reverse, sparsify_graph, renorm_graph
 from text2network.utils.twowaydict import TwoWayDict
 import pandas as pd
 
@@ -112,7 +112,7 @@ class neo4j_network(Sequence):
         self.graph_type = graph_type
         self.graph = None
         self.conditioned = False
-        self.norm_ties = norm_ties
+        self.is_compositional = False
         self.years = []
         self.seed=seed
         self.set_random_seed(seed)
@@ -141,33 +141,6 @@ class neo4j_network(Sequence):
         res = self.db.receive_query(query)
         times = [x['time'] for x in res]
         return times
-
-    def set_norm_ties(self, norm=None):
-        """
-        Sets or switches the normalization of ties.
-        This switches the default behavior if no argument is passed explicitly
-        Parameters
-        ----------
-        norm
-
-        Returns
-        -------
-        None
-
-        """
-        # If no norm is supplied, we switch
-        if norm is None:
-            if self.norm_ties:
-                norm = False
-            else:
-                norm = True
-        # Set norm ties accordingly.
-        if norm:
-            self.norm_ties = True
-            logging.info("Switched default to normalization to compositional mode.")
-        elif not norm:
-            self.norm_ties = False
-            logging.info("Switched default to normalization to aggregate mode.")
 
     def pd_format(self, output: Union[List, Dict], ids_to_tokens: bool = True) -> List:
         """
@@ -317,7 +290,7 @@ class neo4j_network(Sequence):
 
 
 
-    def condition(self, times:Optional[Union[int,list]]=None, tokens:Optional[Union[int,str,list]]=None, weight_cutoff:Optional[float]=None, depth:Optional[int]=None, context:Optional[Union[int,str,list]]=None, compositional:Optional[bool]=None,
+    def condition(self, times:Optional[Union[int,list]]=None, tokens:Optional[Union[int,str,list]]=None, weight_cutoff:Optional[float]=None, depth:Optional[int]=None, context:Optional[Union[int,str,list]]=None, compositional:Optional[bool]=False,
                   batchsize:Optional[int]=None, cond_type:Optional[str]=None,
                   post_cutoff:Optional[float]=None, post_norm:Optional[bool]=False, max_degree:Optional[int]=None):
         """
@@ -373,10 +346,6 @@ class neo4j_network(Sequence):
         # Set up dict of configuration of the conditioning
         cond_dict = defaultdict(lambda: None)
 
-        # Get default normation behavior
-        if compositional is None:
-            compositional = self.norm_ties
-
         if batchsize is None:
             batchsize = self.neo_batch_size
 
@@ -406,7 +375,7 @@ class neo4j_network(Sequence):
 
         if tokens is None:
             logging.debug("Conditioning dispatch: Yearly")
-            self.__year_condition(years=times, weight_cutoff=weight_cutoff, context=context, norm=compositional, batchsize=batchsize, max_degree=max_degree)
+            self.__year_condition(years=times, weight_cutoff=weight_cutoff, context=context, batchsize=batchsize, max_degree=max_degree)
         else:
             logging.debug("Conditioning dispatch: Ego")
             if depth is None:
@@ -423,16 +392,19 @@ class neo4j_network(Sequence):
             if cond_type=="subset":
                 logging.debug("Conditioning dispatch: Ego, subset, depth {}".format(depth))
                 self.__ego_condition_subset(years=times, token_ids=tokens, weight_cutoff=weight_cutoff, depth=depth,
-                                     context=context, norm=compositional, batchsize=batchsize, query_mode=query_mode, max_degree=max_degree)
+                                     context=context, batchsize=batchsize, query_mode=query_mode, max_degree=max_degree)
             elif cond_type=="search":
                 logging.debug("Conditioning dispatch: Ego, search, depth {}".format(depth))
                 self.__ego_condition_search(years=times, token_ids=tokens, weight_cutoff=weight_cutoff, depth=depth,
-                                         context=context, norm=compositional, batchsize=batchsize, query_mode=query_mode, max_degree=max_degree)
+                                         context=context, batchsize=batchsize, query_mode=query_mode, max_degree=max_degree)
             else:
                 msg="Conditioning type {} requested. Please use either search or subset.".format(cond_type)
                 logging.debug(msg)
                 raise NotImplementedError(msg)
         self.__cut_and_norm(post_cutoff,post_norm)
+
+        if compositional:
+            self.to_compositional(times=times, context=context)
 
     def decondition(self):
         # Reset token lists to original state.
@@ -707,11 +679,64 @@ class neo4j_network(Sequence):
 
     # %% Graph manipulation
 
-    def norm_by_time(self, times:Union[list,int]):
+
+
+
+    def add_frequencies(self, times:Union[list,int]):
+        """
+        This function adds a field "freq" to the nodes in the conditioned graph, giving the number of occurrences
+        of a token.
+        """
+        if not self.conditioned:
+            self.__condition_error(call=inspect.stack()[1][3])
+
+        input_check(years=times)
+
+        # Get nodes in network
+        node_list = list(self.graph.nodes)
+        ids = self.ensure_ids(node_list)
+
+        # Just in case, translate between node labels in graph and ids
+        node_id_dict = {x[0]:x[1] for x in zip(node_list,ids)}
+        # Attribute dict
+        ret = {node_id_dict[x[0]]:{'freq':x[1]} for x in self.db.query_occurrences(ids=ids, times=times)}
+        nx.set_node_attributes(self.graph, ret)
+
+
+    def to_compositional(self, times:Union[list,int], context:Union[list,str]):
+        """
+
+        Under the assumption that the network was conditioned in aggregate mode with corresponding
+        times and contexts, this function normalizes the ties such that
+
+        A-(substitutes for)-> B
+        is normalized by
+        P(s|B in s, Context)
+
+        Leading to a measure of
+        P(w=A | B, Context)
+
+        Parameters
+        ----------
+        times
+        context
+
+        """
+
+        if not self.conditioned:
+            self.__condition_error(call=inspect.stack()[1][3])
+
+        # TODO: Add Compositional Here
+
+        self.is_compositional = True
+
+    def norm_by_total_nr_sequences(self, times:Union[list,int]):
         """
 
         If comparing values across different times, aggregate replacement ties
-        should be normed by the number of sequences in each context - so a time period
+        should be normed by the number of sequences.
+
+        This function norms all ties by the number of sequences/1000
 
         Parameters
         ----------
@@ -733,12 +758,52 @@ class neo4j_network(Sequence):
                 raise AttributeError("Please provide a list of ints, or an int as time variable")
 
         query="MATCH(r: edge) WHERE r.time in "+str(times)+" RETURN count(DISTINCT r.run_index) as nrs"
-        res = self.db.receive_query(query)
+        try:
+            res = self.db.receive_query(query)
+        except:
+            logging.error("Could not retrieve number of sequences")
+            raise
         nrs = [x['nrs'] for x in res][0]/1000
         logging.info("Normalizing graph by dividing by {} sequences".format(nrs))
         self.graph = renorm_graph(self.graph, nrs)
 
+    def norm_by_total_nr_occurrences(self, times:Union[list,int]):
+        """
 
+        If comparing values across different times, aggregate replacement ties
+        should be normed.
+
+        This function norms all ties by the number of occurrences/1000
+
+        Parameters
+        ----------
+        time: list of ints or int
+            time parameter which to norm by
+
+        Returns
+        -------
+
+        """
+
+        if not self.conditioned:
+            self.__condition_error(call=inspect.stack()[1][3])
+
+        if not isinstance(times, list):
+            if isinstance(times, int):
+                times=[times]
+            else:
+                raise AttributeError("Please provide a list of ints, or an int as time variable")
+
+        query="MATCH(r: edge) WHERE r.time in "+str(times)+" RETURN round(sum(r.weight)) as nrs"
+
+        try:
+            res = self.db.receive_query(query)
+        except:
+            logging.error("Could not retrieve number of occurrences")
+            raise
+        nrs = [x['nrs'] for x in res][0]/1000
+        logging.info("Normalizing graph by dividing by {} sequences".format(nrs))
+        self.graph = renorm_graph(self.graph, nrs)
 
 
 

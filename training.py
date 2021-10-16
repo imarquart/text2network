@@ -2,15 +2,12 @@
 import argparse
 import configparser
 import logging
-import json
 import sys
 import traceback
 import torch
 from text2network.training.bert_trainer import bert_trainer
-import os
 import gc
-from text2network.preprocessing.nw_preprocessor import nw_preprocessor
-from text2network.functions.file_helpers import check_create_folder
+from text2network.utils.file_helpers import check_create_folder
 from text2network.utils.logging_helpers import setup_logger
 
 import nltk
