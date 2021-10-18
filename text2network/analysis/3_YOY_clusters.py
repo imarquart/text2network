@@ -33,19 +33,19 @@ semantic_network = neo4j_network(config)
 
 #### Cluster yearly proximities
 ma_list = [None, (2, 0),(1, 0),(1, 1)]
-level_list = [3,4,5,6]
+level_list = [3,4,5,6,10,12]
 weight_list = [0]
 max_degree_list = [50,100,200]
 cl_clutoff_list = [0]
 depth_list = [1]
 rs_list = [100]
-rev_ties_list = [True, False]
+rev_ties_list = [False]
 algolist=[consensus_louvain]
 alter_set=[None]
 focaladdlist=[False]
 comp_ties_list = [False]
 back_out_list= [False]
-symmetry_list=[True, False]
+symmetry_list=[True]
 param_list = product(depth_list, level_list, ma_list, weight_list, rev_ties_list,symmetry_list, comp_ties_list, rs_list,
                      cl_clutoff_list,back_out_list,focaladdlist,alter_set,max_degree_list,algolist)
 logging.info("------------------------------------------------")
@@ -56,8 +56,13 @@ for depth, levels, moving_average, weight_cutoff, rev, sym, comp, rs, cluster_cu
     semantic_network = neo4j_network(config)
     # weight_cutoff=0
     filename = "".join(
-        [config['Paths']['csv_outputs'], "/EgoClusterYOY_", str(focal_token),"_max_degree", str(max_degree), "_rev", str(rev),"_sym", str(sym),"_fadd", str(fadd),"_alters", str(str(isinstance(alters,list))), "_norm", str(comp), "_lev",
-         str(levels), "_clcut",
+        [config['Paths']['csv_outputs'], "/EgoClusterYOY_",])
+    filename = check_create_folder(filename)
+    filename = check_create_folder("".join([filename, str(focal_token)]))
+    filename = check_create_folder("".join([filename, "_max_degree", str(max_degree)]))
+    filename = check_create_folder("".join([filename, "_rev", str(rev),"_sym", str(sym),]))
+    filename = check_create_folder("".join([filename, "_lev",  str(levels), ]))
+    filename = "".join([filename, "_fadd", str(fadd),"_alters", str(str(isinstance(alters,list))), "_norm", str(comp), "_clcut",
          str(cluster_cutoff), "_cut", str(weight_cutoff), "_algo", str(algo.__name__), "_depth", str(depth), "_ma", str(moving_average), "_rs",
          str(rs)])
     logging.info("YOY Network clustering: {}".format(filename))

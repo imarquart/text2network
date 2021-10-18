@@ -2,8 +2,8 @@ import itertools
 from typing import Union
 
 import networkx as nx
-import scipy as sp
 import numpy as np
+import scipy as sp
 
 from text2network.functions.rowvec_tools import cutoff_percentage
 
@@ -28,6 +28,7 @@ def make_reverse(graph):
         return graph.reverse()
     else:
         return graph
+
 
 def make_symmetric(graph, technique="avg-sym"):
     """
@@ -160,7 +161,7 @@ def merge_nodes(graph, u, v, method="sum"):
     return new_graph
 
 
-def renorm_graph(graph:Union[nx.DiGraph,nx.Graph], norm:Union[float,int]=1):
+def renorm_graph(graph: Union[nx.DiGraph, nx.Graph], norm: Union[float, int] = 1):
     """
 
     Simply divides all ties in the graph by the given number
@@ -176,12 +177,12 @@ def renorm_graph(graph:Union[nx.DiGraph,nx.Graph], norm:Union[float,int]=1):
     """
 
     for u, v, a in graph.edges(data=True):
-        graph[u][v]['weight']=a['weight']/norm
+        graph[u][v]['weight'] = a['weight'] / norm
 
     return graph
 
 
-def sparsify_graph(graph:Union[nx.DiGraph,nx.Graph], percentage:int=99):
+def sparsify_graph(graph: Union[nx.DiGraph, nx.Graph], percentage: int = 99):
     """
     Sparsify graph as follows:
     For each node, keep *percentage* of aggregate tie weights of outgoing ties.
@@ -196,20 +197,16 @@ def sparsify_graph(graph:Union[nx.DiGraph,nx.Graph], percentage:int=99):
     sparsified graph
     """
     for v in graph.nodes:
-        peers=np.array([z[1] for z in graph.out_edges(v, data="weight")])
+        peers = np.array([z[1] for z in graph.out_edges(v, data="weight")])
         weights = np.array([z[2] for z in graph.out_edges(v, data="weight")])
-        if len(peers)>0:
-            weights=cutoff_percentage(weights,percentage)
-            for u,wt in zip(peers,weights):
-                if wt>0:
-                    graph[v][u]['weight']=wt
+        if len(peers) > 0:
+            weights = cutoff_percentage(weights, percentage)
+            for u, wt in zip(peers, weights):
+                if wt > 0:
+                    graph[v][u]['weight'] = wt
                 else:
-                    graph.remove_edge(v,u)
+                    graph.remove_edge(v, u)
     return graph
-
-
-
-
 
 
 def plural_elimination(graph, method="sum"):

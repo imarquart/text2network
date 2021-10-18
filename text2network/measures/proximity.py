@@ -71,10 +71,9 @@ def proximities(snw, focal_tokens: Optional[List] = None, alter_subset: Optional
     return {"proximity": proximity_dict}
 
 
-
-def yearly_proximities(snw, year_list, focal_tokens=None, alter_subset: Optional[List] = None,symmetric=False,
-                        context=None, weight_cutoff=None, compositional=None, moving_average=None,
-                        reverse_ties: Optional[bool] = False, backout: Optional[bool]=False):
+def yearly_proximities(snw, year_list, focal_tokens=None, alter_subset: Optional[List] = None, symmetric=False,
+                       context=None, weight_cutoff=None, compositional=None, moving_average=None,
+                       reverse_ties: Optional[bool] = False, backout: Optional[bool] = False):
     """
     Compute directly year-by-year centralities for provided list.
 
@@ -110,12 +109,12 @@ def yearly_proximities(snw, year_list, focal_tokens=None, alter_subset: Optional
     cent_year = {}
     assert isinstance(year_list, list), "Please provide list of years."
 
-    if not isinstance(focal_tokens,list):
-        focal_tokens=[focal_tokens]
+    if not isinstance(focal_tokens, list):
+        focal_tokens = [focal_tokens]
 
     for year in year_list:
         snw.decondition()
-        logging.info("Conditioning network on year {} with {} focal tokens".format(year,len(focal_tokens)))
+        logging.info("Conditioning network on year {} with {} focal tokens".format(year, len(focal_tokens)))
 
         if moving_average is not None:
             start_year = max(year_list[0], year - moving_average[0])
@@ -138,7 +137,6 @@ def yearly_proximities(snw, year_list, focal_tokens=None, alter_subset: Optional
             snw.condition(tokens=focal_tokens, times=ma_years, depth=0, context=context, weight_cutoff=weight_cutoff,
                           compositional=compositional)
 
-
         if not compositional:
             snw.norm_by_time(ma_years)
         if reverse_ties:
@@ -148,10 +146,11 @@ def yearly_proximities(snw, year_list, focal_tokens=None, alter_subset: Optional
         if backout:
             snw.to_backout()
         logging.debug("Computing proximities for year {}".format(year))
-        proximity_dict={}
+        proximity_dict = {}
         # Get proximities from conditioned network
-        tie_dict = snw.proximities( focal_tokens=focal_tokens, alter_subset=alter_subset)
-        logging.info("Identified {} proximate tokens for year {}".format(len(list(tie_dict['proximity'].values())[0]),year))
+        tie_dict = snw.proximities(focal_tokens=focal_tokens, alter_subset=alter_subset)
+        logging.info(
+            "Identified {} proximate tokens for year {}".format(len(list(tie_dict['proximity'].values())[0]), year))
         cent_year.update({year: tie_dict})
 
     return {'yearly_proximity': cent_year}

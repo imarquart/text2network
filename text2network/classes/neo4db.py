@@ -1,11 +1,10 @@
-#TODO: Redo Compositional ties
-#TODO: Take out context element fragments
+# TODO: Redo Compositional ties
+# TODO: Take out context element fragments
 
 import logging
 from typing import Union
 
 import numpy as np
-
 
 try:
     from neo4j import GraphDatabase
@@ -177,7 +176,6 @@ class neo4j_database():
             self.add_query(node_query, run=True)
             nr_nodes = self.receive_query("MATCH (n:edge) RETURN count(n) AS nodes")[0]['nodes']
             logging.info("Network has %i edge-nodes" % (nr_nodes))
-
 
         # DEBUG
         nr_nodes = self.receive_query("MATCH (n:edge) RETURN count(n) AS nodes")[0]['nodes']
@@ -383,21 +381,22 @@ class neo4j_database():
 
     def query_multiple_nodes(self, ids, times=None, weight_cutoff=None, context=None, norm_ties=False,
                              context_mode="bidirectional", context_weight=True, mode="new"):
-        if (mode=="new" or context_weight) and norm_ties and context is not None:
-            logging.warning("Compositional mode only supported for contextual queries without context weights. Weights are derived by occurrences.")
-            context_weight=False
-            mode="old"
-        if mode=="old":
+        if (mode == "new" or context_weight) and norm_ties and context is not None:
+            logging.warning(
+                "Compositional mode only supported for contextual queries without context weights. Weights are derived by occurrences.")
+            context_weight = False
+            mode = "old"
+        if mode == "old":
             logging.debug("Query Dispatch OLD")
-            return self.query_multiple_nodes1(ids=ids,times=times,weight_cutoff=weight_cutoff, context=context, context_mode=context_mode, context_weight=context_weight)
+            return self.query_multiple_nodes1(ids=ids, times=times, weight_cutoff=weight_cutoff, context=context,
+                                              context_mode=context_mode, context_weight=context_weight)
         else:
             return self.query_multiple_nodes2(ids=ids, times=times, weight_cutoff=weight_cutoff, context=context,
                                               context_mode=context_mode,
                                               context_weight=context_weight)
 
-
     def query_multiple_nodes1(self, ids, times=None, weight_cutoff=None, context=None, norm_ties=False,
-                             context_mode="bidirectional", context_weight=True):
+                              context_mode="bidirectional", context_weight=True):
         """
         Query multiple nodes by ID and over a set of time intervals
 
@@ -641,7 +640,8 @@ class neo4j_database():
                                         self.aggregate_operator, "(rweight) as agg_weight order by receiver"])
         else:
 
-            return_query = ''.join([" RETURN sender, receiver, ", self.aggregate_operator,"(rweight) as agg_weight order by receiver"])
+            return_query = ''.join(
+                [" RETURN sender, receiver, ", self.aggregate_operator, "(rweight) as agg_weight order by receiver"])
 
         query = "".join([match_query, where_query, with_query, c_match, c_where_query, c_with, return_query])
         logging.debug("Tie Query: {}".format(query))
@@ -738,7 +738,6 @@ class neo4j_database():
 
         return ties
 
-
     # %% Insert functions
     def insert_edges(self, ego, ties):
 
@@ -751,14 +750,12 @@ class neo4j_database():
         egos = np.array([x[0] for x in ties])
         alters = np.array([x[1] for x in ties])
 
-
         # token translation
         egos = np.array(self.translate_token_ids(egos))
         alters = np.array(self.translate_token_ids(alters))
 
         times = np.array([x[2] for x in ties])
         dicts = np.array([x[3] for x in ties])
-
 
         # Delte just to make sure translation is taken
         del ties
@@ -782,7 +779,6 @@ class neo4j_database():
             p2 = np.array([str(x['p2']) if (len(x) > 5) else "0" for x in dicts])
             p3 = np.array([str(x['p3']) if (len(x) > 6) else "0" for x in dicts])
             p4 = np.array([str(x['p4']) if (len(x) > 7) else "0" for x in dicts])
-
 
             # Build parameter string
             parameter_string = ""
@@ -884,7 +880,7 @@ class neo4j_database():
 
         if params is not None:
             assert isinstance(params, list)
-            statements = [{'statement': p, 'parameters':q} for (q, p) in zip(query, params)]
+            statements = [{'statement': p, 'parameters': q} for (q, p) in zip(query, params)]
             self.neo_queue.extend(statements)
         else:
             statements = [{'statement': q} for (q) in query]
@@ -926,29 +922,29 @@ class neo4j_database():
     def consume_result(tx, query, params=None, consume_type=None):
         result = tx.run(query, params)
         if consume_type == "data":
-        #if True:
+            # if True:
             return result.data()
         else:
             return [dict(x) for x in result]
 
     def open_session(self, fetch_size=50):
         logging.debug("Opening Session!")
-        self.read_session=self.driver.session(fetch_size=fetch_size)
+        self.read_session = self.driver.session(fetch_size=fetch_size)
 
     def close_session(self):
         self.read_session.close()
-        self.read_session=None
+        self.read_session = None
 
     def receive_query(self, query, params=None):
-        clean_up=False
+        clean_up = False
         if self.read_session is None:
             logging.debug("Session was closed, opening temporary one")
             self.open_session()
-            clean_up=True
+            clean_up = True
         oldlevel = logging.getLogger().getEffectiveLevel()
         logging.getLogger().setLevel(30)
-        result=self.read_session.run(query,params)
-        res=[dict(x) for x in result]
+        result = self.read_session.run(query, params)
+        res = [dict(x) for x in result]
         logging.getLogger().setLevel(oldlevel)
         if clean_up:
             self.close_session()

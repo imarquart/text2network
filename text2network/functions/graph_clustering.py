@@ -5,26 +5,30 @@ Created on Fri Dec 18 21:16:52 2020
 @author: marquart
 """
 import itertools
-from _collections import defaultdict
 import logging
+from _collections import defaultdict
 from typing import Optional, Callable, Tuple, List, Dict, Union
 
-from text2network.functions.network_tools import make_symmetric
 import networkx as nx
 from community import best_partition
+
+from text2network.functions.network_tools import make_symmetric
 
 # Type definition
 try:
     from typing import TypedDict
+
+
     class GraphDict(TypedDict):
         graph: nx.DiGraph
         name: str
         parent: int
         level: int
         measures: List
-        metadata: [Union[Dict,defaultdict]]
+        metadata: [Union[Dict, defaultdict]]
 except:
-    GraphDict = Dict[str, Union[str,int,Dict,List,defaultdict]]
+    GraphDict = Dict[str, Union[str, int, Dict, List, defaultdict]]
+
 
 def louvain_cluster(graph):
     if graph.is_directed():
@@ -38,11 +42,11 @@ def consensus_louvain(graph, iterations=4):
     if graph.is_directed():
         graph = make_symmetric(graph)
 
-    new_graph_list=[]
+    new_graph_list = []
 
     # Run Clustering several times with different starting points
-    for i in range(0,iterations):
-        new_graph=nx.Graph()
+    for i in range(0, iterations):
+        new_graph = nx.Graph()
         new_graph.add_nodes_from(graph.nodes)
         clustering = best_partition(graph, randomize=True)
         clustering = [[k for k, v in clustering.items() if v == val] for val in list(set(clustering.values()))]
@@ -57,28 +61,26 @@ def consensus_louvain(graph, iterations=4):
     consensus_graph.add_nodes_from(graph.nodes)
     pairs = itertools.combinations(list(consensus_graph.nodes), r=2)
     # Iterate over all pairs and add edges
-    for u,v in pairs:
-        weight=0
+    for u, v in pairs:
+        weight = 0
         # Add 1 for each tie in a cluster graph
         for i, cluster_graph in enumerate(new_graph_list):
             if cluster_graph.has_edge(u, v):
-                weight=weight+1
+                weight = weight + 1
         # Normalize percentage
-        weight=weight/iterations
+        weight = weight / iterations
         # Add if majority agrees on tie
-        if weight>=0.5:
-            consensus_graph.add_edge(u,v,weight=weight)
+        if weight >= 0.5:
+            consensus_graph.add_edge(u, v, weight=weight)
     del new_graph_list
     # Now re-run clustering on consensus graph to get final clustering
     clustering = best_partition(consensus_graph)
     return [[k for k, v in clustering.items() if v == val] for val in list(set(clustering.values()))]
 
 
-
-
-
 def cluster_graph(graph: GraphDict, to_measure: Optional[List[Callable[[nx.DiGraph], Dict]]] = None,
-                  algorithm: Optional[Callable[[nx.DiGraph], List]] = None, add_ego_tokens:Optional[list] = None) -> Tuple[GraphDict, List[GraphDict], dict]:
+                  algorithm: Optional[Callable[[nx.DiGraph], List]] = None, add_ego_tokens: Optional[list] = None) -> \
+Tuple[GraphDict, List[GraphDict], dict]:
     """
     Cluster a graph in a GraphDict into its subgraphs and create measures
 
@@ -105,7 +107,7 @@ def cluster_graph(graph: GraphDict, to_measure: Optional[List[Callable[[nx.DiGra
     graph_metadata = graph['metadata']
 
     if algorithm is None:
-        algorithm=louvain_cluster
+        algorithm = louvain_cluster
 
     # Run clustering algorithm
     try:
@@ -115,19 +117,17 @@ def cluster_graph(graph: GraphDict, to_measure: Optional[List[Callable[[nx.DiGra
         logging.error(msg)
         raise AttributeError(msg)
 
-
     # Create dict of nodes->cluster associations
     cluster_node_dict = {}
     for i, nodes in enumerate(node_list):
         for node in nodes:
             cluster_node_dict.update({node: i})
 
-    if add_ego_tokens is not None: # Add ego tokens to each cluster
-        node_list=[list(set(x+add_ego_tokens)) for x in node_list]
+    if add_ego_tokens is not None:  # Add ego tokens to each cluster
+        node_list = [list(set(x + add_ego_tokens)) for x in node_list]
         for ego in add_ego_tokens:
             if ego not in list(cluster_node_dict.keys()):
-                cluster_node_dict[ego]=0
-
+                cluster_node_dict[ego] = 0
 
     # Add cluster attribute to original graph
     nx.set_node_attributes(graph['graph'], cluster_node_dict, 'cluster')
@@ -137,8 +137,7 @@ def cluster_graph(graph: GraphDict, to_measure: Optional[List[Callable[[nx.DiGra
     if to_measure is not None:
         for measure in to_measure:
             measure_list.append(measure(nw_graph=graph['graph']))
-    graph['measures']=measure_list
-
+    graph['measures'] = measure_list
 
     for i, nodes in enumerate(node_list):
         cluster_subgraph = create_cluster_subgraph(graph['graph'], nodes)
@@ -182,7 +181,7 @@ def create_cluster_subgraph(graph: nx.DiGraph, nodelist: list, copy=True) -> nx.
 
 
 def return_cluster(graph: nx.DiGraph, name: str, parent: str, level: int, measures: Optional[List] = None,
-                   metadata: Optional[Union[dict,defaultdict]] = None) -> GraphDict:
+                   metadata: Optional[Union[dict, defaultdict]] = None) -> GraphDict:
     """
     Returns a dict of a cluster, including relevant metadata and associated measures
 
@@ -206,9 +205,9 @@ def return_cluster(graph: nx.DiGraph, name: str, parent: str, level: int, measur
     """
     # Package metadata and measures into default dicts
     metadata_dict = defaultdict(list)
-    measure_dicts =list()
+    measure_dicts = list()
     if metadata is not None:
-        for (k,v) in metadata.items():
+        for (k, v) in metadata.items():
             metadata_dict[k].append(v)
     if measures is not None:
         for mdict in measures:

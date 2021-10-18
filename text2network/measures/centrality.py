@@ -1,7 +1,7 @@
 import logging
-from typing import Optional, Callable, Union, List, Dict
+from typing import Optional
 
-from text2network.functions.node_measures import proximity, centrality
+from text2network.functions.node_measures import centrality
 # from src.classes import neo4jnw
 from text2network.utils.input_check import input_check
 
@@ -50,10 +50,10 @@ def centralities(snw, focal_tokens=None, types=["PageRank", "normedPageRank"], r
     return cent_dict
 
 
-
 def yearly_centralities(snw, year_list, focal_tokens=None, types=["PageRank", "normedPageRank"],
-                        depth=None, context=None, weight_cutoff=None, compositional=None, symmetric:Optional[bool] = False,
-                        reverse_ties: Optional[bool] = False, backout: Optional[bool]=False, max_degree=100):
+                        depth=None, context=None, weight_cutoff=None, compositional=None,
+                        symmetric: Optional[bool] = False,
+                        reverse_ties: Optional[bool] = False, backout: Optional[bool] = False, max_degree=100):
     """
     Compute directly year-by-year centralities for provided list.
 
@@ -93,7 +93,8 @@ def yearly_centralities(snw, year_list, focal_tokens=None, types=["PageRank", "n
 
     for year in year_list:
         snw.decondition()
-        logging.debug("Conditioning network on year {} with {} focal tokens and depth {}".format(year,len(focal_tokens),depth))
+        logging.debug(
+            "Conditioning network on year {} with {} focal tokens and depth {}".format(year, len(focal_tokens), depth))
         snw.condition(tokens=focal_tokens, times=[
             year], depth=depth, context=context, weight_cutoff=weight_cutoff,
                       compositional=compositional, max_degree=max_degree)
