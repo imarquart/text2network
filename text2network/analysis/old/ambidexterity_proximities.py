@@ -1,8 +1,8 @@
 import time
 from itertools import product
 
-from text2network.functions.file_helpers import check_create_folder
-from text2network.measures.measures import average_cluster_proximities, extract_all_clusters, proximities
+from text2network.utils.file_helpers import check_create_folder
+from text2network.measures.measures import proximities
 from text2network.utils.logging_helpers import setup_logger
 import logging
 import numpy as np

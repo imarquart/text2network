@@ -1,5 +1,5 @@
-from text2network.functions.file_helpers import check_create_folder
-from text2network.measures.measures import yearly_proximities
+from text2network.utils.file_helpers import check_create_folder
+from text2network.measures.proximity import yearly_proximities
 from text2network.utils.logging_helpers import setup_logger
 from text2network.classes.neo4jnw import neo4j_network
 
@@ -11,7 +11,7 @@ config = configparser.ConfigParser()
 print(check_create_folder(configuration_path))
 config.read(check_create_folder(configuration_path))
 # Setup logging
-setup_logger(config['Paths']['log'],config['General']['logging_level'], "founder_yearly_proximities.py")
+setup_logger(config['Paths']['log'], config['General']['logging_level'], "founder_yearly_proximities.py")
 # First, create an empty network
 semantic_network = neo4j_network(config, logging_level=10)
 

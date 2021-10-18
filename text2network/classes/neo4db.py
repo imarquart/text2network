@@ -1,11 +1,10 @@
-#TODO: Redo Compositional ties
-#TODO: Take out context element fragments
+# TODO: Redo Compositional ties
+# TODO: Take out context element fragments
 
 import logging
 from typing import Union
 
 import numpy as np
-
 
 try:
     from neo4j import GraphDatabase
@@ -177,7 +176,6 @@ class neo4j_database():
             self.add_query(node_query, run=True)
             nr_nodes = self.receive_query("MATCH (n:edge) RETURN count(n) AS nodes")[0]['nodes']
             logging.info("Network has %i edge-nodes" % (nr_nodes))
-
 
         # DEBUG
         nr_nodes = self.receive_query("MATCH (n:edge) RETURN count(n) AS nodes")[0]['nodes']
@@ -383,21 +381,22 @@ class neo4j_database():
 
     def query_multiple_nodes(self, ids, times=None, weight_cutoff=None, context=None, norm_ties=False,
                              context_mode="bidirectional", context_weight=True, mode="new"):
-        if (mode=="new" or context_weight) and norm_ties and context is not None:
-            logging.warning("Compositional mode only supported for contextual queries without context weights. Weights are derived by occurrences.")
-            context_weight=False
-            mode="old"
-        if mode=="old":
+        if (mode == "new" or context_weight) and norm_ties and context is not None:
+            logging.warning(
+                "Compositional mode only supported for contextual queries without context weights. Weights are derived by occurrences.")
+            context_weight = False
+            mode = "old"
+        if mode == "old":
             logging.debug("Query Dispatch OLD")
-            return self.query_multiple_nodes1(ids=ids,times=times,weight_cutoff=weight_cutoff, context=context,norm_ties=norm_ties, context_mode=context_mode, context_weight=context_weight)
+            return self.query_multiple_nodes1(ids=ids, times=times, weight_cutoff=weight_cutoff, context=context,
+                                              context_mode=context_mode, context_weight=context_weight)
         else:
             return self.query_multiple_nodes2(ids=ids, times=times, weight_cutoff=weight_cutoff, context=context,
-                                              norm_ties=norm_ties, context_mode=context_mode,
+                                              context_mode=context_mode,
                                               context_weight=context_weight)
 
-
     def query_multiple_nodes1(self, ids, times=None, weight_cutoff=None, context=None, norm_ties=False,
-                             context_mode="bidirectional", context_weight=True):
+                              context_mode="bidirectional", context_weight=True):
         """
         Query multiple nodes by ID and over a set of time intervals
 
@@ -525,7 +524,7 @@ class neo4j_database():
 
         return ties
 
-    def query_multiple_nodes2(self, ids, times=None, weight_cutoff=None, context=None, norm_ties=False,
+    def query_multiple_nodes2(self, ids, times=None, weight_cutoff=None, context=None,
                               context_mode="bidirectional", context_weight=True):
         """
         Query multiple nodes by ID and over a set of time intervals
@@ -641,25 +640,17 @@ class neo4j_database():
                                         self.aggregate_operator, "(rweight) as agg_weight order by receiver"])
         else:
 
-            return_query = ''.join([" RETURN sender, receiver, ", self.aggregate_operator,"(rweight) as agg_weight order by receiver"])
+            return_query = ''.join(
+                [" RETURN sender, receiver, ", self.aggregate_operator, "(rweight) as agg_weight order by receiver"])
 
         query = "".join([match_query, where_query, with_query, c_match, c_where_query, c_with, return_query])
         logging.debug("Tie Query: {}".format(query))
         res = self.receive_query(query, params)
-        # Normalization
-        # Ties should be normalized by the number of occurrences of the receiver
-        if norm_ties:
-            unique_receivers = [int(x) for x in np.unique([y['receiver'] for y in res])]
-            norms = dict(self.query_occurrences(unique_receivers, times, weight_cutoff, context))
-            ties = [(x['sender'], x['receiver'],
-                     {'weight': np.float((100 * x['agg_weight'] / norms[x['receiver']]) if norms[x['receiver']] else 0),
-                      'time': nw_time['m'], 'start': nw_time['s'], 'end': nw_time['e']}) for
-                    x in res]
-        else:
-            ties = [(x['sender'], x['receiver'],
-                     {'weight': np.float(x['agg_weight']), 'time': nw_time['m'], 'start': nw_time['s'],
-                      'end': nw_time['e']}) for
-                    x in res]
+
+        ties = [(x['sender'], x['receiver'],
+                 {'weight': np.float(x['agg_weight']), 'time': nw_time['m'], 'start': nw_time['s'],
+                  'end': nw_time['e']}) for
+                x in res]
 
         return ties
 
@@ -687,85 +678,65 @@ class neo4j_database():
         if context is not None:
             params.update({'contexts': context})
 
-        # Check if occurrences are cached for this year
+        # Check if we want to cache yearly occurrences, in which case we query all
         if self.cache_yearly_occurrences and isinstance(times, int) and context is None:
-            res = self.get_year_cache(times)
+            logging.debug("Yearly occurrences requested, cache will be filled.")
+            where_query = " WHERE TRUE "
         else:
-            res = False
+            where_query = " WHERE a.token_id in $ids "
 
-        if not res:
-
-            # Check if we want to cache yearly occurrences, in which case we query all
-            if self.cache_yearly_occurrences and isinstance(times, int) and context is None:
-                logging.debug("Yearly occurrences requested, cache will be filled.")
-                where_query = " WHERE TRUE "
-            else:
-                where_query = " WHERE a.token_id in $ids "
-
-            # Context if desired
-            if context is not None:
-                c_where_query = " WHERE  e.token_id IN $contexts "
-            else:
-                c_where_query = ""
-
-            # Allow cutoff value of (non-aggregated) weights and set up time-interval query
-            if weight_cutoff is not None:
-                where_query = ''.join([where_query, " AND r.weight >=", str(weight_cutoff), " "])
-                if context is not None:
-                    c_where_query = ''.join([c_where_query, " AND q.weight >=", str(weight_cutoff), " "])
-            if isinstance(times, dict):
-                where_query = ''.join([where_query, " AND  $times.start <= r.time<= $times.end "])
-                if context is not None:
-                    c_where_query = ''.join([c_where_query, " AND  $times.start <= q.time<= $times.end "])
-            elif isinstance(times, list):
-                where_query = ''.join([where_query, " AND  r.time in $times "])
-                if context is not None:
-                    c_where_query = ''.join([c_where_query, " AND  q.time in $times "])
-
-            return_query = ''.join([
-                "RETURN a.token_id AS idx, sum(r.weight) as occurrences order by idx"])
-
-            if context is not None:
-                c_with = "WITH DISTINCT q.run_index as ridx "
-            else:
-                c_with = ""
-
-            if isinstance(times, int):
-                if context is not None:
-                    match_query = "MATCH p=(a:word)-[:onto]->(r:edge {time:$times, run_index:ridx}) "
-                    c_match = "MATCH (q:edge {time:", str(times), "}) - [:onto]->(e:word) "
-                else:
-                    match_query = "MATCH p=(a:word)-[:onto]->(r:edge {time:$times}) "
-                    c_match = ""
-            else:
-                if context is not None:
-                    match_query = "MATCH p=(a:word)-[:onto]->(r:edge {run_index:ridx}) "
-                    c_match = "MATCH (q:edge {time:", str(times), "}) - [:onto]->(e:word) "
-                else:
-                    match_query = "MATCH p=(a:word)-[:onto]->(r:edge) "
-                    c_match = ""
-
-            c_query = "".join([c_match, c_where_query, c_with])
-            query = "".join([c_query, match_query, where_query, return_query])
-
-            logging.debug("Occurrence Query: {}".format(query))
-            res = self.receive_query(query, params)
-
-            if self.cache_yearly_occurrences is False or context is not None:
-                ties = [(x['idx'], x['occurrences']) for x in res]
-            else:
-                ties = [(x['idx'], x['occurrences']) for x in res if x['idx'] in ids]
-                # Update yearly cache:
-                if isinstance(times, int):
-                    if self.cache_yearly_occurrences:
-                        self.add_year_cache(times, res)
-
+        # Context if desired
+        if context is not None:
+            c_where_query = " WHERE  e.token_id IN $contexts "
         else:
-            logging.debug("Cached Occurrences found for {}".format(times))
-            ties = [(x['idx'], x['occurrences']) for x in res if x['idx'] in ids]
+            c_where_query = ""
+
+        # Allow cutoff value of (non-aggregated) weights and set up time-interval query
+        if weight_cutoff is not None:
+            where_query = ''.join([where_query, " AND r.weight >=", str(weight_cutoff), " "])
+            if context is not None:
+                c_where_query = ''.join([c_where_query, " AND q.weight >=", str(weight_cutoff), " "])
+        if isinstance(times, dict):
+            where_query = ''.join([where_query, " AND  $times.start <= r.time<= $times.end "])
+            if context is not None:
+                c_where_query = ''.join([c_where_query, " AND  $times.start <= q.time<= $times.end "])
+        elif isinstance(times, list):
+            where_query = ''.join([where_query, " AND  r.time in $times "])
+            if context is not None:
+                c_where_query = ''.join([c_where_query, " AND  q.time in $times "])
+
+        return_query = ''.join([
+            "RETURN a.token_id AS idx, sum(r.weight) as occurrences order by idx"])
+
+        if context is not None:
+            c_with = "WITH DISTINCT q.run_index as ridx "
+        else:
+            c_with = ""
+
+        if isinstance(times, int):
+            if context is not None:
+                match_query = "MATCH p=(a:word)-[:onto]->(r:edge {time:$times, run_index:ridx}) "
+                c_match = "MATCH (q:edge {time:", str(times), "}) - [:onto]->(e:word) "
+            else:
+                match_query = "MATCH p=(a:word)-[:onto]->(r:edge {time:$times}) "
+                c_match = ""
+        else:
+            if context is not None:
+                match_query = "MATCH p=(a:word)-[:onto]->(r:edge {run_index:ridx}) "
+                c_match = "MATCH (q:edge {time:", str(times), "}) - [:onto]->(e:word) "
+            else:
+                match_query = "MATCH p=(a:word)-[:onto]->(r:edge) "
+                c_match = ""
+
+        c_query = "".join([c_match, c_where_query, c_with])
+        query = "".join([c_query, match_query, where_query, return_query])
+
+        logging.debug("Occurrence Query: {}".format(query))
+        res = self.receive_query(query, params)
+
+        ties = [(x['idx'], x['occurrences']) for x in res]
 
         return ties
-
 
     # %% Insert functions
     def insert_edges(self, ego, ties):
@@ -779,14 +750,12 @@ class neo4j_database():
         egos = np.array([x[0] for x in ties])
         alters = np.array([x[1] for x in ties])
 
-
         # token translation
         egos = np.array(self.translate_token_ids(egos))
         alters = np.array(self.translate_token_ids(alters))
 
         times = np.array([x[2] for x in ties])
         dicts = np.array([x[3] for x in ties])
-
 
         # Delte just to make sure translation is taken
         del ties
@@ -810,7 +779,6 @@ class neo4j_database():
             p2 = np.array([str(x['p2']) if (len(x) > 5) else "0" for x in dicts])
             p3 = np.array([str(x['p3']) if (len(x) > 6) else "0" for x in dicts])
             p4 = np.array([str(x['p4']) if (len(x) > 7) else "0" for x in dicts])
-
 
             # Build parameter string
             parameter_string = ""
@@ -912,7 +880,7 @@ class neo4j_database():
 
         if params is not None:
             assert isinstance(params, list)
-            statements = [{'statement': p, 'parameters':q} for (q, p) in zip(query, params)]
+            statements = [{'statement': p, 'parameters': q} for (q, p) in zip(query, params)]
             self.neo_queue.extend(statements)
         else:
             statements = [{'statement': q} for (q) in query]
@@ -954,29 +922,29 @@ class neo4j_database():
     def consume_result(tx, query, params=None, consume_type=None):
         result = tx.run(query, params)
         if consume_type == "data":
-        #if True:
+            # if True:
             return result.data()
         else:
             return [dict(x) for x in result]
 
     def open_session(self, fetch_size=50):
         logging.debug("Opening Session!")
-        self.read_session=self.driver.session(fetch_size=fetch_size)
+        self.read_session = self.driver.session(fetch_size=fetch_size)
 
     def close_session(self):
         self.read_session.close()
-        self.read_session=None
+        self.read_session = None
 
     def receive_query(self, query, params=None):
-        clean_up=False
+        clean_up = False
         if self.read_session is None:
             logging.debug("Session was closed, opening temporary one")
             self.open_session()
-            clean_up=True
+            clean_up = True
         oldlevel = logging.getLogger().getEffectiveLevel()
         logging.getLogger().setLevel(30)
-        result=self.read_session.run(query,params)
-        res=[dict(x) for x in result]
+        result = self.read_session.run(query, params)
+        res = [dict(x) for x in result]
         logging.getLogger().setLevel(oldlevel)
         if clean_up:
             self.close_session()

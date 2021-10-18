@@ -48,11 +48,11 @@ Finally, a Neo4j server, http accessible, version 4.02+, should be running for p
 We use the standard python configuration parser to read an ini file.
 
 ```python
-from text2network.functions.file_helpers import check_create_folder
+from text2network.utils.file_helpers import check_create_folder
 import configparser
 
 # Load Configuration file
-configuration_path='/config/config.ini'
+configuration_path = '/config/config.ini'
 config = configparser.ConfigParser()
 config.read(check_create_folder(configuration_path))
 ```

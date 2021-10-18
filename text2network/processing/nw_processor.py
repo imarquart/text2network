@@ -1,18 +1,16 @@
 import logging
 import time
 
-import nltk
 import numpy as np
-import tables
 import torch
 import tqdm
 import json
-from text2network.functions.file_helpers import check_create_folder, check_folder
+from text2network.utils.file_helpers import check_create_folder, check_folder
 from torch.utils.data import BatchSampler, SequentialSampler, DataLoader
 # from text2network.datasets.dataloaderX import DataLoaderX
 from text2network.datasets.text_dataset import query_dataset, text_dataset_collate_batchsample
 from text2network.utils.delwords import create_stopword_list
-from text2network.utils.rowvec_tools import simple_norm
+from text2network.functions.rowvec_tools import simple_norm
 from text2network.utils.get_uniques import get_uniques
 from text2network.utils.load_bert import get_bert_and_tokenizer, get_full_vocabulary
 from text2network.processing.neo4j_insertion_interface import Neo4j_Insertion_Interface
