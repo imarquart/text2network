@@ -155,7 +155,8 @@ class query_dataset(Dataset):
             if self.pos:
                 reform_text = self.tokenizer.convert_ids_to_tokens(list(inputs[1:-1].numpy()))
                 pos_tags=pos_tag(reform_text)
-                assert len(reform_text)==len(pos_tags), "NLTK POS Tagger could not tag all tokens!"
+                if len(reform_text) != len(pos_tags):
+                    raise AssertionError("NLTK POS Tagger could not tag all tokens!")
                 # Use simplified Tag Set instead of Penn
                 pos_tags= [(word, map_tag('en-ptb', 'universal', tag)) for word, tag in pos_tags]
                 # Get rid of unknown stuff

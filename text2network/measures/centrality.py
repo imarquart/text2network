@@ -89,7 +89,8 @@ def yearly_centralities(snw, year_list, focal_tokens=None, types=["PageRank", "n
     """
 
     cent_year = {}
-    assert isinstance(year_list, list), "Please provide list of years."
+    if not isinstance(year_list, list):
+        raise AssertionError("Please provide list of years.")
 
     for year in year_list:
         snw.decondition()

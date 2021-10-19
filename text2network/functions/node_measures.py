@@ -77,7 +77,8 @@ def yearly_centrality(nw_graph, year_list, focal_tokens=None,  types=["PageRank"
 
     """
     cent_year = {}
-    assert isinstance(year_list, list), "Please provide list of years."
+    if not isinstance(year_list, list):
+        raise AssertionError("Please provide list of years.")
     for year in year_list:
         cent_measures = centrality(nw_graph,
                                    focal_tokens=focal_tokens, types=types)

@@ -187,7 +187,8 @@ class bert_trainer():
 
         # If uniques are not defined, create them according to provided split_hierarchy
         if self.uniques is None or split_hierarchy is not None:
-            assert split_hierarchy is not None
+            if split_hierarchy is None:
+                raise AssertionError
             self.uniques = self.get_uniques(split_hierarchy)
 
         # Load necessary tokens

@@ -876,10 +876,12 @@ class neo4j_database():
         :param params: list - Associates parameters corresponding to queries
         :return:
         """
-        assert isinstance(query, list)
+        if not isinstance(query, list):
+            raise AssertionError
 
         if params is not None:
-            assert isinstance(params, list)
+            if not isinstance(params, list):
+                raise AssertionError
             statements = [{'statement': p, 'parameters': q} for (q, p) in zip(query, params)]
             self.neo_queue.extend(statements)
         else:
