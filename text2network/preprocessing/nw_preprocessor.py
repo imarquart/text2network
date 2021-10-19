@@ -268,7 +268,7 @@ class nw_preprocessor():
             start_index = -1
             run_index = start_index
 
-        logging.info("Loading files from %s" % folder)
+        logging.info("Loading files from %s", folder)
         # Get list of files
         # files = [abspath(f) for f in listdir(folder) if isfile(join(folder, f))]
 
@@ -281,13 +281,13 @@ class nw_preprocessor():
             # Derive file name and year
             file_dirname = dirname(file_path)
             file_name = os.path.split(file_path)[-1]
-            logging.debug("Loading file %s" % file_name)
+            logging.debug("Loading file %s", file_name)
 
             file_name = re.split(".txt", file_name)[0]
             file_source = file_name
 
             if ext_year is None:
-                logging.debug("Loading file %s" % file_name)
+                logging.debug("Loading file %s", file_name)
                 year = re.split(self.split_symbol,
                                 file_name)[0]
                 year = int(year)
@@ -319,7 +319,7 @@ class nw_preprocessor():
                         with open(file_path, encoding="utf-8", errors='ignore') as f:
                             text = f.read()
                     except:
-                        logging.error("Could not load %s" % file_path)
+                        logging.error("Could not load %s", file_path)
                         raise ImportError(
                             "Could not open file. Make sure, only .txt files in folder!")
 
@@ -408,7 +408,7 @@ class nw_preprocessor():
                     particle['text'] = sent
                 except:
                     logging.error("Saving failed.")
-                    logging.error("Sentence: %s" % sent)
+                    logging.error("Sentence: %s", sent)
 
                 if idx % 100000 == 0:
                     logging.debug(

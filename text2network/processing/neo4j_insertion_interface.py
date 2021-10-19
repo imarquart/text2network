@@ -268,7 +268,7 @@ class Neo4j_Insertion_Interface():
     def delete_database(self, time=None, del_limit=1000000):
         # DEBUG
         nr_nodes = self.receive_query("MATCH (n:edge) RETURN count(n) AS nodes")[0]['nodes']
-        logging.info("Before cleaning: Network has %i edge-nodes " % (nr_nodes))
+        logging.info("Before cleaning: Network has %i edge-nodes ", (nr_nodes))
 
         if time is not None:
             # Delete previous edges
@@ -283,7 +283,7 @@ class Neo4j_Insertion_Interface():
             # Delete edge nodes
             self.add_query(node_query, run=True)
             nr_nodes = self.receive_query("MATCH (n:edge) RETURN count(n) AS nodes")[0]['nodes']
-            logging.info("Network has %i edge-nodes" % (nr_nodes))
+            logging.info("Network has %i edge-nodes", (nr_nodes))
 
 
         # DEBUG
@@ -293,7 +293,7 @@ class Neo4j_Insertion_Interface():
         self.add_query("MATCH (n:part_of_speech) WHERE size((n)--())=0 DELETE (n)", run=True)
 
         nr_nodes = self.receive_query("MATCH (n:edge) RETURN count(n) AS nodes")[0]['nodes']
-        logging.info("After cleaning: Network has %i nodes ties" % (nr_nodes))
+        logging.info("After cleaning: Network has %i nodes ties", (nr_nodes))
 
     def get_neo_tokens_and_ids(self):
         """

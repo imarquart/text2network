@@ -199,14 +199,14 @@ class nw_processor():
             # Set up Hash
             hash = hash_string(processing_folder, hash_factory="md5")
             if (check_step(processing_folder, hash) and (self.processing_cache is not None)):
-                logging.info("Found processed cache for %s. Skipping" % processing_folder)
+                logging.info("Found processed cache for %s. Skipping", processing_folder)
             else:
                 gc.collect()
                 torch.cuda.empty_cache()
                 logging.info("Processing query {}".format(query))
                 start_time = time.time()
                 self.process_query(query, fname)
-                logging.info("Processing Time: %s seconds" % (time.time() - start_time))
+                logging.info("Processing Time: %s seconds", (time.time() - start_time))
                 if self.processing_cache is not None:
                     complete_step(processing_folder, hash)
 
@@ -257,7 +257,7 @@ class nw_processor():
         # %% Initialize text dataset
         dataset = query_dataset(self.text_db, self.tokenizer, self.MAX_SEQ_LENGTH, maxn=self.maxn, query=query,
                                 logging_level=self.logging_level)
-        logging.info("Number of sentences found: %i" % dataset.nitems)
+        logging.info("Number of sentences found: %i", dataset.nitems)
         logging.info("Number of unique tokens in dataset: {}".format(self.tokenizer.vocab_size - len(dataset.id_mask)))
         logging.info("Number of tokens in tokenizer: {}".format(self.tokenizer.vocab_size))
         # Error fix: Batch size must not be larger than dataset size

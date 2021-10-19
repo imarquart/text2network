@@ -160,7 +160,7 @@ class neo4j_database():
     def clean_database(self, time=None, del_limit=1000000):
         # DEBUG
         nr_nodes = self.receive_query("MATCH (n:edge) RETURN count(n) AS nodes")[0]['nodes']
-        logging.info("Before cleaning: Network has %i edge-nodes " % (nr_nodes))
+        logging.info("Before cleaning: Network has %i edge-nodes ", (nr_nodes))
 
         if time is not None:
             # Delete previous edges
@@ -175,11 +175,11 @@ class neo4j_database():
             # Delete edge nodes
             self.add_query(node_query, run=True)
             nr_nodes = self.receive_query("MATCH (n:edge) RETURN count(n) AS nodes")[0]['nodes']
-            logging.info("Network has %i edge-nodes" % (nr_nodes))
+            logging.info("Network has %i edge-nodes", (nr_nodes))
 
         # DEBUG
         nr_nodes = self.receive_query("MATCH (n:edge) RETURN count(n) AS nodes")[0]['nodes']
-        logging.info("After cleaning: Network has %i nodes and %i ties" % (nr_nodes))
+        logging.info("After cleaning: Network has %i nodes and %i ties", (nr_nodes))
 
     # %% Initializations
     def init_tokens(self):
