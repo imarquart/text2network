@@ -33,7 +33,7 @@ def get_uniques(split_hierarchy,db_folder):
             uniques[param] = list(set(uniques[param]))
             # Create query string
             query.append("(%s == %s)" % (param, val))
-            if type(val) == bytes:
+            if type(val) is bytes:
                 val = val.decode("utf-8")
             filename.append("%s" % (val))
 
