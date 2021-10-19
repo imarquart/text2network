@@ -50,6 +50,5 @@ def check_create_folder(folder,create_folder=True):
                 msg="Folder {} does not exist".format(db_folder)
                 logging.error(msg)
                 raise AttributeError(msg)
-                return False
     else:
         return normpath(db_folder+"/"+filename)
