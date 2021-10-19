@@ -398,7 +398,7 @@ class nw_preprocessor():
 
                 # pyTables does not work with unicode
                 # 31.08.2021: trying to get unicode to pytables to work without breaking quotation marks
-                transl_table = dict([(ord(x), ord(y)) for x, y in zip(u"‘’´“”–-", u"'''\"\"--")])
+                transl_table = {ord(x): ord(y) for x, y in zip(u"‘’´“”–-", u"'''\"\"--")}
                 sent = sent.translate(transl_table)
                 sent = unicodedata.normalize('NFKD', sent).encode(
                     'ascii', 'replace').decode('ascii')
