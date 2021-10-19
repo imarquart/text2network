@@ -115,7 +115,8 @@ class Neo4j_Insertion_Interface():
 
    # %% Setup, Initializations
 
-    def check_create_tokenid_dict(self, tokenizer_tokens, tokenizer_ids, db_tokens, db_ids, fail_on_missing=False, debug=False):
+    @staticmethod
+    def check_create_tokenid_dict(tokenizer_tokens, tokenizer_ids, db_tokens, db_ids, fail_on_missing=False, debug=False):
         """
         This function creates a dictionary that translates tokens and ids from an external tokenizer
         with the ones found in the database.

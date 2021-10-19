@@ -452,7 +452,8 @@ class nw_processor():
         # logging.debug(
         #    "Ratio Load/Operations: %s seconds" % (np.mean(load_timings) / np.mean(process_timings + model_timings)))
 
-    def get_bert_tensor(self, args, bert, tokens, pad_token_id, mask_token_id, device=torch.device("cpu")):
+    @staticmethod
+    def get_bert_tensor(args, bert, tokens, pad_token_id, mask_token_id, device=torch.device("cpu")):
         """
         Extracts tensors of probability distributions for each word in sentence from BERT.
         This is done by running BERT separately for each token, masking the focal token.
@@ -555,7 +556,8 @@ class nw_processor():
         return predictions.cpu(), attn.cpu()
 
     # %% Utilities
-    def calculate_cutoffs(self, x, method="percent", percent=100, max_degree=100, min_cut=0.001):
+    @staticmethod
+    def calculate_cutoffs(x, method="percent", percent=100, max_degree=100, min_cut=0.001):
         """
         Different methods to calculate cutoff probability and number.
 
@@ -647,5 +649,6 @@ class nw_processor():
         else:
             return None
 
-    def norm(self, x, min_zero=True):
+    @staticmethod
+    def norm(x, min_zero=True):
         return simple_norm(x, min_zero=min_zero)

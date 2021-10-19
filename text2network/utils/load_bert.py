@@ -51,7 +51,8 @@ class CustomBertForMaskedLM(BertForMaskedLM):
         # Change the embedding
         self.resize_token_embeddings(new_num_tokens)
 
-    def _get_resized_bias(self, old_bias, new_num_tokens):
+    @staticmethod
+    def _get_resized_bias(old_bias, new_num_tokens):
         old_num_tokens = old_bias.data.size()[0]
         if old_num_tokens == new_num_tokens:
             return old_bias
