@@ -187,7 +187,9 @@ class nw_preprocessor():
         # Once done, return completed list
         return text_list
 
-    def preprocess_folders(self, folder=None, max_seq=0, overwrite=True, excludelist=[]):
+    def preprocess_folders(self, folder=None, max_seq=0, overwrite=True, excludelist=None):
+        if excludelist is None:
+            excludelist = []
         if folder is None:
             folder = self.import_folder
         folder = normpath(folder)
@@ -208,7 +210,7 @@ class nw_preprocessor():
             if year >= 0:
                 self.preprocess_files(dir, max_seq, False, year, excludelist)
 
-    def preprocess_files(self, folder=None, max_seq=0, overwrite=True, ext_year=None, excludelist=[]):
+    def preprocess_files(self, folder=None, max_seq=0, overwrite=True, ext_year=None, excludelist=None):
         """
         Pre-processes files from raw data into a HD5 Table
         :param folder: folder with text files
@@ -221,6 +223,8 @@ class nw_preprocessor():
         ext_year
         excludelist
         """
+        if excludelist is None:
+            excludelist = []
 
         # Define particle for pytable
         class sequence(tables.IsDescription):
@@ -420,4 +424,3 @@ class nw_preprocessor():
             data_file.flush()
 
         data_file.close()
-        #f.close()

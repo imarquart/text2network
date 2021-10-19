@@ -6,7 +6,7 @@ from text2network.functions.node_measures import centrality
 from text2network.utils.input_check import input_check
 
 
-def centralities(snw, focal_tokens=None, types=["PageRank", "normedPageRank"], reverse_ties: Optional[bool] = False):
+def centralities(snw, focal_tokens=None, types=None, reverse_ties: Optional[bool] = False):
     """
     Calculate centralities for given tokens over an aggregate of given years.
     If not conditioned, error will be thrown!
@@ -28,6 +28,8 @@ def centralities(snw, focal_tokens=None, types=["PageRank", "normedPageRank"], r
         Dict of centralities for focal tokens.
 
     """
+    if types is None:
+        types = ["PageRank", "normedPageRank"]
 
     input_check(tokens=focal_tokens)
     if focal_tokens is not None:
@@ -50,7 +52,7 @@ def centralities(snw, focal_tokens=None, types=["PageRank", "normedPageRank"], r
     return cent_dict
 
 
-def yearly_centralities(snw, year_list, focal_tokens=None, types=["PageRank", "normedPageRank"],
+def yearly_centralities(snw, year_list, focal_tokens=None, types=None,
                         depth=None, context=None, weight_cutoff=None, compositional=None,
                         symmetric: Optional[bool] = False,
                         reverse_ties: Optional[bool] = False, backout: Optional[bool] = False, max_degree=100):
@@ -87,6 +89,8 @@ def yearly_centralities(snw, year_list, focal_tokens=None, types=["PageRank", "n
         Dict of years with dict of centralities for focal tokens.
 
     """
+    if types is None:
+        types = ["PageRank", "normedPageRank"]
 
     cent_year = {}
     assert isinstance(year_list, list), "Please provide list of years."

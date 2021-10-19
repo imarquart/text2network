@@ -500,11 +500,13 @@ class neo4j_network(Sequence):
 
     # %% Measures
 
-    def centralities(self, focal_tokens=None, types=["PageRank", "normedPageRank"],
+    def centralities(self, focal_tokens=None, types=None,
                      reverse_ties: Optional[bool] = False):
         """
         See measures.centralities
         """
+        if types is None:
+            types = ["PageRank", "normedPageRank"]
         return centralities(self, focal_tokens=focal_tokens, types=types, reverse_ties=reverse_ties)
 
     def proximities(self, focal_tokens: Optional[List] = None, alter_subset: Optional[List] = None,
