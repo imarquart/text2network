@@ -198,7 +198,7 @@ def train(args, train_dataset, model, tokenizer):
     # Check if continuing training from a checkpoint
 
     # DISABLE THIS FOR NOW
-    if os.path.exists(args.model_name_or_path) and return_from_checkpoint == True:
+    if os.path.exists(args.model_name_or_path) and return_from_checkpoint is True:
         # set global_step to gobal_step of last saved checkpoint from model path
         global_step = int(args.model_name_or_path.split('-')[-1].split('/')[0])
         epochs_trained = global_step // (len(train_dataloader) // args.gradient_accumulation_steps)

@@ -126,7 +126,7 @@ def average_cluster_proximities(focal_token: str, nw, levels: int,
     else:
         percentage = 0
 
-    if cluster_cutoff == None:
+    if cluster_cutoff is None:
         cluster_cutoff = 0
 
     if symmetric or reverse_ties:

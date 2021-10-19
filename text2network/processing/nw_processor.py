@@ -38,7 +38,7 @@ class nw_processor():
         :param cutoff_percent: Amount of probability mass to use to create links. Smaller values, less ties.
         """
 
-        if neo_interface == None:
+        if neo_interface is None:
             if config is not None:
                 self.neo_interface = Neo4j_Insertion_Interface(config)
             else:
