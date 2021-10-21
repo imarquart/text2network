@@ -29,7 +29,7 @@ def check_create_folder(folder,create_folder=True):
 
 
     # check if file
-    if not folder.suffix == '':
+    if folder.suffix != '':
         filename=folder.stem+folder.suffix
         db_folder=str(folder.parents[0])
     else:
