@@ -611,7 +611,7 @@ class neo4j_network(Sequence):
 
     # %% Graph manipulation
 
-    def add_frequencies(self, times: Union[list, int], context: Union[list, str]=None):
+    def add_frequencies(self, times: Union[list, int], context: Union[list, str] = None):
         """
         This function adds a field "freq" to the nodes in the conditioned graph, giving the number of occurrences
         of a token.
@@ -631,10 +631,11 @@ class neo4j_network(Sequence):
         # Just in case, translate between node labels in graph and ids
         node_id_dict = {x[0]: x[1] for x in zip(node_list, ids)}
         # Attribute dict
-        ret = {node_id_dict[x[0]]: {'freq': x[1]} for x in self.db.query_occurrences(ids=ids, times=times, context=context)}
+        ret = {node_id_dict[x[0]]: {'freq': x[1]} for x in
+               self.db.query_occurrences(ids=ids, times=times, context=context)}
         nx.set_node_attributes(self.graph, ret)
 
-    def to_compositional(self, times: Union[list, int]=None, context: Union[list, str]=None):
+    def to_compositional(self, times: Union[list, int] = None, context: Union[list, str] = None):
         """
 
         Under the assumption that the network was conditioned in aggregate mode with corresponding
@@ -680,7 +681,8 @@ class neo4j_network(Sequence):
 
         if self.cond_dict['compositional']:
             # Graph was already reversed - update state
-            logging.warning("You have invoked compositional mode more than once. This means ties are normalized by frequency^k!")
+            logging.warning(
+                "You have invoked compositional mode more than once. This means ties are normalized by frequency^k!")
             pass
         else:
             self.cond_dict['backout'] = True
@@ -892,8 +894,9 @@ class neo4j_network(Sequence):
         # Are time formats submitted? Handle those and check inputs
         if isinstance(i, tuple):
             if len(
-                i) != 2:
-                raise AssertionError("Please format a call as (<tokens>,<time>) or (<tokens>,{'start:'<time>, 'end':<time>})")
+                    i) != 2:
+                raise AssertionError(
+                    "Please format a call as (<tokens>,<time>) or (<tokens>,{'start:'<time>, 'end':<time>})")
             # if not isinstance(i[1], dict):
             #    assert isinstance(
             #        i[1], int), "Please timestamp as <time>, or {'start:'<time>, 'end':<time>}"
@@ -1464,7 +1467,7 @@ class neo4j_network(Sequence):
     def export_gefx(self, filename=None, path=None, delete_isolates=True):
         if self.conditioned:
             if filename is None:
-                filename = self.filename+".gexf"
+                filename = self.filename + ".gexf"
             if path is None:
                 path = filename
             else:
@@ -1485,7 +1488,7 @@ class neo4j_network(Sequence):
                 for n1, n2, d in cleaned_graph.edges(data=True):
                     for att in ['time', 'start', 'end']:
                         d[att] = int(d[att])
-                for n,d in cleaned_graph.nodes(data=True):
+                for n, d in cleaned_graph.nodes(data=True):
                     for att in ['freq']:
                         if att in d:
                             d[att] = int(d[att])
@@ -1556,7 +1559,7 @@ class neo4j_network(Sequence):
 
         return self.db.query_context_of_node(ids=ids, times=times, weight_cutoff=weight_cutoff, occurrence=occurrence)
 
-    def query_nodes(self, ids, context=None, times=None, weight_cutoff=None, query_mode="old"):
+    def query_nodes(self, ids, context=None, times=None, weight_cutoff=None, query_mode="new"):
         """
         Query multiple nodes by ID and over a set of time intervals, return distinct occurrences
         If provided with context, return under the condition that elements of context are present in the context element distribution of

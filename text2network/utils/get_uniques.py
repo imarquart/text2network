@@ -1,6 +1,7 @@
 import tables
 
-def get_uniques(split_hierarchy,db_folder):
+
+def get_uniques(split_hierarchy, db_folder):
     """
     Queries database to get unique values according to hierarchy provided.
     Determines how many models we would like to train.
@@ -20,7 +21,7 @@ def get_uniques(split_hierarchy,db_folder):
         uniques[param] = []
     uniques["query"] = []
     uniques["file"] = []
-    uniques["query_filename"]  = []
+    uniques["query_filename"] = []
 
     # Iterate to get unqiue values and create query strings and file-names
     for row in data.iterrows():
@@ -40,11 +41,11 @@ def get_uniques(split_hierarchy,db_folder):
         # Add (uniquely) query strings and file-names
         query = " & ".join(query)
         filename = "-".join(filename)
-        uniques["query_filename"].append((query,filename))
+        uniques["query_filename"].append((query, filename))
         uniques["query_filename"] = list(set(uniques["query_filename"]))
 
     # Split up tuple to get single instances
-    uniques["query"]=[x[0] for x in uniques['query_filename']]
+    uniques["query"] = [x[0] for x in uniques['query_filename']]
     uniques["file"] = [x[1] for x in uniques['query_filename']]
 
     return uniques
