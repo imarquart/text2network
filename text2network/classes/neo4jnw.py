@@ -1299,7 +1299,7 @@ class neo4j_network(Sequence):
     @staticmethod
     def __create_filename(cond_dict):
 
-        if cond_dict['type'] != False:
+        if cond_dict['type'] is not False:
             fn = str(cond_dict['type']) + "-"
         else:
             fn = ""
@@ -1322,7 +1322,7 @@ class neo4j_network(Sequence):
                 if key not in ["type", "tokens", "context", "years"]:
                     fn = fn + '-' + str(key) + str(cond_dict[key])
 
-        if cond_dict['context'] != False:
+        if cond_dict['context'] is not False:
             if not isinstance(cond_dict['context'], list):
                 cond_dict['context'] = [cond_dict['context']]
             fn = "context-"

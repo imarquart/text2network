@@ -34,8 +34,8 @@ class neo4nw_test(unittest.TestCase):
         assert len(self.neograph.graph) == 6
 
         self.neograph.decondition()
-        assert self.neograph.graph == None
-        assert self.neograph.conditioned == False
+        assert self.neograph.graph is None
+        assert self.neograph.conditioned is False
 
         self.neograph.decondition()
         self.neograph.condition(tokens=['t_manager'], depth=1)
