@@ -1140,52 +1140,6 @@ class neo4j_network(Sequence):
             self.decondition()
             self.__yearly_context_condition(times, weight_cutoff, batchsize, occurrence)
 
-    def __ayearly_context_condition(self, times, weight_cutoff=None, batchsize=None, occurrence=False,
-                                    max_degree: Optional[int] = None):
-        """ Condition the entire network over all years """
-
-        # Same for batchsize
-        if batchsize is None:
-            batchsize = self.neo_batch_size
-
-        if not self.conditioned:  # This is the first conditioning
-            # Build graph
-            self.graph = self.create_empty_graph()
-
-            # All tokens
-            worklist = self.ids
-            # Add all tokens to graph
-            self.graph.add_nodes_from(worklist)
-
-            # Loop batched over all tokens to condition
-            for i in tqdm(range(0, len(worklist), batchsize), leave=False, position=0):
-                token_ids = worklist[i:i + batchsize]
-                logging.debug(
-                    "Conditioning by query batch {} of {} tokens.".format(i, len(token_ids)))
-                # Query Neo4j
-                self.__add_edges(
-                    self.query_context(token_ids, times=times, weight_cutoff=weight_cutoff), max_degree=max_degree)
-
-            try:
-                all_ids = list(self.graph.nodes)
-            except:
-                logging.error("Could not context-condition graph by query method.")
-
-            # Update IDs and Tokens to reflect conditioning
-
-            all_tokens = [self.get_token_from_id(x) for x in all_ids]
-            # Add final properties
-            att_list = [{"token": x} for x in all_ids]
-            att_dict = dict(list(zip(all_ids, att_list)))
-            nx.set_node_attributes(self.graph, att_dict)
-
-            # Set conditioning true
-            self.__complete_conditioning()
-
-        else:  # Remove conditioning and recondition
-            self.decondition()
-            self.__yearly_context_condition(times, weight_cutoff, batchsize)
-
     def __context_ego_conditioning(self, times: Optional[Union[int, list]] = None,
                                    tokens: Optional[Union[int, str, list]] = None,
                                    weight_cutoff: Optional[float] = None, depth: Optional[int] = None,
