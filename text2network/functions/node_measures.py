@@ -45,7 +45,7 @@ def proximity(nw_graph, focal_tokens=None, alter_subset=None):
             # Extract edge weights and sort by weight
             edge_weights = [x['weight'] for x in neighbors.values()]
             edge_sort = np.argsort(-np.array(edge_weights))
-            neighbors = [x for x in neighbors]
+            neighbors = list(neighbors)
             edge_weights = np.array(edge_weights)
             neighbors = np.array(neighbors)
             edge_weights = edge_weights[edge_sort]
