@@ -178,7 +178,7 @@ class bert_trainer():
         logging.info("After resizing BERT, Tokenizer vocabulary {} items.".format(
             len(new_tokenizer)))
 
-        logging.info("Training BERT on %s" % (query))
+        logging.info("Training BERT on %s", (query))
         torch.cuda.empty_cache()
         results = run_bert(args, tokenizer=new_tokenizer, model=bert)
         return results
@@ -211,7 +211,7 @@ class bert_trainer():
             complete_step(token_folder, hash)
 
         # Train BERTS
-        logging.info("With the current hierarchy, there are %i BERT models to train" % (
+        logging.info("With the current hierarchy, there are %i BERT models to train", (
             len(self.uniques["query"])))
         for idx, query_filename in enumerate(self.uniques["query_filename"]):
             logging.disable(self.logging_level)
@@ -226,16 +226,14 @@ class bert_trainer():
             hash = hash_string(bert_folder, hash_factory="md5")
 
             if (check_step(bert_folder, hash)):
-                logging.info("Found trained BERT for %s. Skipping" %
-                             bert_folder)
+                logging.info("Found trained BERT for %s. Skipping", bert_folder)
             else:
                 start_time = time.time()
                 # logging.disable(logging.ERROR)
                 results = self.train_one_bert(query=query, bert_folder=bert_folder, tokenizer_folder=token_folder)
                 logging.disable(self.logging_level)
-                logging.info("BERT training finished in %s seconds" %
-                             (time.time() - start_time))
-                logging.info("%s: BERT results %s" % (fname, results))
+                logging.info("BERT training finished in %s seconds", (time.time() - start_time))
+                logging.info("%s: BERT results %s", fname, results)
                 complete_step(bert_folder, hash)
                 logging.info(
                     "----------------------------------------------------------------------")
