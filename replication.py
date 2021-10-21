@@ -48,25 +48,25 @@ extract_yearly_networks(semantic_network, compositional=True, folder=ffolder, ti
 # Extract yearly centralities
 centrality_folder=check_create_folder(csv_folder+"/centralities")
 
-cent=yearly_centralities(semantic_network, year_list=years,focal_tokens=focal_token, normalization=None, compositional=False, reverse=False, symmetric=False)
+cent=yearly_centralities(semantic_network, year_list=years,focal_tokens=focal_token, normalization=None, compositional=False, reverse=False, symmetric=False, types=["PageRank", "normedPageRank","local_clustering","weighted_local_clustering"])
 cent=semantic_network.pd_format(cent)[0]
 filename="/forward_centralities_"+str(focal_token)+".xlsx"
 ffolder = check_create_folder(centrality_folder+filename)
 cent.to_excel(ffolder,merge_cells=False)
 
-cent=yearly_centralities(semantic_network, year_list=years,focal_tokens=focal_token, normalization="sequences", compositional=False, reverse=False, symmetric=False)
+cent=yearly_centralities(semantic_network, year_list=years,focal_tokens=focal_token, normalization="sequences", compositional=False, reverse=False, symmetric=False, types=["PageRank", "normedPageRank","local_clustering","weighted_local_clustering"])
 cent=semantic_network.pd_format(cent)[0]
 filename="/normed_forward_centralities_"+str(focal_token)+".xlsx"
 ffolder = check_create_folder(centrality_folder+filename)
 cent.to_excel(ffolder,merge_cells=False)
 
-cent=yearly_centralities(semantic_network, year_list=years,focal_tokens=focal_token, normalization=None, compositional=False, reverse=False, symmetric=True)
+cent=yearly_centralities(semantic_network, year_list=years,focal_tokens=focal_token, normalization=None, compositional=False, reverse=False, symmetric=True, types=["PageRank", "normedPageRank","local_clustering","weighted_local_clustering"])
 cent=semantic_network.pd_format(cent)[0]
 filename="/sym_centralities_"+str(focal_token)+".xlsx"
 ffolder = check_create_folder(centrality_folder+filename)
 cent.to_excel(ffolder,merge_cells=False)
 
-cent=yearly_centralities(semantic_network, year_list=years,focal_tokens=focal_token, normalization="sequences", compositional=False, reverse=False, symmetric=True)
+cent=yearly_centralities(semantic_network, year_list=years,focal_tokens=focal_token, normalization="sequences", compositional=False, reverse=False, symmetric=True, types=["PageRank", "normedPageRank","local_clustering","weighted_local_clustering"])
 cent=semantic_network.pd_format(cent)[0]
 filename="/normed_sym_centralities"+str(focal_token)+".xlsx"
 ffolder = check_create_folder(centrality_folder+filename)

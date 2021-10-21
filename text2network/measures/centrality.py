@@ -5,7 +5,7 @@ from text2network.functions.node_measures import centrality
 from text2network.utils.input_check import input_check
 
 
-def centralities(snw, focal_tokens=None, types=["PageRank", "normedPageRank"]) -> Dict:
+def centralities(snw, focal_tokens=None, types=None) -> Dict:
     """
     Calculate centralities for given tokens over an aggregate of given years.
     If not conditioned, error will be thrown!
@@ -18,6 +18,8 @@ def centralities(snw, focal_tokens=None, types=["PageRank", "normedPageRank"]) -
         List of tokens of interest. If not provided, centralities for all tokens will be returned.
     types : list, optional
         Types of centrality to calculate. The default is ["PageRank", "normedPageRank"].
+        Other options are "local_clustering" for unweighted local clustering
+        and "weighted_local_clustering" for weighted local clustering
 
 
     Returns
@@ -105,9 +107,9 @@ def yearly_centralities(snw, year_list: list, focal_tokens: Optional[Union[list,
         snw.condition(tokens=focal_tokens, times=[
             year], depth=depth, context=context, weight_cutoff=weight_cutoff, max_degree=max_degree)
         if normalization == "sequences":
-            snw.norm_by_total_nr_sequences(times=ma_years)
+            snw.norm_by_total_nr_sequences(times=year)
         elif normalization == "occurrences":
-            snw.norm_by_total_nr_occurrences(times=ma_years)
+            snw.norm_by_total_nr_occurrences(times=year)
         elif normalization is not None:
             msg = "For yearly normalization, please either specify 'sequences' or 'occcurrences' or None"
             logging.error(msg)
