@@ -46,20 +46,19 @@ if __name__ == '__main__':
 
     logging.info("Preprocessing of folder {} complete!".format(config['Paths']['import_folder']))
 
-    path = check_create_folder(config['Paths']['database'], create_folder=False)
-    logging.info("Confirmation, printing the first sentences in {}".format(path))
+    paths = check_create_folder(config['Paths']['database'], create_folder=False)
+    logging.info("Confirmation, printing the first sentences in {}".format(paths))
 
     import tables
+
     table = tables.open_file(paths, mode="r")
     data = table.root.textdata.table
-    for i,row in enumerate(data):
+    for i, row in enumerate(data):
         logging.info("Seq {}, Run_id: {}, Year: {}, p1: {}".format(i, row['run_index'], row['year'], row['p1']))
         logging.info("Txt: {}".format(row['text']))
-        if i>5:
+        if i > 5:
             break
     table.close()
-
-    # items = data.read()[:]
 
 
 

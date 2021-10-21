@@ -349,7 +349,7 @@ class neo4j_network(Sequence):
         if tokens is None:
             logging.debug("Conditioning dispatch: Yearly")
             self.__year_condition(years=times, weight_cutoff=weight_cutoff, context=context, batchsize=batchsize,
-                                  max_degree=max_degree)
+                                  max_degree=max_degree, query_mode=query_mode)
         else:
             logging.debug("Conditioning dispatch: Ego")
             if depth is None:
@@ -500,19 +500,17 @@ class neo4j_network(Sequence):
 
     # %% Measures
 
-    def centralities(self, focal_tokens=None, types=["PageRank", "normedPageRank"],
-                     reverse_ties: Optional[bool] = False):
+    def centralities(self, focal_tokens=None, types=["PageRank", "normedPageRank"]) -> Dict:
         """
         See measures.centralities
         """
-        return centralities(self, focal_tokens=focal_tokens, types=types, reverse_ties=reverse_ties)
+        return centralities(self, focal_tokens=focal_tokens, types=types)
 
-    def proximities(self, focal_tokens: Optional[List] = None, alter_subset: Optional[List] = None,
-                    reverse_ties: Optional[bool] = False) -> Dict:
+    def proximities(self, focal_tokens: Optional[List] = None, alter_subset: Optional[List] = None) -> Dict:
         """
         See measures.proximities
         """
-        return proximities(self, focal_tokens=focal_tokens, alter_subset=alter_subset, reverse_ties=reverse_ties)
+        return proximities(self, focal_tokens=focal_tokens, alter_subset=alter_subset)
 
     def get_node_context(self, tokens: Union[list, int, str], years: Union[int, list, dict] = None,
                          weight_cutoff: Optional[float] = None, occurrence: Optional[bool] = False):
@@ -613,7 +611,7 @@ class neo4j_network(Sequence):
 
     # %% Graph manipulation
 
-    def add_frequencies(self, times: Union[list, int]):
+    def add_frequencies(self, times: Union[list, int], context: Union[list, str]=None):
         """
         This function adds a field "freq" to the nodes in the conditioned graph, giving the number of occurrences
         of a token.
@@ -627,13 +625,16 @@ class neo4j_network(Sequence):
         node_list = list(self.graph.nodes)
         ids = self.ensure_ids(node_list)
 
+        # Set default frequency
+        nx.set_node_attributes(self.graph, values=0, name="freq")
+
         # Just in case, translate between node labels in graph and ids
         node_id_dict = {x[0]: x[1] for x in zip(node_list, ids)}
         # Attribute dict
-        ret = {node_id_dict[x[0]]: {'freq': x[1]} for x in self.db.query_occurrences(ids=ids, times=times)}
+        ret = {node_id_dict[x[0]]: {'freq': x[1]} for x in self.db.query_occurrences(ids=ids, times=times, context=context)}
         nx.set_node_attributes(self.graph, ret)
 
-    def to_compositional(self, times: Union[list, int], context: Union[list, str]):
+    def to_compositional(self, times: Union[list, int]=None, context: Union[list, str]=None):
         """
 
         Under the assumption that the network was conditioned in aggregate mode with corresponding
@@ -664,20 +665,22 @@ class neo4j_network(Sequence):
         node_list = list(self.graph.nodes)
         ids = self.ensure_ids(node_list)
 
-        # Just in case, translate between node labels in graph and ids
-        node_id_dict = {x[0]: x[1] for x in zip(node_list, ids)}
-        # Attribute dict
-        ret = {node_id_dict[x[0]]: {'freq': x[1]} for x in
-               self.db.query_occurrences(ids=ids, times=times, context=context)}
+        # Do frequencies exist?
+        if self.graph.nodes[node_list[-1]].get('freq') is None:
+            self.add_frequencies(times=times, context=context)
 
         # Normalize per in degree
         for (u, v, wt) in self.graph.edges.data('weight'):
-            self.graph[u][v]['weight'] = wt / ret[v]['freq']
+            if self.graph.nodes[v]['freq'] > 0:
+                self.graph[u][v]['weight'] = wt / self.graph.nodes[v]['freq']
+            else:
+                self.graph[u][v]['weight'] = 0
 
         self.is_compositional = True
 
         if self.cond_dict['compositional']:
             # Graph was already reversed - update state
+            logging.warning("You have invoked compositional mode more than once. This means ties are normalized by frequency^k!")
             pass
         else:
             self.cond_dict['backout'] = True
@@ -1502,7 +1505,7 @@ class neo4j_network(Sequence):
     def export_gefx(self, filename=None, path=None, delete_isolates=True):
         if self.conditioned:
             if filename is None:
-                filename = self.filename
+                filename = self.filename+".gexf"
             if path is None:
                 path = filename
             else:
@@ -1515,27 +1518,25 @@ class neo4j_network(Sequence):
                     zip(self.ids, [self.get_token_from_id(x) for x in self.ids]))
                 reverse_dict = dict(
                     zip([self.get_token_from_id(x) for x in self.ids], self.ids))
-                if delete_isolates:
-                    cleaned_graph = self.graph.copy()
-                    cleaned_graph = nx.relabel_nodes(cleaned_graph, labeldict)
-                    # need to put strings on edges for gefx to write (not sure why)
-                    # confirm that edge attributes are int
-                    for n1, n2, d in cleaned_graph.edges(data=True):
-                        for att in ['time', 'start', 'end']:
+
+                cleaned_graph = self.graph.copy()
+                cleaned_graph = nx.relabel_nodes(cleaned_graph, labeldict)
+                # need to put strings on edges for gefx to write (not sure why)
+                # confirm that edge attributes are int
+                for n1, n2, d in cleaned_graph.edges(data=True):
+                    for att in ['time', 'start', 'end']:
+                        d[att] = int(d[att])
+                for n,d in cleaned_graph.nodes(data=True):
+                    for att in ['freq']:
+                        if att in d:
                             d[att] = int(d[att])
+                if delete_isolates:
                     isolates = list(nx.isolates(self.graph))
                     logging.debug(
                         "Found {} isolated nodes in graph, deleting.".format(len(isolates)))
                     cleaned_graph.remove_nodes_from(isolates)
-                    nx.write_gexf(cleaned_graph, path)
-                else:
-                    cleaned_graph = self.graph.copy()
-                    cleaned_graph = nx.relabel_nodes(cleaned_graph, labeldict)
-                    # confirm that edge attributes are int
-                    for n1, n2, d in cleaned_graph.edges(data=True):
-                        for att in ['time', 'start', 'end']:
-                            d[att] = int(d[att])
-                    nx.write_gexf(cleaned_graph, path)
+                nx.write_gexf(cleaned_graph, path)
+
             except:
                 raise SystemError("Could not save to %s " % path)
 
