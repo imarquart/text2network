@@ -1341,7 +1341,8 @@ class neo4j_network(Sequence):
 
         return cond_dict
 
-    def __create_filename(self, cond_dict):
+    @staticmethod
+    def __create_filename(cond_dict):
 
         if cond_dict['type'] != False:
             fn = str(cond_dict['type']) + "-"
@@ -1374,7 +1375,8 @@ class neo4j_network(Sequence):
 
         return fn
 
-    def __condition_error(self, call: Optional[str] = None):
+    @staticmethod
+    def __condition_error(call: Optional[str] = None):
         """
         Raises an error that the network is to be conditioned.
         Tries to find the call that was used.
