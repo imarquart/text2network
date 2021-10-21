@@ -2,8 +2,6 @@ import pytest
 
 import os
 
-import pytest
-
 from text2network.classes.neo4jnw import neo4j_network
 from text2network.utils.file_helpers import check_create_folder
 from text2network.preprocessing.nw_preprocessor import nw_preprocessor
@@ -103,14 +101,13 @@ def Neo4j_Interface(test_config):
     res=neo4j_interface.receive_query(query)[0]
     if res["nr_nodes"] > 0:
         raise ImportError("The provided Neo4j database is not empty. For security reasons, testing is disallowed on non-empty databases!")
-    else:
-        yield neo4j_interface
-        tokens,token_ids = get_token_list()
-        for token in tokens:
-            qry = "".join(["Match (r:word {token:'", token, "'})-[:onto]->(t) DETACH DELETE t"])
-            neo4j_interface.add_query(qry, run=True)
-            qry = "".join(["Match (r:word {token:'", token, "'}) DETACH DELETE r"])
-            neo4j_interface.add_query(qry, run=True)
+    yield neo4j_interface
+    tokens,token_ids = get_token_list()
+    for token in tokens:
+        qry = "".join(["Match (r:word {token:'", token, "'})-[:onto]->(t) DETACH DELETE t"])
+        neo4j_interface.add_query(qry, run=True)
+        qry = "".join(["Match (r:word {token:'", token, "'}) DETACH DELETE r"])
+        neo4j_interface.add_query(qry, run=True)
 
 @pytest.fixture(scope="module")
 def Neo4j_Network(test_config):

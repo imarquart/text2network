@@ -48,8 +48,8 @@ del semantic_network
 semantic_network = neo4j_network(config, seed=rs)
 start_time=time.time()
 semantic_network.context_condition(times=years, tokens=focal_words, depth=1, weight_cutoff=cutoff) # condition on context
-logging.info("nodes in network %i" % (len(semantic_network)))
-logging.info("ties in network %i" % (semantic_network.graph.number_of_edges()))
+logging.info("nodes in network %i", (len(semantic_network)))
+logging.info("ties in network %i", (semantic_network.graph.number_of_edges()))
 logging.info("finished in (across years) average {} seconds".format((time.time() - start_time)))
 context_dyads= semantic_network.pd_format(semantic_network.proximities(focal_tokens=focal_words))[0].T
 filename = "".join(
@@ -61,8 +61,8 @@ del semantic_network
 semantic_network = neo4j_network(config, seed=rs)
 start_time=time.time()
 semantic_network.context_condition(times=years, tokens=focal_words, depth=1, weight_cutoff=cutoff, occurrence=True) # condition on context
-logging.info("nodes in network %i" % (len(semantic_network)))
-logging.info("ties in network %i" % (semantic_network.graph.number_of_edges()))
+logging.info("nodes in network %i", (len(semantic_network)))
+logging.info("ties in network %i", (semantic_network.graph.number_of_edges()))
 logging.info("finished in (across years) average {} seconds".format((time.time() - start_time)))
 context_dyads2= semantic_network.pd_format(semantic_network.proximities(focal_tokens=focal_words))[0].T
 

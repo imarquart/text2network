@@ -10,7 +10,6 @@ import numpy as np
 from src.functions.graph_clustering import consensus_louvain
 from src.classes.neo4jnw import neo4j_network
 import pandas as pd
-from src.classes.neo4jnw import neo4j_network
 import networkx as nx
 
 from src.utils.rowvec_tools import cutoff_percentage

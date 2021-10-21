@@ -53,8 +53,8 @@ for cutoff,batch in param_list:
     logging.info(param_string)
     logging.info("{} finished in (across years) average {} seconds".format(test_name,np.mean(time_list)))
     logging.info("Last Filename: {}".format(semantic_network.filename))
-    logging.info("nodes in network %i" % (len(semantic_network)))
-    logging.info("ties in network %i" % (semantic_network.graph.number_of_edges()))
+    logging.info("nodes in network %i", (len(semantic_network)))
+    logging.info("ties in network %i", (semantic_network.graph.number_of_edges()))
     logging.info("------------------------------------------------")
 
 
@@ -79,8 +79,8 @@ for cutoff,batch in param_list:
     logging.info(param_string)
     logging.info("{} finished in (across years) average {} seconds".format(test_name,np.mean(time_list)))
     logging.info("Last Filename: {}".format(semantic_network.filename))
-    logging.info("nodes in network %i" % (len(semantic_network)))
-    logging.info("ties in network %i" % (semantic_network.graph.number_of_edges()))
+    logging.info("nodes in network %i", (len(semantic_network)))
+    logging.info("ties in network %i", (semantic_network.graph.number_of_edges()))
     logging.info("------------------------------------------------")
 
 
@@ -105,7 +105,7 @@ for cutoff,batch in param_list:
     logging.info(param_string)
     logging.info("{} finished in (across years) average {} seconds".format(test_name,np.mean(time_list)))
     logging.info("Last Filename: {}".format(semantic_network.filename))
-    logging.info("nodes in network %i" % (len(semantic_network)))
-    logging.info("ties in network %i" % (semantic_network.graph.number_of_edges()))
+    logging.info("nodes in network %i", (len(semantic_network)))
+    logging.info("ties in network %i", (semantic_network.graph.number_of_edges()))
     logging.info("------------------------------------------------")
 

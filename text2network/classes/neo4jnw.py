@@ -123,7 +123,7 @@ class neo4j_network(Sequence):
         self.filename = ""
         self.token_id_dict = TwoWayDict()
         # Since both are numerical, we need to use a single way dict here
-        self.id_index_dict = dict()
+        self.id_index_dict = {}
         self.tokens = []
         self.ids = []
         # Copies to be used during conditioning
@@ -611,7 +611,7 @@ class neo4j_network(Sequence):
 
     # %% Graph manipulation
 
-    def add_frequencies(self, times: Union[list, int], context: Union[list, str]=None):
+    def add_frequencies(self, times: Union[list, int], context: Union[list, str] = None):
         """
         This function adds a field "freq" to the nodes in the conditioned graph, giving the number of occurrences
         of a token.
@@ -631,10 +631,11 @@ class neo4j_network(Sequence):
         # Just in case, translate between node labels in graph and ids
         node_id_dict = {x[0]: x[1] for x in zip(node_list, ids)}
         # Attribute dict
-        ret = {node_id_dict[x[0]]: {'freq': x[1]} for x in self.db.query_occurrences(ids=ids, times=times, context=context)}
+        ret = {node_id_dict[x[0]]: {'freq': x[1]} for x in
+               self.db.query_occurrences(ids=ids, times=times, context=context)}
         nx.set_node_attributes(self.graph, ret)
 
-    def to_compositional(self, times: Union[list, int]=None, context: Union[list, str]=None):
+    def to_compositional(self, times: Union[list, int] = None, context: Union[list, str] = None):
         """
 
         Under the assumption that the network was conditioned in aggregate mode with corresponding
@@ -680,7 +681,8 @@ class neo4j_network(Sequence):
 
         if self.cond_dict['compositional']:
             # Graph was already reversed - update state
-            logging.warning("You have invoked compositional mode more than once. This means ties are normalized by frequency^k!")
+            logging.warning(
+                "You have invoked compositional mode more than once. This means ties are normalized by frequency^k!")
             pass
         else:
             self.cond_dict['backout'] = True
@@ -891,8 +893,10 @@ class neo4j_network(Sequence):
             self.db.write_queue()
         # Are time formats submitted? Handle those and check inputs
         if isinstance(i, tuple):
-            assert len(
-                i) == 2, "Please format a call as (<tokens>,<time>) or (<tokens>,{'start:'<time>, 'end':<time>})"
+            if len(
+                    i) != 2:
+                raise AssertionError(
+                    "Please format a call as (<tokens>,<time>) or (<tokens>,{'start:'<time>, 'end':<time>})")
             # if not isinstance(i[1], dict):
             #    assert isinstance(
             #        i[1], int), "Please timestamp as <time>, or {'start:'<time>, 'end':<time>}"
@@ -1008,7 +1012,7 @@ class neo4j_network(Sequence):
             or_depth = depth
             depth += 1
             # Create a dict to hold previously queried ids
-            prev_queried_ids = list()
+            prev_queried_ids = []
             # ids to check
             ids_to_check = token_ids
             logging.debug(
@@ -1139,52 +1143,6 @@ class neo4j_network(Sequence):
             self.decondition()
             self.__yearly_context_condition(times, weight_cutoff, batchsize, occurrence)
 
-    def __ayearly_context_condition(self, times, weight_cutoff=None, batchsize=None, occurrence=False,
-                                    max_degree: Optional[int] = None):
-        """ Condition the entire network over all years """
-
-        # Same for batchsize
-        if batchsize is None:
-            batchsize = self.neo_batch_size
-
-        if not self.conditioned:  # This is the first conditioning
-            # Build graph
-            self.graph = self.create_empty_graph()
-
-            # All tokens
-            worklist = self.ids
-            # Add all tokens to graph
-            self.graph.add_nodes_from(worklist)
-
-            # Loop batched over all tokens to condition
-            for i in tqdm(range(0, len(worklist), batchsize), leave=False, position=0):
-                token_ids = worklist[i:i + batchsize]
-                logging.debug(
-                    "Conditioning by query batch {} of {} tokens.".format(i, len(token_ids)))
-                # Query Neo4j
-                self.__add_edges(
-                    self.query_context(token_ids, times=times, weight_cutoff=weight_cutoff), max_degree=max_degree)
-
-            try:
-                all_ids = list(self.graph.nodes)
-            except:
-                logging.error("Could not context-condition graph by query method.")
-
-            # Update IDs and Tokens to reflect conditioning
-
-            all_tokens = [self.get_token_from_id(x) for x in all_ids]
-            # Add final properties
-            att_list = [{"token": x} for x in all_ids]
-            att_dict = dict(list(zip(all_ids, att_list)))
-            nx.set_node_attributes(self.graph, att_dict)
-
-            # Set conditioning true
-            self.__complete_conditioning()
-
-        else:  # Remove conditioning and recondition
-            self.decondition()
-            self.__yearly_context_condition(times, weight_cutoff, batchsize)
-
     def __context_ego_conditioning(self, times: Optional[Union[int, list]] = None,
                                    tokens: Optional[Union[int, str, list]] = None,
                                    weight_cutoff: Optional[float] = None, depth: Optional[int] = None,
@@ -1214,7 +1172,7 @@ class neo4j_network(Sequence):
 
                 depth += 1
                 # Create a dict to hold previously queried ids
-                prev_queried_ids = list()
+                prev_queried_ids = []
                 # ids to check
                 ids_to_check = tokens
                 logging.info(
@@ -1336,14 +1294,15 @@ class neo4j_network(Sequence):
 
         # Add non "None" or False tuples
         for key, item in tuple_list:
-            if item != None and item != False:
+            if item not in (None, False):
                 cond_dict.update({key: item})
 
         return cond_dict
 
-    def __create_filename(self, cond_dict):
+    @staticmethod
+    def __create_filename(cond_dict):
 
-        if cond_dict['type'] != False:
+        if cond_dict['type'] is not False:
             fn = str(cond_dict['type']) + "-"
         else:
             fn = ""
@@ -1366,7 +1325,7 @@ class neo4j_network(Sequence):
                 if key not in ["type", "tokens", "context", "years"]:
                     fn = fn + '-' + str(key) + str(cond_dict[key])
 
-        if cond_dict['context'] != False:
+        if cond_dict['context'] is not False:
             if not isinstance(cond_dict['context'], list):
                 cond_dict['context'] = [cond_dict['context']]
             fn = "context-"
@@ -1374,7 +1333,8 @@ class neo4j_network(Sequence):
 
         return fn
 
-    def __condition_error(self, call: Optional[str] = None):
+    @staticmethod
+    def __condition_error(call: Optional[str] = None):
         """
         Raises an error that the network is to be conditioned.
         Tries to find the call that was used.
@@ -1444,7 +1404,8 @@ class neo4j_network(Sequence):
     def get_token_from_id(self, id):
         """Token of id in data structures used"""
         # id should be int
-        assert np.issubdtype(type(id), np.integer)
+        if not np.issubdtype(type(id), np.integer):
+            raise AssertionError
         try:
             token = self.token_id_dict[id]
         except:
@@ -1460,7 +1421,8 @@ class neo4j_network(Sequence):
     def get_id_from_token(self, token):
         """Id of token in data structures used"""
         # Token has to be string
-        assert isinstance(token, str)
+        if not isinstance(token, str):
+            raise AssertionError
         try:
             id = int(self.token_id_dict[token])
         except:
@@ -1505,7 +1467,7 @@ class neo4j_network(Sequence):
     def export_gefx(self, filename=None, path=None, delete_isolates=True):
         if self.conditioned:
             if filename is None:
-                filename = self.filename+".gexf"
+                filename = self.filename + ".gexf"
             if path is None:
                 path = filename
             else:
@@ -1526,7 +1488,7 @@ class neo4j_network(Sequence):
                 for n1, n2, d in cleaned_graph.edges(data=True):
                     for att in ['time', 'start', 'end']:
                         d[att] = int(d[att])
-                for n,d in cleaned_graph.nodes(data=True):
+                for n, d in cleaned_graph.nodes(data=True):
                     for att in ['freq']:
                         if att in d:
                             d[att] = int(d[att])
@@ -1597,7 +1559,7 @@ class neo4j_network(Sequence):
 
         return self.db.query_context_of_node(ids=ids, times=times, weight_cutoff=weight_cutoff, occurrence=occurrence)
 
-    def query_nodes(self, ids, context=None, times=None, weight_cutoff=None, query_mode="old"):
+    def query_nodes(self, ids, context=None, times=None, weight_cutoff=None, query_mode="new"):
         """
         Query multiple nodes by ID and over a set of time intervals, return distinct occurrences
         If provided with context, return under the condition that elements of context are present in the context element distribution of

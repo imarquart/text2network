@@ -1,19 +1,21 @@
 import logging
+
 from text2network.utils.file_helpers import check_create_folder
 
-def setup_logger(logging_path, logging_level,filename="log"):
+
+def setup_logger(logging_path, logging_level, filename="log"):
     """
     Sets up logging formats and file etc.
     Returns
     -------
     None
     """
-    logging_level=int(logging_level)
+    logging_level = int(logging_level)
     logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                         datefmt='%m/%d/%Y %H:%M:%S',
                         level=logging_level)
     # Logging path
-    logging_path=check_create_folder(logging_path)
+    logging_path = check_create_folder(logging_path)
 
     # Set up logging
     logging.info("Setting loggging level {}".format(logging_level))
@@ -23,7 +25,6 @@ def setup_logger(logging_path, logging_level,filename="log"):
     logFormatter = logging.Formatter(
         '%(asctime)s - %(levelname)s - %(name)s -   %(message)s')
     fileHandler = logging.FileHandler(
-        "{0}/{1}.log".format(logging_path, "".join(["text2network_",filename])))
+        "{0}/{1}.log".format(logging_path, "".join(["text2network_", filename])))
     fileHandler.setFormatter(logFormatter)
     rootLogger.addHandler(fileHandler)
-

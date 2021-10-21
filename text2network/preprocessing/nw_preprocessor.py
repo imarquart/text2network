@@ -187,7 +187,9 @@ class nw_preprocessor():
         # Once done, return completed list
         return text_list
 
-    def preprocess_folders(self, folder=None, max_seq=0, overwrite=True, excludelist=[]):
+    def preprocess_folders(self, folder=None, max_seq=0, overwrite=True, excludelist=None):
+        if excludelist is None:
+            excludelist = []
         if folder is None:
             folder = self.import_folder
         folder = normpath(folder)
@@ -208,7 +210,7 @@ class nw_preprocessor():
             if year >= 0:
                 self.preprocess_files(dir, max_seq, False, year, excludelist)
 
-    def preprocess_files(self, folder=None, max_seq=0, overwrite=True, ext_year=None, excludelist=[]):
+    def preprocess_files(self, folder=None, max_seq=0, overwrite=True, ext_year=None, excludelist=None):
         """
         Pre-processes files from raw data into a HD5 Table
         :param folder: folder with text files
@@ -221,6 +223,8 @@ class nw_preprocessor():
         ext_year
         excludelist
         """
+        if excludelist is None:
+            excludelist = []
 
         # Define particle for pytable
         class sequence(tables.IsDescription):
@@ -268,7 +272,7 @@ class nw_preprocessor():
             start_index = -1
             run_index = start_index
 
-        logging.info("Loading files from %s" % folder)
+        logging.info("Loading files from %s", folder)
         # Get list of files
         # files = [abspath(f) for f in listdir(folder) if isfile(join(folder, f))]
 
@@ -281,13 +285,13 @@ class nw_preprocessor():
             # Derive file name and year
             file_dirname = dirname(file_path)
             file_name = os.path.split(file_path)[-1]
-            logging.debug("Loading file %s" % file_name)
+            logging.debug("Loading file %s", file_name)
 
             file_name = re.split(".txt", file_name)[0]
             file_source = file_name
 
             if ext_year is None:
-                logging.debug("Loading file %s" % file_name)
+                logging.debug("Loading file %s", file_name)
                 year = re.split(self.split_symbol,
                                 file_name)[0]
                 year = int(year)
@@ -319,7 +323,7 @@ class nw_preprocessor():
                         with open(file_path, encoding="utf-8", errors='ignore') as f:
                             text = f.read()
                     except:
-                        logging.error("Could not load %s" % file_path)
+                        logging.error("Could not load %s", file_path)
                         raise ImportError(
                             "Could not open file. Make sure, only .txt files in folder!")
 
@@ -398,7 +402,7 @@ class nw_preprocessor():
 
                 # pyTables does not work with unicode
                 # 31.08.2021: trying to get unicode to pytables to work without breaking quotation marks
-                transl_table = dict([(ord(x), ord(y)) for x, y in zip(u"‘’´“”–-", u"'''\"\"--")])
+                transl_table = {ord(x): ord(y) for x, y in zip(u"‘’´“”–-", u"'''\"\"--")}
                 sent = sent.translate(transl_table)
                 sent = unicodedata.normalize('NFKD', sent).encode(
                     'ascii', 'replace').decode('ascii')
@@ -408,7 +412,7 @@ class nw_preprocessor():
                     particle['text'] = sent
                 except:
                     logging.error("Saving failed.")
-                    logging.error("Sentence: %s" % sent)
+                    logging.error("Sentence: %s", sent)
 
                 if idx % 100000 == 0:
                     logging.debug(
@@ -420,4 +424,3 @@ class nw_preprocessor():
             data_file.flush()
 
         data_file.close()
-        #f.close()

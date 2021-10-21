@@ -115,7 +115,8 @@ class Neo4j_Insertion_Interface():
 
    # %% Setup, Initializations
 
-    def check_create_tokenid_dict(self, tokenizer_tokens, tokenizer_ids, db_tokens, db_ids, fail_on_missing=False, debug=False):
+    @staticmethod
+    def check_create_tokenid_dict(tokenizer_tokens, tokenizer_ids, db_tokens, db_ids, fail_on_missing=False, debug=False):
         """
         This function creates a dictionary that translates tokens and ids from an external tokenizer
         with the ones found in the database.
@@ -137,7 +138,8 @@ class Neo4j_Insertion_Interface():
         """
         tokenizer_tokens = np.array(tokenizer_tokens)
         tokenizer_ids = np.array(tokenizer_ids)
-        assert len(tokenizer_tokens)==len(tokenizer_ids), logging.error("Tokenizer token and id arrays MUST be same length!")
+        if len(tokenizer_tokens) != len(tokenizer_ids):
+            raise AssertionError(logging.error("Tokenizer token and id arrays MUST be same length!"))
 
         # Find overlapping and missing tokens / ids
         if len(db_ids) > 0:
@@ -173,7 +175,8 @@ class Neo4j_Insertion_Interface():
             else:
                 added_ids = list(range(0, len(missing_tokenizer_tokens)))
             # Create missing dictionary
-            assert len(added_ids)==len(missing_tokenizer_ids), logging.error("Internal error: Length of newly defined ids for missing tokens does not equal array of tokenizer ids!")
+            if len(added_ids) != len(missing_tokenizer_ids):
+                raise AssertionError(logging.error("Internal error: Length of newly defined ids for missing tokens does not equal array of tokenizer ids!"))
             missing_db_id_dict = {x[0]: x[1] for x in zip(missing_tokenizer_ids, added_ids)}
         else:
             missing_db_id_dict = {}
@@ -195,11 +198,13 @@ class Neo4j_Insertion_Interface():
                 logging.debug(
                     "tokenizer-db translation for tokenizer token {}, (id: {}), assigned to database token {}, (id: {})".format(
                         tokenizer_tk, x, db_tk, db_id))
-            assert tokenizer_tk==db_tk, "Mismatch when creating tokenizer-db translation for tokenizer token {}, (id: {}), assigned to database token {}, (id: {})".format(tokenizer_tk,x,db_tk,db_id)
+            if tokenizer_tk != db_tk:
+                raise AssertionError("Mismatch when creating tokenizer-db translation for tokenizer token {}, (id: {}), assigned to database token {}, (id: {})".format(tokenizer_tk,x,db_tk,db_id))
         for x in missing_tokenizer_ids:
             tokenizer_tk = tokenizer_tokens[np.where(tokenizer_ids == x)[0][0]]
             db_id = db_id_dict[x]
-            assert tokenizer_tk not in list(db_tokens), "Mismatch when creating tokenizer-db translation, assigned tokenizer token {}, (id: {}) with new id {}".format(tokenizer_tk,x,db_id)
+            if tokenizer_tk in list(db_tokens):
+                raise AssertionError("Mismatch when creating tokenizer-db translation, assigned tokenizer token {}, (id: {}) with new id {}".format(tokenizer_tk,x,db_id))
             if debug:
                 logging.debug("Assigned tokenizer token {}, (id: {}) with new id {} as missing, but found in database".format(tokenizer_tk,x,db_id))
 
@@ -268,7 +273,7 @@ class Neo4j_Insertion_Interface():
     def delete_database(self, time=None, del_limit=1000000):
         # DEBUG
         nr_nodes = self.receive_query("MATCH (n:edge) RETURN count(n) AS nodes")[0]['nodes']
-        logging.info("Before cleaning: Network has %i edge-nodes " % (nr_nodes))
+        logging.info("Before cleaning: Network has %i edge-nodes ", (nr_nodes))
 
         if time is not None:
             # Delete previous edges
@@ -283,7 +288,7 @@ class Neo4j_Insertion_Interface():
             # Delete edge nodes
             self.add_query(node_query, run=True)
             nr_nodes = self.receive_query("MATCH (n:edge) RETURN count(n) AS nodes")[0]['nodes']
-            logging.info("Network has %i edge-nodes" % (nr_nodes))
+            logging.info("Network has %i edge-nodes", (nr_nodes))
 
 
         # DEBUG
@@ -293,7 +298,7 @@ class Neo4j_Insertion_Interface():
         self.add_query("MATCH (n:part_of_speech) WHERE size((n)--())=0 DELETE (n)", run=True)
 
         nr_nodes = self.receive_query("MATCH (n:edge) RETURN count(n) AS nodes")[0]['nodes']
-        logging.info("After cleaning: Network has %i nodes ties" % (nr_nodes))
+        logging.info("After cleaning: Network has %i nodes ties", (nr_nodes))
 
     def get_neo_tokens_and_ids(self):
         """
@@ -351,7 +356,8 @@ class Neo4j_Insertion_Interface():
         -------
         token: str
         """
-        assert isinstance(idx, (int, np.integer)), "Token IDs need to be of integer type."
+        if not isinstance(idx, (int, np.integer)):
+            raise AssertionError("Token IDs need to be of integer type.")
         try:
             db_id=self.db_id_dict[idx]
             pos = np.where(self.db_ids == db_id)[0][0]
@@ -378,7 +384,8 @@ class Neo4j_Insertion_Interface():
         -------
         token: str
         """
-        assert isinstance(idx, (int, np.integer)), "Token IDs need to be of integer type."
+        if not isinstance(idx, (int, np.integer)):
+            raise AssertionError("Token IDs need to be of integer type.")
         try:
             pos = np.where(self.db_ids == idx)[0][0]
             token=self.db_tokens[pos]
@@ -388,7 +395,8 @@ class Neo4j_Insertion_Interface():
         return token
 
     def get_db_id_from_token(self,token:Union[str, np.character])->int:
-        assert isinstance(token, (str, np.character)), "Tokens need to be string or char type."
+        if not isinstance(token, (str, np.character)):
+            raise AssertionError("Tokens need to be string or char type.")
         try:
             pos = np.where(self.db_tokens == token)[0][0]
             idx=self.db_ids[pos]
@@ -404,7 +412,8 @@ class Neo4j_Insertion_Interface():
         return idx
 
     def get_tokenizer_id_from_token(self,token):
-        assert isinstance(token, (str, np.character)), "Tokens need to be string or char type."
+        if not isinstance(token, (str, np.character)):
+            raise AssertionError("Tokens need to be string or char type.")
         try:
             pos = np.where(self.tokenizer_tokens == token)[0][0]
             idx=self.tokenizer_ids[pos]
@@ -562,10 +571,12 @@ class Neo4j_Insertion_Interface():
         :param params: list - Associates parameters corresponding to queries
         :return:
         """
-        assert isinstance(query, list)
+        if not isinstance(query, list):
+            raise AssertionError
 
         if params is not None:
-            assert isinstance(params, list)
+            if not isinstance(params, list):
+                raise AssertionError
             statements = [{'statement': p, 'parameters':q} for (p, q) in zip(query, params)]
             self.neo_queue.extend(statements)
         else:

@@ -38,7 +38,7 @@ class nw_processor():
         :param cutoff_percent: Amount of probability mass to use to create links. Smaller values, less ties.
         """
 
-        if neo_interface == None:
+        if neo_interface is None:
             if config is not None:
                 self.neo_interface = Neo4j_Insertion_Interface(config)
             else:
@@ -151,7 +151,8 @@ class nw_processor():
         """
         if split_hierarchy is not None:
             self.split_hierarchy = split_hierarchy
-        assert self.split_hierarchy is not None
+        if self.split_hierarchy is None:
+            raise AssertionError
 
         self.uniques = get_uniques(self.split_hierarchy, self.text_db)
 
@@ -199,14 +200,14 @@ class nw_processor():
             # Set up Hash
             hash = hash_string(processing_folder, hash_factory="md5")
             if (check_step(processing_folder, hash) and (self.processing_cache is not None)):
-                logging.info("Found processed cache for %s. Skipping" % processing_folder)
+                logging.info("Found processed cache for %s. Skipping", processing_folder)
             else:
                 gc.collect()
                 torch.cuda.empty_cache()
                 logging.info("Processing query {}".format(query))
                 start_time = time.time()
                 self.process_query(query, fname)
-                logging.info("Processing Time: %s seconds" % (time.time() - start_time))
+                logging.info("Processing Time: %s seconds", (time.time() - start_time))
                 if self.processing_cache is not None:
                     complete_step(processing_folder, hash)
 
@@ -257,7 +258,7 @@ class nw_processor():
         # %% Initialize text dataset
         dataset = query_dataset(self.text_db, self.tokenizer, self.MAX_SEQ_LENGTH, maxn=self.maxn, query=query,
                                 logging_level=self.logging_level)
-        logging.info("Number of sentences found: %i" % dataset.nitems)
+        logging.info("Number of sentences found: %i", dataset.nitems)
         logging.info("Number of unique tokens in dataset: {}".format(self.tokenizer.vocab_size - len(dataset.id_mask)))
         logging.info("Number of tokens in tokenizer: {}".format(self.tokenizer.vocab_size))
         # Error fix: Batch size must not be larger than dataset size
@@ -452,7 +453,8 @@ class nw_processor():
         # logging.debug(
         #    "Ratio Load/Operations: %s seconds" % (np.mean(load_timings) / np.mean(process_timings + model_timings)))
 
-    def get_bert_tensor(self, args, bert, tokens, pad_token_id, mask_token_id, device=torch.device("cpu")):
+    @staticmethod
+    def get_bert_tensor(args, bert, tokens, pad_token_id, mask_token_id, device=torch.device("cpu")):
         """
         Extracts tensors of probability distributions for each word in sentence from BERT.
         This is done by running BERT separately for each token, masking the focal token.
@@ -555,7 +557,8 @@ class nw_processor():
         return predictions.cpu(), attn.cpu()
 
     # %% Utilities
-    def calculate_cutoffs(self, x, method="percent", percent=100, max_degree=100, min_cut=0.001):
+    @staticmethod
+    def calculate_cutoffs(x, method="percent", percent=100, max_degree=100, min_cut=0.001):
         """
         Different methods to calculate cutoff probability and number.
 
@@ -647,5 +650,6 @@ class nw_processor():
         else:
             return None
 
-    def norm(self, x, min_zero=True):
+    @staticmethod
+    def norm(x, min_zero=True):
         return simple_norm(x, min_zero=min_zero)

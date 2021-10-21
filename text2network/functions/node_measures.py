@@ -45,7 +45,7 @@ def proximity(nw_graph, focal_tokens=None, alter_subset=None):
             # Extract edge weights and sort by weight
             edge_weights = [x['weight'] for x in neighbors.values()]
             edge_sort = np.argsort(-np.array(edge_weights))
-            neighbors = [x for x in neighbors]
+            neighbors = list(neighbors)
             edge_weights = np.array(edge_weights)
             neighbors = np.array(neighbors)
             edge_weights = edge_weights[edge_sort]
@@ -57,7 +57,7 @@ def proximity(nw_graph, focal_tokens=None, alter_subset=None):
     return {"proximity":proximity_dict}
 
 
-def yearly_centrality(nw_graph, year_list, focal_tokens=None,  types=["PageRank", "normedPageRank"]):
+def yearly_centrality(nw_graph, year_list, focal_tokens=None,  types=None):
     """
     Compute directly year-by-year centralities for provided list.
 
@@ -76,8 +76,11 @@ def yearly_centrality(nw_graph, year_list, focal_tokens=None,  types=["PageRank"
         Dict of years with dict of centralities for focal tokens.
 
     """
+    if types is None:
+        types = ["PageRank", "normedPageRank"]
     cent_year = {}
-    assert isinstance(year_list, list), "Please provide list of years."
+    if not isinstance(year_list, list):
+        raise AssertionError("Please provide list of years.")
     for year in year_list:
         cent_measures = centrality(nw_graph,
                                    focal_tokens=focal_tokens, types=types)
@@ -86,7 +89,7 @@ def yearly_centrality(nw_graph, year_list, focal_tokens=None,  types=["PageRank"
     return {'yearly_centrality':cent_year}
 
 
-def centrality(nw_graph, focal_tokens=None,  types=["PageRank", "normedPageRank"]):
+def centrality(nw_graph, focal_tokens=None,  types=None):
     """
     Calculate centralities for given tokens over an aggregate of given years.
     If no graph is supplied via nw, the semantic network will be conditioned according to the parameters given.
@@ -105,6 +108,8 @@ def centrality(nw_graph, focal_tokens=None,  types=["PageRank", "normedPageRank"
         Dict of centralities for focal tokens.
 
     """
+    if types is None:
+        types = ["PageRank", "normedPageRank"]
     # Input checks
     if isinstance(types, str):
         types = [types]
