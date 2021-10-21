@@ -26,6 +26,8 @@ def centralities(snw, focal_tokens=None, types=["PageRank", "normedPageRank"]) -
         Dict of centralities for focal tokens.
 
     """
+    if types is None:
+        types = ["PageRank", "normedPageRank"]
 
     input_check(tokens=focal_tokens)
     if focal_tokens is not None:
@@ -89,6 +91,8 @@ def yearly_centralities(snw, year_list: list, focal_tokens: Optional[Union[list,
         Dict of years with dict of centralities for focal tokens.
 
     """
+    if types is None:
+        types = ["PageRank", "normedPageRank"]
 
     cent_year = {}
     if not isinstance(year_list, list):

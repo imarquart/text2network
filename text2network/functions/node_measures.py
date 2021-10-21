@@ -57,7 +57,7 @@ def proximity(nw_graph, focal_tokens=None, alter_subset=None):
     return {"proximity":proximity_dict}
 
 
-def yearly_centrality(nw_graph, year_list, focal_tokens=None,  types=["PageRank", "normedPageRank"]):
+def yearly_centrality(nw_graph, year_list, focal_tokens=None,  types=None):
     """
     Compute directly year-by-year centralities for provided list.
 
@@ -76,6 +76,8 @@ def yearly_centrality(nw_graph, year_list, focal_tokens=None,  types=["PageRank"
         Dict of years with dict of centralities for focal tokens.
 
     """
+    if types is None:
+        types = ["PageRank", "normedPageRank"]
     cent_year = {}
     if not isinstance(year_list, list):
         raise AssertionError("Please provide list of years.")
@@ -87,7 +89,7 @@ def yearly_centrality(nw_graph, year_list, focal_tokens=None,  types=["PageRank"
     return {'yearly_centrality':cent_year}
 
 
-def centrality(nw_graph, focal_tokens=None,  types=["PageRank", "normedPageRank"]):
+def centrality(nw_graph, focal_tokens=None,  types=None):
     """
     Calculate centralities for given tokens over an aggregate of given years.
     If no graph is supplied via nw, the semantic network will be conditioned according to the parameters given.
@@ -106,6 +108,8 @@ def centrality(nw_graph, focal_tokens=None,  types=["PageRank", "normedPageRank"
         Dict of centralities for focal tokens.
 
     """
+    if types is None:
+        types = ["PageRank", "normedPageRank"]
     # Input checks
     if isinstance(types, str):
         types = [types]
