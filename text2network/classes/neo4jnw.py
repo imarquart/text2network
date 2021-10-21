@@ -123,7 +123,7 @@ class neo4j_network(Sequence):
         self.filename = ""
         self.token_id_dict = TwoWayDict()
         # Since both are numerical, we need to use a single way dict here
-        self.id_index_dict = dict()
+        self.id_index_dict = {}
         self.tokens = []
         self.ids = []
         # Copies to be used during conditioning
@@ -1008,7 +1008,7 @@ class neo4j_network(Sequence):
             or_depth = depth
             depth += 1
             # Create a dict to hold previously queried ids
-            prev_queried_ids = list()
+            prev_queried_ids = []
             # ids to check
             ids_to_check = token_ids
             logging.debug(
@@ -1214,7 +1214,7 @@ class neo4j_network(Sequence):
 
                 depth += 1
                 # Create a dict to hold previously queried ids
-                prev_queried_ids = list()
+                prev_queried_ids = []
                 # ids to check
                 ids_to_check = tokens
                 logging.info(

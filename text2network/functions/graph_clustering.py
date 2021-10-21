@@ -205,7 +205,7 @@ def return_cluster(graph: nx.DiGraph, name: str, parent: str, level: int, measur
     """
     # Package metadata and measures into default dicts
     metadata_dict = defaultdict(list)
-    measure_dicts = list()
+    measure_dicts = []
     if metadata is not None:
         for (k, v) in metadata.items():
             metadata_dict[k].append(v)
