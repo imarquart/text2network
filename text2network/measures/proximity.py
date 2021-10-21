@@ -1,21 +1,17 @@
 import logging
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Union
 
 import numpy as np
 
-# from src.classes import neo4jnw
-# from src.classes.neo4jnw import neo4j_network
 from text2network.functions.node_measures import proximity
-# from src.classes import neo4jnw
 from text2network.utils.input_check import input_check
 
 
-def proximities(snw, focal_tokens: Optional[List] = None, alter_subset: Optional[List] = None,
-                reverse_ties: Optional[bool] = False, to_backout: Optional[bool] = False) -> Dict:
+def proximities(snw, focal_tokens: Optional[List] = None, alter_subset: Optional[List] = None) -> Dict:
     """
     Calculate proximities for given tokens.
 
-    Throwns error if network is not conditioned!
+    Throws error if network is not conditioned!
 
     Parameters
     ----------
@@ -25,8 +21,6 @@ def proximities(snw, focal_tokens: Optional[List] = None, alter_subset: Optional
         List of tokens of interest. If not provided, centralities for all tokens will be returned.
     alter_subset : list, str optional
         List of alters to show. Others are hidden. The default is None.
-    reverse_ties : bool, optional
-        Reverse all ties. The default is False.
 
     Returns
     -------
@@ -52,11 +46,6 @@ def proximities(snw, focal_tokens: Optional[List] = None, alter_subset: Optional
 
     proximity_dict = {}
 
-    # Reverse ties if requested
-    if reverse_ties:
-        snw.to_reverse()
-    if to_backout:
-        snw.to_backout()
     # Get proximities from conditioned network
     for token in focal_tokens:
         if token in snw.graph.nodes:
@@ -64,16 +53,15 @@ def proximities(snw, focal_tokens: Optional[List] = None, alter_subset: Optional
                 'proximity'][token]
             proximity_dict.update({token: tie_dict})
 
-    # Reverse ties if requested
-    if reverse_ties:
-        snw.to_reverse()
-
     return {"proximity": proximity_dict}
 
 
-def yearly_proximities(snw, year_list, focal_tokens=None, alter_subset: Optional[List] = None, symmetric=False,
-                       context=None, weight_cutoff=None, compositional=None, moving_average=None,
-                       reverse_ties: Optional[bool] = False, backout: Optional[bool] = False):
+def yearly_proximities(snw, year_list: Union[list, int], focal_tokens: Optional[Union[list, str]] = None,
+                       alter_subset: Optional[list] = None, max_degree: Optional[int] = None,
+                       context: Optional[Union[list, str]] = None, weight_cutoff: Optional[float] = None,
+                       moving_average: Optional[tuple] = None,symmetric:Optional[bool]=False,
+                        compositional:Optional[bool]=False,
+                        reverse:Optional[bool]=False, normalization: Optional[str] = None):
     """
     Compute directly year-by-year centralities for provided list.
 
@@ -85,24 +73,35 @@ def yearly_proximities(snw, year_list, focal_tokens=None, alter_subset: Optional
     year_list : list
         List of years for which to calculate centrality.
     focal_tokens : list, str
-        List of tokens of interest. If not provided, centralities for all tokens will be returned.
-    alter_subset: Optional[List] = None
+        List of tokens of interest. If not provided, proximities for all tokens will be returned.
+    alter_subset: list, optional
         List of alters to return proximities for. Others are discarded.
-    symmetric : bool, optional
-        Symmetrize Network?
     context : list, optional - used when conditioning
         List of tokens that need to appear in the context distribution of a tie. The default is None.
     weight_cutoff : float, optional - used when conditioning
         Only links of higher weight are considered in conditioning.. The default is None.
-    compositional : bool, optional - used when conditioning
-        Please see semantic network class. The default is True.
-    reverse_ties : bool, optional
-        Reverse all ties. The default is False.
+    moving_average: tuple
+        Pass as (a,b), where for a focal year x the conditioning window will be
+        [x-a,x+b]
+    normalization: optional, str
+        Given that each point in time has differently many sequences, we can norm either:
+        -> "sequences" - divide each tie weight by #sequences/1000 in the given year
+        -> "occurrences" - divide each tie weight by the total #occurrences/1000 in the given year
+        Note that this differs from compositional mode, where each norm is individual to each token/year
+    max_degree: int
+        When conditioning, extract at most the top max_degree ties for any token in terms of weight
+    symmetric: bool, optional
+        Transform directed network to undirected network
+        use symmetric_method to specify how. See semantic_network.to_symmetric
+    compositional: bool, optional
+        Use compositional ties. See semantic_network.to_compositional
+    reverse: bool, optional
+        Reverse ties. See semantic_network.to_reverse()
 
     Returns
     -------
     dict
-        Dict of years with dict of centralities for focal tokens.
+        Dict of years with dict of proxmities for focal tokens.
 
     """
 
@@ -130,21 +129,22 @@ def yearly_proximities(snw, year_list, focal_tokens=None, alter_subset: Optional
         else:
             ma_years = year
 
-        if reverse_ties or symmetric:
-            snw.condition(tokens=focal_tokens, times=ma_years, depth=1, context=context, weight_cutoff=weight_cutoff,
-                          compositional=compositional)
-        else:
-            snw.condition(tokens=focal_tokens, times=ma_years, depth=0, context=context, weight_cutoff=weight_cutoff,
-                          compositional=compositional)
-
-        if not compositional:
-            snw.norm_by_time(ma_years)
-        if reverse_ties:
+        snw.condition(tokens=focal_tokens, times=ma_years, depth=0, context=context, weight_cutoff=weight_cutoff,
+                      max_degree=max_degree)
+        if normalization=="sequences":
+            snw.norm_by_total_nr_sequences(times=ma_years)
+        elif normalization=="occurrences":
+            snw.norm_by_total_nr_occurrences(times=ma_years)
+        elif normalization is not None:
+            msg="For yearly normalization, please either specify 'sequences' or 'occcurrences' or None"
+            logging.error(msg)
+            raise AttributeError(msg)
+        if reverse:
             snw.to_reverse()
+        if compositional:
+            snw.to_compositional()
         if symmetric:
             snw.to_symmetric()
-        if backout:
-            snw.to_backout()
         logging.debug("Computing proximities for year {}".format(year))
         proximity_dict = {}
         # Get proximities from conditioned network
