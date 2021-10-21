@@ -8,28 +8,28 @@ def test_norm( processor):
     expected_x=np.array([1/6,2/6,3/6])
     normed_x=processor.norm(x,min_zero=False)
     assert (normed_x==expected_x).all(), "Regular normalization. x: {} - expected: {}".format(normed_x,expected_x)
-    assert (np.sum(normed_x)== 1, "Regular normalization. sum(x): {} - expected: {}".format(np.sum(normed_x),1))
+    assert np.sum(normed_x)== 1, "Regular normalization. sum(x): {} - expected: {}".format(np.sum(normed_x),1)
 
     # Zero normalization
     x=np.array([0,1,2,3,0])
     expected_x=np.array([0,1/6,2/6,3/6,0])
     normed_x=processor.norm(x,min_zero=False)
     assert (normed_x==expected_x).all(), "Regular normalization. x: {} - expected: {}".format(normed_x,expected_x)
-    assert (np.sum(normed_x)== 1, "Regular normalization. sum(x): {} - expected: {}".format(np.sum(normed_x),1))
+    assert np.sum(normed_x)== 1, "Regular normalization. sum(x): {} - expected: {}".format(np.sum(normed_x),1)
 
     # Fractional normalization
     x=np.array([0,1/2,1/4,0])
     expected_x=np.array([0,2/3,1/3,0])
     normed_x=processor.norm(x,min_zero=False)
     assert (normed_x==expected_x).all(), "Regular normalization. x: {} - expected: {}".format(normed_x,expected_x)
-    assert (np.sum(normed_x)== 1, "Regular normalization. sum(x): {} - expected: {}".format(np.sum(normed_x),1))
+    assert np.sum(normed_x)== 1, "Regular normalization. sum(x): {} - expected: {}".format(np.sum(normed_x),1)
 
     # List normalization
     x=[1,2,3]
     expected_x=np.array([1/6,2/6,3/6])
     normed_x=processor.norm(x,min_zero=False)
     assert (normed_x==expected_x).all(), "Regular normalization. x: {} - expected: {}".format(normed_x,expected_x)
-    assert (np.sum(normed_x)== 1, "Regular normalization. sum(x): {} - expected: {}".format(np.sum(normed_x),1))
+    assert np.sum(normed_x)== 1, "Regular normalization. sum(x): {} - expected: {}".format(np.sum(normed_x),1)
 
 
     # Delete Minimum normalization
@@ -37,7 +37,7 @@ def test_norm( processor):
     expected_x=np.array([0,1,0,0])
     normed_x=processor.norm(x,min_zero=True)
     assert (normed_x==expected_x).all(), "Regular normalization. x: {} - expected: {}".format(normed_x,expected_x)
-    assert (np.sum(normed_x)== 1, "Regular normalization. sum(x): {} - expected: {}".format(np.sum(normed_x),1))
+    assert np.sum(normed_x)== 1, "Regular normalization. sum(x): {} - expected: {}".format(np.sum(normed_x),1)
 
 def test_calculate_cutoffs( processor):
 
