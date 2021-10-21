@@ -151,7 +151,8 @@ class nw_processor():
         """
         if split_hierarchy is not None:
             self.split_hierarchy = split_hierarchy
-        assert self.split_hierarchy is not None
+        if self.split_hierarchy is None:
+            raise AssertionError
 
         self.uniques = get_uniques(self.split_hierarchy, self.text_db)
 

@@ -106,7 +106,8 @@ def yearly_proximities(snw, year_list: Union[list, int], focal_tokens: Optional[
     """
 
     cent_year = {}
-    assert isinstance(year_list, list), "Please provide list of years."
+    if not isinstance(year_list, list):
+        raise AssertionError("Please provide list of years.")
 
     if not isinstance(focal_tokens, list):
         focal_tokens = [focal_tokens]

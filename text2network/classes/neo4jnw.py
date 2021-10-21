@@ -891,8 +891,9 @@ class neo4j_network(Sequence):
             self.db.write_queue()
         # Are time formats submitted? Handle those and check inputs
         if isinstance(i, tuple):
-            assert len(
-                i) == 2, "Please format a call as (<tokens>,<time>) or (<tokens>,{'start:'<time>, 'end':<time>})"
+            if len(
+                i) != 2:
+                raise AssertionError("Please format a call as (<tokens>,<time>) or (<tokens>,{'start:'<time>, 'end':<time>})")
             # if not isinstance(i[1], dict):
             #    assert isinstance(
             #        i[1], int), "Please timestamp as <time>, or {'start:'<time>, 'end':<time>}"
@@ -1446,7 +1447,8 @@ class neo4j_network(Sequence):
     def get_token_from_id(self, id):
         """Token of id in data structures used"""
         # id should be int
-        assert np.issubdtype(type(id), np.integer)
+        if not np.issubdtype(type(id), np.integer):
+            raise AssertionError
         try:
             token = self.token_id_dict[id]
         except:
@@ -1462,7 +1464,8 @@ class neo4j_network(Sequence):
     def get_id_from_token(self, token):
         """Id of token in data structures used"""
         # Token has to be string
-        assert isinstance(token, str)
+        if not isinstance(token, str):
+            raise AssertionError
         try:
             id = int(self.token_id_dict[token])
         except:
