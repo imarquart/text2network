@@ -2,8 +2,6 @@ import pytest
 
 import os
 
-import pytest
-
 from text2network.classes.neo4jnw import neo4j_network
 from text2network.utils.file_helpers import check_create_folder
 from text2network.preprocessing.nw_preprocessor import nw_preprocessor
