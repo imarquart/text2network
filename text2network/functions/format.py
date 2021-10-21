@@ -43,7 +43,7 @@ def pd_format(format_list: Union[List, Dict])->List:
                     # but convention dictates that rows=outgoing ties
                     output=output.transpose()
                     result_list.append(output)
-                elif ftype =="centrality" or ftype=="dyad_context":
+                elif ftype in ("centrality", "dyad_context"):
                     proxdict=fdict[ftype]
                     output=pd.DataFrame(proxdict)
                     output=output.fillna(0)

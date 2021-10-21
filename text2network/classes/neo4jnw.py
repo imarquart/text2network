@@ -1336,7 +1336,7 @@ class neo4j_network(Sequence):
 
         # Add non "None" or False tuples
         for key, item in tuple_list:
-            if item != None and item != False:
+            if item not in (None, False):
                 cond_dict.update({key: item})
 
         return cond_dict
