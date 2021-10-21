@@ -61,5 +61,5 @@ def extract_yearly_networks(snw:neo4j_network, folder:str, symmetric: Optional[b
         snw.graph.remove_nodes_from(prune_list)
         snw.export_gefx(path=folder)
 
-    edge_list=pd.DataFrame()
-    return edge_list
+    #edge_list=pd.DataFrame()
+    #return edge_list
