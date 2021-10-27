@@ -148,6 +148,8 @@ def compute_centrality(nw_graph, measure, focal_nodes=None):
         centralities = nx.clustering(nw_graph, nodes=focal_nodes, weight=None)
     elif measure=="weighted_local_clustering":
         centralities = nx.clustering(nw_graph, nodes=focal_nodes, weight="weight")
+    elif (measure=="frequency" or measure=="freq" or measure=="frequencies"):
+        centralities = nx.get_node_attributes(nw_graph, "freq")
     else:
         raise AttributeError(
             "Centrality measure {} not found in list".format(measure))

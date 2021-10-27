@@ -280,47 +280,63 @@ class neo4j_network(Sequence):
                   weight_cutoff: Optional[float] = None, depth: Optional[int] = None,
                   context: Optional[Union[int, str, list]] = None, compositional: Optional[bool] = False,
                   reverse: Optional[bool] = False,
+                  max_degree: Optional[int] = None, prune_min_frequency:Optional[int]=None, keep_only_tokens:Optional[bool]=False,
                   batchsize: Optional[int] = None, cond_type: Optional[str] = None,
-                  post_cutoff: Optional[float] = None, post_norm: Optional[bool] = False,
-                  max_degree: Optional[int] = None):
+                  post_cutoff: Optional[float] = None, post_norm: Optional[bool] = False):
         """
 
         Condition the network: Pull ties from database and aggregate according to given parameters.
 
         Parameters
         ----------
+
         times: int or list, optional
             Times (Years) to condition on
+
         tokens: int, str or list, optional
             tokens or token_ids.
             If given, ego networks of these tokens will be derived.
+
         weight_cutoff: float, optinal
             Occurrence-level ties below this cutoff value are discarded (in the query)
+
         depth: int, optional
             The depth of the ego networks to consider.
+
         context: int, str or list, optional
             tokens or token_ids.
             If given, only ties that occur within a sentence including these tokens are considered
+
         compositional: bool, optional
             Whether to condition as compositional ties, or aggregate ties
+
         max_degree: int, optional
             For each node that is conditioned upon, retain only 'max_degree' largest ties. Can significantly speed up conditioning!
             This sparsifies the network for tokens that have many neighbors and is appropriate if these
             ties are highly skewed. On the other hand, for non-skewed weight distributions, it would
             likely cut significant ties without account for the amount of probability mass preserved. Use with care!
 
+        prune_min_frequency : int, optional
+            Will remove nodes entirely which occur less than  prune_min_frequency+1 times
+
+        keep_only_tokens : bool, optional
+            If True, the network will only include tokens provided in "tokens" and their ties (according to depth).
+
         Technical Parameters
         ----------
 
         batchsize: int, optional
             If given, queries of this size are sent to the database.
+
         cond_type: str, optional
             Manually set how the queries are sent. If not set, heuristically determined.
                 "subset": queries the entire network into memory and uses network x to find the ego networks
                 "search": queries the ego networks in a "beam search" fashion. Slower for high depths.
+
         post_cutoff: float, optional
             If set, network edges will be pruned by edges smaller than the given value.
             Note that this does not affect the conditioning itself
+
         post_norm: bool, optional
             If true, network will be normed after post_cutoff is applied.
             Network is normed such that the in-degree of each node is 1.
@@ -338,6 +354,19 @@ class neo4j_network(Sequence):
         input_check(tokens=tokens)
         input_check(tokens=context)
         input_check(years=times)
+        tokens=self.ensure_ids(tokens)
+        context = self.ensure_ids(context)
+
+        if isinstance(tokens, (list, np.ndarray)):
+            nr_tokens=len(tokens)
+        elif tokens is not None:
+            nr_tokens=1
+        else:
+            nr_tokens=0
+
+        if keep_only_tokens and (depth is None or depth >0):
+            logging.warning("Only focal tokens are to be kept, but depth is more than zero. This is not necessary. For performance reasons, depth is reduced to 0")
+            depth=0
 
         # Create Conditioning Dict to keep track of state and create filename
         cond_dict_list = [('type', "replacement"),
@@ -357,7 +386,7 @@ class neo4j_network(Sequence):
             else:
                 checkdepth = depth
             if cond_type is None:
-                if checkdepth <= 2 and len(tokens) <= 5:
+                if checkdepth <= 2 and nr_tokens <= 5:
                     cond_type = "search"
                 elif checkdepth == 0:  # just need proximities
                     cond_type = "search"
@@ -378,6 +407,12 @@ class neo4j_network(Sequence):
                 logging.debug(msg)
                 raise NotImplementedError(msg)
         self.__cut_and_norm(post_cutoff, post_norm)
+        self.__prune_by_frequency(prune_min_frequency, times=times, context=context)
+        if keep_only_tokens:
+            self.__prune_by_tokens(tokens)
+
+        # Set conditioning true
+        self.__complete_conditioning()
 
         if compositional:
             self.to_compositional(times=times, context=context)
@@ -623,19 +658,8 @@ class neo4j_network(Sequence):
 
         input_check(years=times)
 
-        # Get nodes in network
-        node_list = list(self.graph.nodes)
-        ids = self.ensure_ids(node_list)
+        self.__add_frequencies(times=times,context=context)
 
-        # Set default frequency
-        nx.set_node_attributes(self.graph, values=0, name="freq")
-
-        # Just in case, translate between node labels in graph and ids
-        node_id_dict = {x[0]: x[1] for x in zip(node_list, ids)}
-        # Attribute dict
-        ret = {node_id_dict[x[0]]: {'freq': x[1]} for x in
-               self.db.query_occurrences(ids=ids, times=times, context=context)}
-        nx.set_node_attributes(self.graph, ret)
 
     def to_compositional(self, times: Union[list, int] = None, context: Union[list, str] = None):
         """
@@ -856,11 +880,19 @@ class neo4j_network(Sequence):
         Parameters
         ----------
         technique : string, optional
+
             transpose: Transpose and average adjacency matrix. Note: Loses other edge parameters!
+
             min-sym: Retain minimum direction, no tie if zero OR directed.
+
             max-sym: Retain maximum direction; tie exists even if directed.
-            avg-sym: Average ties. 
+
+            avg-sym: Average ties.
+
             min-sym-avg: Average ties if link is bidirectional, otherwise no tie.
+
+            sum: sum
+
             The default is "avg-sym".
 
         Returns
@@ -940,6 +972,7 @@ class neo4j_network(Sequence):
             # Build graph
             self.graph = self.create_empty_graph()
 
+            # TODO Make sure ids are okay here
             # All tokens
             worklist = self.ids
             # Add all tokens to graph
@@ -967,8 +1000,6 @@ class neo4j_network(Sequence):
             att_dict = dict(list(zip(all_ids, att_list)))
             nx.set_node_attributes(self.graph, att_dict)
 
-            # Set conditioning true
-            self.__complete_conditioning()
 
         else:  # Remove conditioning and recondition
             self.decondition()
@@ -990,15 +1021,20 @@ class neo4j_network(Sequence):
         if depth is not None:
             # Create ego graph for each node
             graph_list = []
+            if isinstance(token_ids, (list, np.ndarray)):
+                for focal_token in token_ids:
+                    temp_graph = nx.generators.ego.ego_graph(self.graph, self.ensure_ids(focal_token), radius=depth, center=True,
+                                                             undirected=False)
+                    graph_list.append(temp_graph)
+                # Compose ego graphs
+                self.graph = compose_all(graph_list)
+            else:
+                self.graph = nx.generators.ego.ego_graph(self.graph, self.ensure_ids(token_ids), radius=depth,
+                                                         center=True, undirected=False)
 
-            for focal_token in token_ids:
-                temp_graph = nx.generators.ego.ego_graph(self.graph, focal_token, radius=depth, center=True,
-                                                         undirected=False)
-                graph_list.append(temp_graph)
-            # Compose ego graphs
-            self.graph = compose_all(graph_list)
-        # Set conditioning true
-        self.__complete_conditioning(copy_ids=False)
+
+
+
 
     def __ego_condition_search(self, years, token_ids, weight_cutoff=None, depth=None, context=None,
                                batchsize=None, query_mode="old", max_degree: Optional[int] = None):
@@ -1018,10 +1054,11 @@ class neo4j_network(Sequence):
             # ids to check
             ids_to_check = token_ids
             logging.debug(
-                "Start of Depth {} conditioning: {} tokens".format(or_depth, len(ids_to_check)))
+                "Start of Depth {} conditioning".format(or_depth))
             while depth > 0:
                 if not isinstance(ids_to_check, (list, np.ndarray)):
                     ids_to_check = [ids_to_check]
+
                 # Work from ID list, give error if tokens are not in database
                 ids_to_check = self.ensure_ids(ids_to_check)
                 # Do not consider already added tokens
@@ -1080,12 +1117,13 @@ class neo4j_network(Sequence):
 
             # Create ego graph for each node and compose
             if or_depth > 0:
-                self.graph = compose_all([nx.generators.ego.ego_graph(self.graph, x, radius=or_depth, center=True,
-                                                                      undirected=False) for x in token_ids if
-                                          x in self.graph.nodes])
-
-            # Set conditioning true
-            self.__complete_conditioning()
+                if isinstance(token_ids, (list, np.ndarray)):
+                    self.graph = compose_all([nx.generators.ego.ego_graph(self.graph, x, radius=or_depth, center=True,
+                                                                          undirected=False) for x in self.ensure_ids(token_ids) if
+                                              x in self.graph.nodes])
+                else:
+                    self.graph = nx.generators.ego.ego_graph(self.graph, self.ensure_ids(token_ids), radius=or_depth, center=True,
+                                                                          undirected=False)
 
         else:  # Remove conditioning and recondition
             # TODO: "Allow for conditioning on conditioning"
@@ -1364,6 +1402,41 @@ class neo4j_network(Sequence):
         logging.error(msg)
         raise RuntimeError(msg)
 
+    def __prune_by_tokens(self, tokens):
+        if not isinstance(tokens, list):
+            tokens=[tokens]
+
+        prune_list = [x for x in self.graph.nodes if x not in tokens]
+        logging.info("Found {} nodes not in focal list, pruning".format(len(prune_list)))
+        self.graph.remove_nodes_from(prune_list)
+
+    def __prune_by_frequency(self, prune_min_frequency=None, times=None, context=None):
+
+        if prune_min_frequency is not None:
+            self.__add_frequencies(times=times, context=context)
+
+            # Prune frequencies
+            prune_list = [x for x in self.graph.nodes if self.graph.nodes[x]['freq'] < prune_min_frequency+1]
+            logging.info("'Graph has {} nodes. Found {} nodes with frequency {} or less, pruning".format(len(self.graph.nodes),len(prune_list), prune_min_frequency))
+            self.graph.remove_nodes_from(prune_list)
+
+
+    def __add_frequencies(self, times=None, context=None):
+
+        # Get nodes in network
+        node_list = list(self.graph.nodes)
+        ids = self.ensure_ids(node_list)
+
+        # Set default frequency
+        nx.set_node_attributes(self.graph, values=0, name="freq")
+
+        # Just in case, translate between node labels in graph and ids
+        node_id_dict = {x[0]: x[1] for x in zip(node_list, ids)}
+        # Attribute dict
+        ret = {node_id_dict[x[0]]: {'freq': x[1]} for x in
+               self.db.query_occurrences(ids=ids, times=times, context=context)}
+        nx.set_node_attributes(self.graph, ret)
+
     def __cut_and_norm(self, cutoff: Optional[float] = None, norm: Optional[bool] = False):
 
         if cutoff is not None:
@@ -1439,17 +1512,20 @@ class neo4j_network(Sequence):
 
     def ensure_ids(self, tokens):
         """This is just to confirm mixed lists of tokens and ids get converted to ids"""
-        if isinstance(tokens, (list, tuple, np.ndarray)):
-            # Transform strings to corresponding IDs
-            tokens = [self.get_id_from_token(x) if not np.issubdtype(
-                type(x), np.integer) else x for x in tokens]
-            # Make sure np arrays get transformed to int lists
-            return [int(x) if not isinstance(x, int) else x for x in tokens]
-        else:
-            if not np.issubdtype(type(tokens), np.integer):
-                return self.get_id_from_token(tokens)
+        if tokens is not None:
+            if isinstance(tokens, (list, tuple, np.ndarray)):
+                # Transform strings to corresponding IDs
+                tokens = [self.get_id_from_token(x) if not np.issubdtype(
+                    type(x), np.integer) else x for x in tokens]
+                # Make sure np arrays get transformed to int lists
+                return [int(x) if not isinstance(x, int) else x for x in tokens]
             else:
-                return int(tokens)
+                if not np.issubdtype(type(tokens), np.integer):
+                    return self.get_id_from_token(tokens)
+                else:
+                    return int(tokens)
+        else:
+            return tokens
 
     def ensure_tokens(self, ids):
         """This is just to confirm mixed lists of tokens and ids get converted to ids"""
@@ -1503,6 +1579,47 @@ class neo4j_network(Sequence):
 
             except:
                 raise SystemError("Could not save to %s " % path)
+
+
+
+    def export_edgelist(self, filename=None, path=None, delete_isolates=True):
+        if self.conditioned:
+            if filename is None:
+                filename = self.filename + ".csv"
+            if path is None:
+                path = filename
+            else:
+                path = path + "/" + filename
+                path = check_create_folder(path)
+            try:
+
+                # Relabel nodes
+                labeldict = dict(
+                    zip(self.ids, [self.get_token_from_id(x) for x in self.ids]))
+                reverse_dict = dict(
+                    zip([self.get_token_from_id(x) for x in self.ids], self.ids))
+
+                cleaned_graph = self.graph.copy()
+                cleaned_graph = nx.relabel_nodes(cleaned_graph, labeldict)
+                # need to put strings on edges for gefx to write (not sure why)
+                # confirm that edge attributes are int
+                for n1, n2, d in cleaned_graph.edges(data=True):
+                    for att in ['time', 'start', 'end']:
+                        d[att] = int(d[att])
+                for n, d in cleaned_graph.nodes(data=True):
+                    for att in ['freq']:
+                        if att in d:
+                            d[att] = int(d[att])
+                if delete_isolates:
+                    isolates = list(nx.isolates(self.graph))
+                    logging.debug(
+                        "Found {} isolated nodes in graph, deleting.".format(len(isolates)))
+                    cleaned_graph.remove_nodes_from(isolates)
+                nx.write_edgelist(cleaned_graph, path, delimiter=",", data=True)
+            except:
+                raise SystemError("Could not save to %s " % path)
+
+
 
     # %% Graph Database Aliases
     def setup_neo_db(self, tokens, token_ids):

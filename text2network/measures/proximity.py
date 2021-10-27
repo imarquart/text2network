@@ -61,7 +61,8 @@ def yearly_proximities(snw, year_list: Union[list, int], focal_tokens: Optional[
                        context: Optional[Union[list, str]] = None, weight_cutoff: Optional[float] = None,
                        moving_average: Optional[tuple] = None,symmetric:Optional[bool]=False,
                         compositional:Optional[bool]=False,
-                        reverse:Optional[bool]=False, normalization: Optional[str] = None):
+                        reverse:Optional[bool]=False, normalization: Optional[str] = None,
+                       symmetric_method:Optional[str]=None, prune_min_frequency: Optional[int] = None):
     """
     Compute directly year-by-year centralities for provided list.
 
@@ -69,41 +70,62 @@ def yearly_proximities(snw, year_list: Union[list, int], focal_tokens: Optional[
 
     Parameters
     ----------
+
     snw : semantic network
+
     year_list : list
         List of years for which to calculate centrality.
+
     focal_tokens : list, str
         List of tokens of interest. If not provided, proximities for all tokens will be returned.
+
     alter_subset: list, optional
         List of alters to return proximities for. Others are discarded.
+
     context : list, optional - used when conditioning
         List of tokens that need to appear in the context distribution of a tie. The default is None.
+
     weight_cutoff : float, optional - used when conditioning
         Only links of higher weight are considered in conditioning.. The default is None.
+
     moving_average: tuple
         Pass as (a,b), where for a focal year x the conditioning window will be
         [x-a,x+b]
+
     normalization: optional, str
         Given that each point in time has differently many sequences, we can norm either:
         -> "sequences" - divide each tie weight by #sequences/1000 in the given year
         -> "occurrences" - divide each tie weight by the total #occurrences/1000 in the given year
         Note that this differs from compositional mode, where each norm is individual to each token/year
+
     max_degree: int
         When conditioning, extract at most the top max_degree ties for any token in terms of weight
+
+    prune_min_frequency : int, optional
+    Will remove nodes entirely which occur less than  prune_min_frequency+1 times
+
     symmetric: bool, optional
         Transform directed network to undirected network
         use symmetric_method to specify how. See semantic_network.to_symmetric
+
     compositional: bool, optional
         Use compositional ties. See semantic_network.to_compositional
+
     reverse: bool, optional
         Reverse ties. See semantic_network.to_reverse()
 
     Returns
     -------
+
     dict
         Dict of years with dict of proxmities for focal tokens.
 
     """
+
+    if symmetric or reverse:
+        depth=1
+    else:
+        depth=0
 
     cent_year = {}
     if not isinstance(year_list, list):
@@ -130,8 +152,8 @@ def yearly_proximities(snw, year_list: Union[list, int], focal_tokens: Optional[
         else:
             ma_years = year
 
-        snw.condition(tokens=focal_tokens, times=ma_years, depth=0, context=context, weight_cutoff=weight_cutoff,
-                      max_degree=max_degree)
+        snw.condition(tokens=focal_tokens, times=ma_years, depth=depth, context=context, weight_cutoff=weight_cutoff,
+                      max_degree=max_degree,prune_min_frequency=prune_min_frequency)
         if normalization=="sequences":
             snw.norm_by_total_nr_sequences(times=ma_years)
         elif normalization=="occurrences":
@@ -145,7 +167,7 @@ def yearly_proximities(snw, year_list: Union[list, int], focal_tokens: Optional[
         if compositional:
             snw.to_compositional()
         if symmetric:
-            snw.to_symmetric()
+            snw.to_symmetric(technique=symmetric_method)
         logging.debug("Computing proximities for year {}".format(year))
         proximity_dict = {}
         # Get proximities from conditioned network

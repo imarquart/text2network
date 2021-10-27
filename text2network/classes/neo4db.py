@@ -705,9 +705,11 @@ class neo4j_database():
             if context is not None:
                 c_where_query = ''.join([c_where_query, " AND  q.time in $times "])
 
+        #return_query = ''.join([
+        #    "RETURN a.token_id AS idx, sum(r.weight) as occurrences order by idx"])
+        # WARNING I changed to round here
         return_query = ''.join([
-            "RETURN a.token_id AS idx, sum(r.weight) as occurrences order by idx"])
-
+            "RETURN a.token_id AS idx, round(sum(r.weight)) as occurrences order by idx"])
         if context is not None:
             c_with = "WITH DISTINCT q.run_index as ridx "
         else:
