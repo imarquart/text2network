@@ -662,7 +662,7 @@ class neo4j_database():
         :param weight_cutoff: float in 0,1
         :return: list of tuples (u,occurrences)
         """
-        logging.debug("Querying {} node occurrences for normalization".format(len(ids)))
+        logging.debug("Querying {} node occurrences".format(len(ids)))
 
         # Optimization for time
         if isinstance(times, list):

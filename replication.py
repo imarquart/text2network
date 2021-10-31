@@ -1,7 +1,11 @@
-import pandas as pd
 import logging
 
 from scipy.spatial.distance import squareform, pdist
+import numpy as np
+import pandas as pd
+
+from matplotlib import pyplot as plt
+from scipy.cluster.hierarchy import dendrogram, linkage, fcluster
 
 from text2network.classes.neo4jnw import neo4j_network
 from text2network.measures.centrality import yearly_centralities
@@ -11,6 +15,50 @@ from text2network.measures.proximity import yearly_proximities
 from text2network.utils.file_helpers import check_create_folder
 from text2network.utils.logging_helpers import setup_logger
 
+def get_prefix( symmetric=False, compositional=False, reverse=False,):
+
+    prefix = ""
+    if symmetric:
+        prefix=prefix+"sym_"
+    else:
+        prefix=prefix+"fw_"
+    if compositional:
+        prefix=prefix+"comp_"
+    if reverse:
+        prefix=prefix+"rev_"
+
+    return prefix
+
+def fancy_dendrogram(filename, *args, title=None, **kwargs):
+    """modified from joernhees.de"""
+    max_d = kwargs.pop('max_d', None)
+    if max_d and 'color_threshold' not in kwargs:
+        kwargs['color_threshold'] = max_d
+    annotate_above = kwargs.pop('annotate_above', 0)
+
+    ddata = dendrogram(*args, **kwargs)
+
+    if not kwargs.get('no_plot', False):
+        if title is None:
+            plt.title('Hierarchical Clustering Dendrogram (truncated)')
+        else:
+            plt.title(title)
+        plt.ylabel('distance')
+        for i, d, c in zip(ddata['icoord'], ddata['dcoord'], ddata['color_list']):
+            x = 0.5 * sum(i[1:3])
+            y = d[1]
+            if y > annotate_above:
+                plt.plot(x, y, 'o', c=c)
+                plt.annotate("%.3g" % y, (x, y), xytext=(0, -5),
+                             textcoords='offset points',
+                             va='top', ha='center')
+        if max_d:
+            plt.axhline(y=max_d, c='k')
+        plt.savefig(filename, dpi=150)
+        plt.show()
+        plt.close()
+    return ddata
+
 def get_top_100(semantic_network,years, symmetric=False, compositional=False, reverse=False,):
     if symmetric or reverse:
         depth = 1
@@ -19,7 +67,7 @@ def get_top_100(semantic_network,years, symmetric=False, compositional=False, re
 
     logging.info("Extracting Top 100 Tokens")
 
-    semantic_network.condition(tokens=focal_token, times=years, depth=depth, prune_min_frequency=prune_min_frequency)
+    semantic_network.condition(tokens=focal_token, times=years, depth=depth, prune_min_frequency=prune_min_frequency, max_degree=150)
     # semantic_network.norm_by_total_nr_occurrences(times=years)
     if compositional:
         semantic_network.to_compositional()
@@ -38,13 +86,7 @@ def get_top_100(semantic_network,years, symmetric=False, compositional=False, re
 
 def replicate(semantic_network,csv_folder,years, symmetric=False, compositional=False, reverse=False):
 
-    prefix = ""
-    if symmetric:
-        prefix=prefix+"sym_"
-    if compositional:
-        prefix=prefix+"comp_"
-    if reverse:
-        prefix=prefix+"rev_"
+    prefix= get_prefix( symmetric=symmetric,compositional=compositional,reverse=reverse)
 
     # Create Top 100 List
     #######################
@@ -60,16 +102,16 @@ def replicate(semantic_network,csv_folder,years, symmetric=False, compositional=
 
     # Yearly proximities (normed by # of yearly sequences)
     #######################
-    logging.info("{}: Creating Yearly proximities (normed)".format(prefix))
-    cent = yearly_proximities(semantic_network, alter_subset=alter_subset, year_list=years, focal_tokens=focal_token,
-                              max_degree=100, normalization="sequences", compositional=compositional, reverse=reverse, symmetric=symmetric,
-                              symmetric_method="sum", prune_min_frequency=prune_min_frequency)
-    cent = semantic_network.pd_format(cent)[0]
-    filename = "/" + str(prefix)+"normed_proximities_" + str(focal_token) + ".xlsx"
-    ffolder = check_create_folder(proximitiy_folder + filename)
-    dyn_table = cent.reset_index(drop=False)
-    dyn_table.columns = ["year", "token", "str_eq"]
-    dyn_table.to_excel(ffolder, merge_cells=False)
+    #logging.info("{}: Creating Yearly proximities (normed)".format(prefix))
+    #cent = yearly_proximities(semantic_network, alter_subset=alter_subset, year_list=years, focal_tokens=focal_token,
+    #                          max_degree=100, normalization="sequences", compositional=compositional, reverse=reverse, symmetric=symmetric,
+    #                          symmetric_method="sum", prune_min_frequency=prune_min_frequency)
+    #cent = semantic_network.pd_format(cent)[0]
+    #filename = "/" + str(prefix)+"normed_proximities_" + str(focal_token) + ".xlsx"
+    #ffolder = check_create_folder(proximitiy_folder + filename)
+    #dyn_table = cent.reset_index(drop=False)
+    #dyn_table.columns = ["year", "token", "str_eq"]
+    #dyn_table.to_excel(ffolder, merge_cells=False)
 
     # Yearly proximities (not normed)
     #######################
@@ -150,17 +192,14 @@ def replicate(semantic_network,csv_folder,years, symmetric=False, compositional=
     ffolder = check_create_folder(centrality_folder + filename)
     cent.to_excel(ffolder, merge_cells=False)
 
+
+
 def get_networks(semantic_network, csv_folder, years, symmetric=False, compositional=False, reverse=False,
                   extract_yearly=True):
 
 
-    prefix = ""
-    if symmetric:
-        prefix=prefix+"sym_"
-    if compositional:
-        prefix=prefix+"comp_"
-    if reverse:
-        prefix=prefix+"rev_"
+    prefix= get_prefix( symmetric=symmetric,compositional=compositional,reverse=reverse)
+
 
 
     # Extract yearly ego networks
@@ -183,28 +222,50 @@ def get_networks(semantic_network, csv_folder, years, symmetric=False, compositi
                                 prune_min_frequency=prune_min_frequency)
 
 
-def get_year_clusters(semantic_network, csv_folder, years, symmetric=False, compositional=False, reverse=False,
-                  extract_yearly=True):
+def get_year_clusters(semantic_network, csv_folder, years, symmetric=False, compositional=False, reverse=False):
 
-    prefix = ""
-    if symmetric:
-        prefix=prefix+"sym_"
-    if compositional:
-        prefix=prefix+"comp_"
-    if reverse:
-        prefix=prefix+"rev_"
+    prefix= get_prefix( symmetric=symmetric,compositional=compositional,reverse=reverse)
 
     logging.info("{}: Extracting Yearly Cosine Similarities".format(prefix))
 
     cent=get_top_100(semantic_network=semantic_network,years=years,symmetric=symmetric,compositional=compositional,reverse=reverse)
-    top100 = list(cent.manager[0:100].index)
+    top100 = list(cent.manager[0:100].index)+[focal_token]
     filename = check_create_folder(csv_folder + "/yoy_clusters/" + str(prefix)+ "cosine_matrix.xlsx")
 
-    cosine_similarities = extract_temporal_cosine_similarity(snw=semantic_network, tokens=top100,symmetric=symmetric, compositional=compositional, reverse=reverse,
+    cosine_similarities = extract_temporal_cosine_similarity(snw=semantic_network, times=years,tokens=top100,symmetric=symmetric, compositional=compositional, reverse=reverse,
                                        symmetric_method="sum", prune_min_frequency=prune_min_frequency, filename=filename)
 
     matrix=cosine_similarities.to_numpy()
     eucl_distances = squareform(pdist(matrix, metric='euclidean'))
+    cosine_dist=1-matrix
+    running_eucl_dist = squareform(pdist(np.triu(matrix), metric='euclidean'))
+
+    linkfun_list=["complete","single","ward"]
+    matrix_list={"eucl_distance":eucl_distances, "cosine_distance": cosine_dist, "running_eucl_distance": running_eucl_dist}
+    df_list=[]
+    for mname in matrix_list:
+
+        dist_matrix= matrix_list[mname]
+        for linkfun in linkfun_list:
+            filename = check_create_folder(csv_folder + "/yoy_clusters/" + str(prefix)+ "dendogram_"+str(linkfun)+"_"+str(mname)+".pdf")
+            condensed_dist_matrix = squareform(dist_matrix)
+            Z = linkage(condensed_dist_matrix, linkfun)
+            asdf=fancy_dendrogram(filename=filename, Z=Z,    leaf_rotation=90.,
+            leaf_font_size=8., title=mname+"_"+linkfun,
+            show_contracted=False,
+            annotate_above=10,labels=np.array(cosine_similarities.columns))
+            cluster_array=fcluster(Z, 3, criterion='maxclust')
+            df=pd.DataFrame(cluster_array,index=cosine_similarities.index, columns=[mname+"_"+linkfun])
+            df_list.append(df)
+            for clid in np.unique(cluster_array):
+                years=np.where(cluster_array==clid)[0]
+                years=np.array(cosine_similarities.columns)[years]
+                logging.info(str(linkfun)+"_"+str(mname)+" cluster {}, Years: {}".format(clid, years))
+            del Z
+    filename = check_create_folder(
+        csv_folder + "/yoy_clusters/" + str(prefix) + "years_k3.xlsx")
+    df=pd.concat(df_list, axis=1)
+    df.to_excel(filename)
 
 # Set a configuration path
 configuration_path = 'config/analyses/replicationHBR40.ini'
@@ -231,9 +292,16 @@ semantic_network = neo4j_network(config)
 
 csv_folder = check_create_folder(config['Paths']['csv_outputs'])
 
+
+get_year_clusters(semantic_network=semantic_network, csv_folder=csv_folder, years=years, symmetric=False, compositional=False, reverse=False)
+get_year_clusters(semantic_network=semantic_network, csv_folder=csv_folder, years=years, symmetric=True, compositional=False, reverse=False)
+
+
+replicate(semantic_network=semantic_network, csv_folder=csv_folder, years=years, symmetric=True, compositional=False, reverse=False)
+replicate(semantic_network=semantic_network, csv_folder=csv_folder, years=years, symmetric=False, compositional=False, reverse=False)
+
+
 get_networks(semantic_network=semantic_network, csv_folder=csv_folder, years=years, symmetric=False, compositional=False, reverse=False)
 get_networks(semantic_network=semantic_network, csv_folder=csv_folder, years=years, symmetric=True, compositional=False, reverse=False)
 
 
-replicate(semantic_network=semantic_network, csv_folder=csv_folder, years=years, symmetric=False, compositional=False, reverse=False)
-replicate(semantic_network=semantic_network, csv_folder=csv_folder, years=years, symmetric=True, compositional=False, reverse=False)

@@ -73,7 +73,7 @@ def extract_temporal_cosine_similarity(snw: neo4j_network, tokens: Union[list, s
                 msg = "Mismatch of column/row order of adjacency matrix returned!"
                 logging.error()
                 raise np.AxisError()
-            prior_tokens = current_tokens
+        prior_tokens = current_tokens
 
     matrix = np.stack(row_list)
     cosine_similarities = 1 - squareform(pdist(matrix, metric='cosine'))
@@ -141,7 +141,7 @@ def extract_temporal_adjacency_matrices(snw: neo4j_network, tokens: Union[list, 
         pbar.desc = "Extracting year: {}".format(year)
         snw.decondition()
         snw.condition(tokens=tokens, keep_only_tokens=True, times=year, batchsize=5000,
-                      prune_min_frequency=prune_min_frequency)
+                      prune_min_frequency=None)
 
         if reverse:
             snw.to_reverse()
@@ -149,10 +149,13 @@ def extract_temporal_adjacency_matrices(snw: neo4j_network, tokens: Union[list, 
             snw.to_compositional(times=year)
         if symmetric:
             snw.to_symmetric(technique=symmetric_method)
-        # extract
+
+
+        # Not all tokens will be in the network due to pruning
+        tokens=np.array(tokens)[np.in1d(tokens, snw.ensure_tokens(list(snw.graph.nodes)))].tolist()
 
         mat = nx.to_pandas_adjacency(snw.graph, nodelist=snw.ensure_ids(tokens))
-        rows = snw.ensure_tokens(mat.columns)
+        rows = snw.ensure_tokens(list(mat.columns))
         mat.columns = rows
         mat = mat.set_axis(rows, axis='index')
         mat_dict[year] = mat.copy()

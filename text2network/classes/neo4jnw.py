@@ -365,8 +365,10 @@ class neo4j_network(Sequence):
             nr_tokens=0
 
         if keep_only_tokens and (depth is None or depth >0):
-            logging.warning("Only focal tokens are to be kept, but depth is more than zero. This is not necessary. For performance reasons, depth is reduced to 0")
             depth=0
+            if depth > 0:
+                logging.warning(
+                    "Only focal tokens are to be kept, but depth is more than zero. This is not necessary. For performance reasons, depth is reduced to 0")
 
         # Create Conditioning Dict to keep track of state and create filename
         cond_dict_list = [('type', "replacement"),
@@ -406,10 +408,11 @@ class neo4j_network(Sequence):
                 msg = "Conditioning type {} requested. Please use either search or subset.".format(cond_type)
                 logging.debug(msg)
                 raise NotImplementedError(msg)
-        self.__cut_and_norm(post_cutoff, post_norm)
-        self.__prune_by_frequency(prune_min_frequency, times=times, context=context)
         if keep_only_tokens:
             self.__prune_by_tokens(tokens)
+        self.__cut_and_norm(post_cutoff, post_norm)
+        self.__prune_by_frequency(prune_min_frequency, times=times, context=context)
+
 
         # Set conditioning true
         self.__complete_conditioning()

@@ -134,6 +134,13 @@ def yearly_proximities(snw, year_list: Union[list, int], focal_tokens: Optional[
     if not isinstance(focal_tokens, list):
         focal_tokens = [focal_tokens]
 
+    orig_focal_tokens = focal_tokens.copy()
+    if alter_subset is not None:
+        # Add alter subset to focal tokens
+        focal_tokens = focal_tokens+alter_subset
+        # Set depth=0 to only get this network
+        depth=0
+
     for year in year_list:
         snw.decondition()
         logging.info("Conditioning network on year {} with {} focal tokens".format(year, len(focal_tokens)))
@@ -171,7 +178,7 @@ def yearly_proximities(snw, year_list: Union[list, int], focal_tokens: Optional[
         logging.debug("Computing proximities for year {}".format(year))
         proximity_dict = {}
         # Get proximities from conditioned network
-        tie_dict = snw.proximities(focal_tokens=focal_tokens, alter_subset=alter_subset)
+        tie_dict = snw.proximities(focal_tokens=orig_focal_tokens, alter_subset=alter_subset)
         logging.info(
             "Identified {} proximate tokens for year {}".format(len(list(tie_dict['proximity'].values())[0]), year))
         cent_year.update({year: tie_dict})
