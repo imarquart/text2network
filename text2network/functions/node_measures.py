@@ -56,39 +56,6 @@ def proximity(nw_graph, focal_tokens=None, alter_subset=None):
 
     return {"proximity":proximity_dict}
 
-
-def yearly_centrality(nw_graph, year_list, focal_tokens=None,  types=None):
-    """
-    Compute directly year-by-year centralities for provided list.
-
-    Parameters
-    ----------
-    nw_graph
-    year_list : list
-        List of years for which to calculate centrality.
-    focal_tokens : list, str
-        List of tokens of interest. If not provided, centralities for all tokens will be returned.
-    types : list, optional
-        ypes of centrality to calculate. The default is ["PageRank"].
-    Returns
-    -------
-    dict
-        Dict of years with dict of centralities for focal tokens.
-
-    """
-    if types is None:
-        types = ["PageRank", "normedPageRank"]
-    cent_year = {}
-    if not isinstance(year_list, list):
-        raise AssertionError("Please provide list of years.")
-    for year in year_list:
-        cent_measures = centrality(nw_graph,
-                                   focal_tokens=focal_tokens, types=types)
-        cent_year.update({year: cent_measures})
-
-    return {'yearly_centrality':cent_year}
-
-
 def centrality(nw_graph, focal_tokens=None,  types=None):
     """
     Calculate centralities for given tokens over an aggregate of given years.
@@ -127,7 +94,7 @@ def centrality(nw_graph, focal_tokens=None,  types=None):
     measures = {}
     for measure in types:
         # PageRank centrality
-        centralities = compute_centrality(nw_graph, measure)
+        centralities = compute_centrality(nw_graph, measure, focal_tokens)
         cent_nodes = np.array(list(centralities.keys()))
         cent_vals = np.array(list(centralities.values()))
         edge_sort = np.argsort(-cent_vals)
@@ -143,7 +110,7 @@ def centrality(nw_graph, focal_tokens=None,  types=None):
     return {"centrality":measures}
 
 
-def compute_centrality(nw_graph, measure):
+def compute_centrality(nw_graph, measure, focal_nodes=None):
     if measure == "PageRank":
         # PageRank centrality
         try:
@@ -155,7 +122,7 @@ def compute_centrality(nw_graph, measure):
 
         except:
             logging.error("Could not calculate Page Rank centralities")
-            raise Exception("Could not calculate Page Rank centralities")
+            raise
     elif measure == "normedPageRank":
         # PageRank centrality
         try:
@@ -176,8 +143,13 @@ def compute_centrality(nw_graph, measure):
         except:
             logging.error(
                 "Could not calculate normed Page Rank centralities")
-            raise Exception(
-                "Could not calculate normed Page Rank centralities")
+            raise
+    elif measure=="local_clustering":
+        centralities = nx.clustering(nw_graph, nodes=focal_nodes, weight=None)
+    elif measure=="weighted_local_clustering":
+        centralities = nx.clustering(nw_graph, nodes=focal_nodes, weight="weight")
+    elif (measure=="frequency" or measure=="freq" or measure=="frequencies"):
+        centralities = nx.get_node_attributes(nw_graph, "freq")
     else:
         raise AttributeError(
             "Centrality measure {} not found in list".format(measure))
