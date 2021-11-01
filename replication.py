@@ -80,11 +80,12 @@ def get_top_100(semantic_network,years, symmetric=False, compositional=False, re
     cent = semantic_network.pd_format(cent)[0]
     cent = cent.T
     cent = cent.sort_values(by="manager", ascending=False)
+    cent=cent[0:100]
 
     return cent
 
 
-def replicate(semantic_network,csv_folder,years, symmetric=False, compositional=False, reverse=False):
+def proximities_and_centralities(semantic_network,csv_folder,years,focal_token, symmetric=False, compositional=False, reverse=False):
 
     prefix= get_prefix( symmetric=symmetric,compositional=compositional,reverse=reverse)
 
@@ -97,7 +98,7 @@ def replicate(semantic_network,csv_folder,years, symmetric=False, compositional=
 
     cent=get_top_100(semantic_network=semantic_network,years=years,symmetric=symmetric,compositional=compositional,reverse=reverse)
     cent.to_excel(ffolder, merge_cells=False)
-    alter_subset = list(cent.manager[0:100].index)
+    alter_subset = list(cent.index)
     logging.info("Alter subset: {}".format(alter_subset))
 
     # Yearly proximities (normed by # of yearly sequences)
@@ -194,7 +195,7 @@ def replicate(semantic_network,csv_folder,years, symmetric=False, compositional=
 
 
 
-def get_networks(semantic_network, csv_folder, years, symmetric=False, compositional=False, reverse=False,
+def get_networks(semantic_network, csv_folder, years,focal_token, symmetric=False, compositional=False, reverse=False,
                   extract_yearly=True):
 
 
@@ -222,7 +223,7 @@ def get_networks(semantic_network, csv_folder, years, symmetric=False, compositi
                                 prune_min_frequency=prune_min_frequency)
 
 
-def get_year_clusters(semantic_network, csv_folder, years, symmetric=False, compositional=False, reverse=False):
+def get_year_clusters(semantic_network, csv_folder,focal_token, years, symmetric=False, compositional=False, reverse=False):
 
     prefix= get_prefix( symmetric=symmetric,compositional=compositional,reverse=reverse)
 
@@ -267,6 +268,56 @@ def get_year_clusters(semantic_network, csv_folder, years, symmetric=False, comp
     df=pd.concat(df_list, axis=1)
     df.to_excel(filename)
 
+
+def make_regression_data(semantic_network, csv_folder, years,focal_token, symmetric=False, compositional=False, reverse=False):
+    prefix= get_prefix( symmetric=symmetric,compositional=compositional,reverse=reverse)
+
+    logging.info("{}: Extracting Regression data".format(prefix))
+    top100= list(get_top_100(semantic_network=semantic_network,years=years,symmetric=symmetric,compositional=compositional,reverse=reverse).index)
+    top100=top100+[focal_token]
+
+    logging.info("{}: Creating Yearly proximities".format(prefix))
+    cent = yearly_proximities(semantic_network, alter_subset=top100, year_list=years, focal_tokens=focal_token,
+                              max_degree=100, normalization=None, compositional=compositional, reverse=reverse,
+                              symmetric=symmetric,
+                              symmetric_method="sum", prune_min_frequency=prune_min_frequency)
+    cent = semantic_network.pd_format(cent)[0]
+    prox_table = cent.reset_index(drop=False)
+    prox_table.columns = ["year", "token", "sym_agg_measure"]
+
+    logging.info("{}: Creating Yearly Centralities, Clustering, Frequency  for alter subset".format(prefix))
+    centrality_folder = check_create_folder(csv_folder + "/centralities")
+    cent = yearly_centralities(semantic_network, year_list=years, focal_tokens=top100, symmetric_method="sum",
+                               normalization=None, compositional=compositional, reverse=reverse, symmetric=symmetric,
+                               types=["PageRank", "normedPageRank", "local_clustering",
+                                      "frequency"], prune_min_frequency=prune_min_frequency)
+    cent = semantic_network.pd_format(cent)[0]
+    cent_table = cent.reset_index(drop=False)
+    cent_table.columns = ["year", "token", "sym_agg_prank", "sym_agg_nprank","unweight_trans", "freq" ]
+    cent_table=cent_table[["year", "token", "sym_agg_prank", "sym_agg_nprank","unweight_trans", "freq" ]]
+
+    mtable = pd.merge(left=prox_table, right=cent_table, how="outer", on=["year","token"])
+
+    # Triadic Data
+    logging.info("{}: Creating Yearly proximities".format(prefix))
+    cent = yearly_proximities(semantic_network, alter_subset=top100, year_list=years, focal_tokens=top100,
+                              max_degree=100, normalization=None, compositional=compositional, reverse=reverse,
+                              symmetric=symmetric,
+                              symmetric_method="sum", prune_min_frequency=prune_min_frequency)
+    cent = semantic_network.pd_format(cent)[0]
+    prox_table = cent.reset_index(drop=False)
+    cols=prox_table.columns
+    cols= [x+"_sym_agg_streq" for x in cols]
+    cols[0] = "year"
+    cols[1] = "token"
+    prox_table.columns=cols
+
+    mttable = pd.merge(left=mtable, right=prox_table, how="outer", on=["year","token"])
+    filename = check_create_folder(
+        csv_folder + "/reg_data/" + str(prefix) + "reg_table.xlsx")
+    mttable.to_excel(filename)
+
+
 # Set a configuration path
 configuration_path = 'config/analyses/replicationHBR40.ini'
 # Settings
@@ -292,16 +343,19 @@ semantic_network = neo4j_network(config)
 
 csv_folder = check_create_folder(config['Paths']['csv_outputs'])
 
-
-get_year_clusters(semantic_network=semantic_network, csv_folder=csv_folder, years=years, symmetric=False, compositional=False, reverse=False)
-get_year_clusters(semantic_network=semantic_network, csv_folder=csv_folder, years=years, symmetric=True, compositional=False, reverse=False)
-
-
-replicate(semantic_network=semantic_network, csv_folder=csv_folder, years=years, symmetric=True, compositional=False, reverse=False)
-replicate(semantic_network=semantic_network, csv_folder=csv_folder, years=years, symmetric=False, compositional=False, reverse=False)
+make_regression_data(semantic_network=semantic_network, csv_folder=csv_folder, focal_token=focal_token, years=years, symmetric=True, compositional=False, reverse=False)
+make_regression_data(semantic_network=semantic_network, csv_folder=csv_folder, focal_token=focal_token, years=years, symmetric=False, compositional=False, reverse=False)
 
 
-get_networks(semantic_network=semantic_network, csv_folder=csv_folder, years=years, symmetric=False, compositional=False, reverse=False)
-get_networks(semantic_network=semantic_network, csv_folder=csv_folder, years=years, symmetric=True, compositional=False, reverse=False)
+#get_year_clusters(semantic_network=semantic_network, csv_folder=csv_folder, years=years, focal_token=focal_token, symmetric=False, compositional=False, reverse=False)
+#get_year_clusters(semantic_network=semantic_network, csv_folder=csv_folder, years=years, focal_token=focal_token, symmetric=True, compositional=False, reverse=False)
+
+
+#proximities_and_centralities(semantic_network=semantic_network, csv_folder=csv_folder, focal_token=focal_token, years=years, symmetric=True, compositional=False, reverse=False)
+#proximities_and_centralities(semantic_network=semantic_network, csv_folder=csv_folder, focal_token=focal_token, years=years, symmetric=False, compositional=False, reverse=False)
+
+
+get_networks(semantic_network=semantic_network, csv_folder=csv_folder, years=years, focal_token=focal_token, symmetric=False, compositional=False, reverse=False)
+get_networks(semantic_network=semantic_network, csv_folder=csv_folder, years=years, focal_token=focal_token, symmetric=True, compositional=False, reverse=False)
 
 

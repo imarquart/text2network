@@ -137,7 +137,7 @@ def yearly_proximities(snw, year_list: Union[list, int], focal_tokens: Optional[
     orig_focal_tokens = focal_tokens.copy()
     if alter_subset is not None:
         # Add alter subset to focal tokens
-        focal_tokens = focal_tokens+alter_subset
+        focal_tokens = list(set(focal_tokens+alter_subset))
         # Set depth=0 to only get this network
         depth=0
 
