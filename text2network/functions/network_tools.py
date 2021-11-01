@@ -38,12 +38,21 @@ def make_symmetric(graph, technique="avg-sym"):
     ----------
     graph : networkx graph
         A directed, weighted graph.
+
     technique : TYPE, optional
+
         transpose: Transpose and average adjacency matrix. Note: Loses other edge parameters!
+
         min-sym: Retain minimum direction i.e. no tie if zero / unidirectional.
+
         max-sym: Retain maximum direction; tie exists even if unidirectional.
-        avg-sym: Average ties. 
+
+        avg-sym: Average ties.
+
         min-sym-avg: Average ties if link is bidirectional, otherwise no tie.
+
+        sum: Sum ties
+
         The default is "avg-sym".
 
     Returns
@@ -52,6 +61,9 @@ def make_symmetric(graph, technique="avg-sym"):
         graph with modified edges.
 
     """
+    if technique is None:
+        technique = "avg-sym"
+
     if technique == "transpose":
         M = nx.to_scipy_sparse_matrix(graph)
         nodes_list = list(graph.nodes)

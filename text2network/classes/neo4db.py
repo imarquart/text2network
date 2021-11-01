@@ -160,7 +160,7 @@ class neo4j_database():
     def clean_database(self, time=None, del_limit=1000000):
         # DEBUG
         nr_nodes = self.receive_query("MATCH (n:edge) RETURN count(n) AS nodes")[0]['nodes']
-        logging.info("Before cleaning: Network has %i edge-nodes " % (nr_nodes))
+        logging.info("Before cleaning: Network has %i edge-nodes ", (nr_nodes))
 
         if time is not None:
             # Delete previous edges
@@ -175,11 +175,11 @@ class neo4j_database():
             # Delete edge nodes
             self.add_query(node_query, run=True)
             nr_nodes = self.receive_query("MATCH (n:edge) RETURN count(n) AS nodes")[0]['nodes']
-            logging.info("Network has %i edge-nodes" % (nr_nodes))
+            logging.info("Network has %i edge-nodes", (nr_nodes))
 
         # DEBUG
         nr_nodes = self.receive_query("MATCH (n:edge) RETURN count(n) AS nodes")[0]['nodes']
-        logging.info("After cleaning: Network has %i nodes and %i ties" % (nr_nodes))
+        logging.info("After cleaning: Network has %i nodes and %i ties", (nr_nodes))
 
     # %% Initializations
     def init_tokens(self):
@@ -246,7 +246,7 @@ class neo4j_database():
             nw_time = {"s": 0, "e": 0, "m": 0}
 
         # Create params with or without time
-        if isinstance(times, dict) or isinstance(times, int) or isinstance(times, list):
+        if isinstance(times, (dict, int, list)):
             params = {"occurring": occurring, "replacing": replacing, "times": times}
         else:
             params = {"occurring": occurring, "replacing": replacing, }
@@ -354,7 +354,7 @@ class neo4j_database():
             nw_time = {"s": 0, "e": 0, "m": 0}
 
         # Create params with or without time
-        if isinstance(times, dict) or isinstance(times, int) or isinstance(times, list):
+        if isinstance(times, (dict, int, list)):
             params = {"ids": ids, "times": times}
         else:
             params = {"ids": ids}
@@ -428,7 +428,7 @@ class neo4j_database():
             nw_time = {"s": 0, "e": 0, "m": 0}
 
         # Create params with or without time
-        if isinstance(times, dict) or isinstance(times, int) or isinstance(times, list):
+        if isinstance(times, (dict, int, list)):
             params = {"ids": ids, "times": times}
         else:
             params = {"ids": ids}
@@ -573,7 +573,7 @@ class neo4j_database():
             nw_time = {"s": 0, "e": 0, "m": 0}
 
         # Create params with or without time
-        if isinstance(times, dict) or isinstance(times, int) or isinstance(times, list):
+        if isinstance(times, (dict, int, list)):
             params = {"ids": ids, "times": times}
         else:
             params = {"ids": ids}
@@ -662,7 +662,7 @@ class neo4j_database():
         :param weight_cutoff: float in 0,1
         :return: list of tuples (u,occurrences)
         """
-        logging.debug("Querying {} node occurrences for normalization".format(len(ids)))
+        logging.debug("Querying {} node occurrences".format(len(ids)))
 
         # Optimization for time
         if isinstance(times, list):
@@ -670,7 +670,7 @@ class neo4j_database():
                 times = int(times[0])
 
         # Create params with or without time
-        if isinstance(times, dict) or isinstance(times, int) or isinstance(times, list):
+        if isinstance(times, (dict, int, list)):
             params = {"ids": ids, "times": times}
         else:
             params = {"ids": ids}
@@ -705,9 +705,11 @@ class neo4j_database():
             if context is not None:
                 c_where_query = ''.join([c_where_query, " AND  q.time in $times "])
 
+        #return_query = ''.join([
+        #    "RETURN a.token_id AS idx, sum(r.weight) as occurrences order by idx"])
+        # WARNING I changed to round here
         return_query = ''.join([
-            "RETURN a.token_id AS idx, sum(r.weight) as occurrences order by idx"])
-
+            "RETURN a.token_id AS idx, round(sum(r.weight)) as occurrences order by idx"])
         if context is not None:
             c_with = "WITH DISTINCT q.run_index as ridx "
         else:
@@ -876,10 +878,12 @@ class neo4j_database():
         :param params: list - Associates parameters corresponding to queries
         :return:
         """
-        assert isinstance(query, list)
+        if not isinstance(query, list):
+            raise AssertionError
 
         if params is not None:
-            assert isinstance(params, list)
+            if not isinstance(params, list):
+                raise AssertionError
             statements = [{'statement': p, 'parameters': q} for (q, p) in zip(query, params)]
             self.neo_queue.extend(statements)
         else:

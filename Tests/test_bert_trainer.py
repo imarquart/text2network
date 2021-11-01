@@ -28,7 +28,7 @@ def test_training_and_prediction(get_bert_trainer, get_training_tokenizer_folder
     trainer=get_bert_trainer
     tokenizer_folder=get_training_tokenizer_folder
     uniques = trainer.get_uniques(trainer.split_hierarchy)
-    queryf = [x for x in uniques["query_filename"]][0]
+    queryf = list(uniques["query_filename"])[0]
     print(queryf)
     query = queryf[0]
     fname = queryf[1]

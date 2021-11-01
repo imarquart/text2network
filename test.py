@@ -33,7 +33,6 @@ configuration_path = 'config/analyses/HBR40.ini'
 # Settings
 years = list(range(1980, 2021))
 focal_token = "leader"
-import os
 os.environ['NUMEXPR_MAX_THREADS'] = '16'
 alter_subset=None
 # Load Configuration file
