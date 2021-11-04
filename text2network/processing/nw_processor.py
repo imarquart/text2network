@@ -202,6 +202,9 @@ class nw_processor():
             if (check_step(processing_folder, hash) and (self.processing_cache is not None)):
                 logging.info("Found processed cache for %s. Skipping", processing_folder)
             else:
+                if delete_incomplete:
+                    logging.info("Checking for incomplete ties in network")
+                    
                 gc.collect()
                 torch.cuda.empty_cache()
                 logging.info("Processing query {}".format(query))
