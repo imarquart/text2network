@@ -215,39 +215,51 @@ class neo4j_network(Sequence):
 
     def context_condition(self, times: Optional[Union[int, list]] = None,
                           tokens: Optional[Union[int, str, list]] = None, weight_cutoff: Optional[float] = None,
-                          depth: Optional[int] = None, max_degree: Optional[int] = None,
-                          batchsize: Optional[int] = None, cond_type: Optional[str] = None, occurrence=False,
-                          asyncio=False):
+                          depth: Optional[int] = None, max_degree: Optional[int] = None, prune_min_frequency:Optional[int]=None, keep_only_tokens:Optional[bool]=False,
+                          batchsize: Optional[int] = None, cond_type: Optional[str] = None, occurrence=False):
         """
 
-        Derive context network by conditioning on tokens that are likely to
+        Derive context network by conditioning on tokens that are likely to occur together with the focal token(s)
 
         Parameters
         ----------
+
         times: int or list, optional
             Times (Years) to condition on
+
         tokens: int, str or list, optional
             tokens or token_ids.
             If given, ego networks of these tokens will be derived.
+
         weight_cutoff: float, optinal
             Ties below this cutoff value are discarded
+
         depth: int, optional
             The depth of the ego networks to consider.
+
         max_degree: int, optional
             For each node that is conditioned upon, retain only 'max_degree' largest ties. Can significantly speed up conditioning!
             This sparsifies the network for tokens that have many neighbors and is appropriate if these
             ties are highly skewed. On the other hand, for non-skewed weight distributions, it would
             likely cut significant ties without account for the amount of probability mass preserved. Use with care!
 
+        prune_min_frequency : int, optional
+            Will remove nodes entirely which occur less than  prune_min_frequency+1 times
+
+        keep_only_tokens : bool, optional
+            If True, the network will only include tokens provided in "tokens" and their ties (according to depth).
 
         Technical Parameters
         ----------
+
         batchsize: int, optional
             If given, queries of this size are sent to the database.
+
         cond_type: str, optional
             Manually set how ego network is queried. If not set, heuristically determined.
                 "subset": queries the entire network into memory and uses network x to find the ego networks
                 "search": queries the ego networks in a "beam search" fashion. Slower for high depths.
+
         Returns
         -------
 
@@ -258,6 +270,21 @@ class neo4j_network(Sequence):
 
         input_check(tokens=tokens)
         input_check(years=times)
+
+
+        if isinstance(tokens, (list, np.ndarray)):
+            nr_tokens=len(tokens)
+        elif tokens is not None:
+            nr_tokens=1
+        else:
+            nr_tokens=0
+
+        if keep_only_tokens and (depth is None or depth >0):
+            depth=0
+            if depth > 0:
+                logging.warning(
+                    "Only focal tokens are to be kept, but depth is more than zero. This is not necessary. For performance reasons, depth is reduced to 0")
+
 
         # Create Conditioning Dict to keep track of state and create filename
         cond_dict_list = [('type', "context"),
@@ -275,6 +302,13 @@ class neo4j_network(Sequence):
             self.__context_ego_conditioning(times=times, tokens=tokens, weight_cutoff=weight_cutoff, depth=depth,
                                             batchsize=batchsize, cond_type=cond_type, occurrence=occurrence,
                                             max_degree=max_degree)
+        if keep_only_tokens:
+            self.__prune_by_tokens(tokens)
+        if prune_min_frequency is not None:
+            self.__prune_by_frequency(prune_min_frequency, times=times)
+
+        # Set conditioning true
+        self.__complete_conditioning()
 
     def condition(self, times: Optional[Union[int, list]] = None, tokens: Optional[Union[int, str, list]] = None,
                   weight_cutoff: Optional[float] = None, depth: Optional[int] = None,
@@ -1018,22 +1052,23 @@ class neo4j_network(Sequence):
 
         # First, do a year conditioning
         logging.debug("Full year conditioning before ego subsetting.")
-        self.__year_condition(years=years, weight_cutoff=weight_cutoff, context=context, batchsize=batchsize,
+        self.__year_condition(years=years, weight_cutoff=weight_cutoff, context=context, batchsize=batchsize, max_degree=max_degree,
                               query_mode=query_mode)
 
         if depth is not None:
-            # Create ego graph for each node
-            graph_list = []
-            if isinstance(token_ids, (list, np.ndarray)):
-                for focal_token in token_ids:
-                    temp_graph = nx.generators.ego.ego_graph(self.graph, self.ensure_ids(focal_token), radius=depth, center=True,
-                                                             undirected=False)
-                    graph_list.append(temp_graph)
-                # Compose ego graphs
-                self.graph = compose_all(graph_list)
-            else:
-                self.graph = nx.generators.ego.ego_graph(self.graph, self.ensure_ids(token_ids), radius=depth,
-                                                         center=True, undirected=False)
+            if depth > 0:
+                # Create ego graph for each node
+                graph_list = []
+                if isinstance(token_ids, (list, np.ndarray)):
+                    for focal_token in token_ids:
+                        temp_graph = nx.generators.ego.ego_graph(self.graph, self.ensure_ids(focal_token), radius=depth, center=True,
+                                                                 undirected=False)
+                        graph_list.append(temp_graph)
+                    # Compose ego graphs
+                    self.graph = compose_all(graph_list)
+                else:
+                    self.graph = nx.generators.ego.ego_graph(self.graph, self.ensure_ids(token_ids), radius=depth,
+                                                             center=True, undirected=False)
 
 
 
@@ -1129,7 +1164,6 @@ class neo4j_network(Sequence):
                                                                           undirected=False)
 
         else:  # Remove conditioning and recondition
-            # TODO: "Allow for conditioning on conditioning"
             self.decondition()
             self.condition(times=years, tokens=token_ids, weight_cutoff=weight_cutoff,
                            depth=depth, context=context, max_degree=max_degree)
@@ -1179,8 +1213,6 @@ class neo4j_network(Sequence):
             att_dict = dict(list(zip(all_ids, att_list)))
             nx.set_node_attributes(self.graph, att_dict)
 
-            # Set conditioning true
-            self.__complete_conditioning()
 
         else:  # Remove conditioning and recondition
             self.decondition()
@@ -1250,6 +1282,7 @@ class neo4j_network(Sequence):
 
                     # Delete disconnected nodes
                     remove = [node for node, degree in dict(self.graph.degree).items() if degree <= 0]
+                    remove = list(np.setdiff1d(remove, tokens))  # Do not remove focal tokens
                     self.graph.remove_nodes_from(remove)
 
                     # Update IDs and Tokens to reflect conditioning
@@ -1279,10 +1312,22 @@ class neo4j_network(Sequence):
                 raise NotImplementedError(msg)
 
             # Create ego graph for each node and compose
-            self.graph = compose_all([nx.generators.ego.ego_graph(self.graph, x, radius=or_depth, center=True,
-                                                                  undirected=False) for x in tokens])
-            # Set conditioning true
-            self.__complete_conditioning()
+            if or_depth is not None:
+                if or_depth >0:
+                    # Create ego graph for each node
+                    graph_list = []
+                    if isinstance(tokens, (list, np.ndarray)):
+                        for focal_token in tokens:
+                            temp_graph = nx.generators.ego.ego_graph(self.graph, self.ensure_ids(focal_token), radius=or_depth,
+                                                                     center=True,
+                                                                     undirected=False)
+                            graph_list.append(temp_graph)
+                        # Compose ego graphs
+                        self.graph = compose_all(graph_list)
+                    else:
+                        self.graph = nx.generators.ego.ego_graph(self.graph, self.ensure_ids(tokens), radius=or_depth,
+                                                                 center=True, undirected=False)
+
 
         else:  # Remove conditioning and recondition
             self.decondition()

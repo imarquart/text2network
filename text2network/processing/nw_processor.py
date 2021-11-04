@@ -382,7 +382,8 @@ class nw_processor():
                         replacement = replacement.numpy().flatten()
                         # Sparsify
                         # TODO: try without setting own-link to zero!
-                        replacement[token] = 0
+                        # WARNING: TODO: HERE COMMENTED
+                        #replacement[token] = 0
                         replacement[replacement == np.min(replacement)] = 0
                         # Get rid of delnorm links
                         replacement[delwords] = 0
@@ -390,25 +391,8 @@ class nw_processor():
                         if self.prune_missing_tokens:
                             replacement[dataset.id_mask] = 0
                         # We norm the distributions here
-                        replacement = self.norm(replacement, min_zero=False)
-
-                        # %% Context Element
-                        # context = (
-                        #    torch.sum((seq_ce[pos] * dists[context_index, :].transpose(-1, 0)).transpose(-1, 0),
-                        #              dim=0).unsqueeze(0))
-                        # Flatten, since it is one row each
-                        # context = context.numpy().flatten()
-                        # Sparsify
-                        # TODO: try without setting own-link to zero!
-                        # context[token] = 0
-                        # context[context == np.min(context)] = 0
-                        # Get rid of delnorm links
-                        # context[delwords] = 0
-                        # Get rid of tokens not in text
-                        # if self.prune_missing_tokens:
-                        #    context[dataset.id_mask] = 0
-                        # We norm the distributions here
-                        # context = self.norm(context, min_zero=False)
+                        # WARNING: TODO: HERE COMMENTED
+                        #replacement = self.norm(replacement, min_zero=False)
 
                         # Add values to network
                         # Replacement ties
