@@ -380,7 +380,7 @@ class neo4j_database():
         return ties
 
     def query_multiple_nodes(self, ids, times=None, weight_cutoff=None, context=None,
-                              context_mode="bidirectional", context_weight=True):
+                             context_mode="bidirectional", context_weight=True):
         """
         Query multiple nodes by ID and over a set of time intervals
 
@@ -523,12 +523,13 @@ class neo4j_database():
         logging.debug("Querying {} node occurrences".format(len(ids)))
 
         # Optimization for time
-        if isinstance(times, list):
-            if len(times) == 1:
-                times = int(times[0])
+        if isinstance(times, int):
+            times = [times]
+        elif not isinstance(times, (dict, list)):
+            AttributeError("Occurrence Query: Times variable must be dict, list or integer!")
 
         # Create params with or without time
-        if isinstance(times, (dict, int, list)):
+        if isinstance(times, (dict, list)):
             params = {"ids": ids, "times": times}
         else:
             params = {"ids": ids}
@@ -536,12 +537,7 @@ class neo4j_database():
         if context is not None:
             params.update({'contexts': context})
 
-        # Check if we want to cache yearly occurrences, in which case we query all
-        if self.cache_yearly_occurrences and isinstance(times, int) and context is None:
-            logging.debug("Yearly occurrences requested, cache will be filled.")
-            where_query = " WHERE TRUE "
-        else:
-            where_query = " WHERE a.token_id in $ids "
+        where_query = " WHERE a.token_id in $ids "
 
         # Context if desired
         if context is not None:
@@ -554,6 +550,8 @@ class neo4j_database():
             where_query = ''.join([where_query, " AND r.weight >=", str(weight_cutoff), " "])
             if context is not None:
                 c_where_query = ''.join([c_where_query, " AND q.weight >=", str(weight_cutoff), " "])
+
+        # Timing
         if isinstance(times, dict):
             where_query = ''.join([where_query, " AND  $times.start <= r.time<= $times.end "])
             if context is not None:
@@ -563,30 +561,23 @@ class neo4j_database():
             if context is not None:
                 c_where_query = ''.join([c_where_query, " AND  q.time in $times "])
 
-        #return_query = ''.join([
+        # return_query = ''.join([
         #    "RETURN a.token_id AS idx, sum(r.weight) as occurrences order by idx"])
         # WARNING I changed to round here
         return_query = ''.join([
             "RETURN a.token_id AS idx, round(sum(r.weight)) as occurrences order by idx"])
+
         if context is not None:
-            c_with = "WITH DISTINCT q.run_index as ridx "
+            c_with = " WITH DISTINCT q.run_index as ridx "
         else:
             c_with = ""
 
-        if isinstance(times, int):
-            if context is not None:
-                match_query = "MATCH p=(a:word)-[:onto]->(r:edge {time:$times, run_index:ridx}) "
-                c_match = "MATCH (q:edge {time:", str(times), "}) - [:onto]->(e:word) "
-            else:
-                match_query = "MATCH p=(a:word)-[:onto]->(r:edge {time:$times}) "
-                c_match = ""
+        if context is not None:
+            match_query = "MATCH p=(a:word)-[:onto]->(r:edge {run_index:ridx}) "
+            c_match = "MATCH (q:edge) - [:onto]->(e:word) "
         else:
-            if context is not None:
-                match_query = "MATCH p=(a:word)-[:onto]->(r:edge {run_index:ridx}) "
-                c_match = "MATCH (q:edge {time:", str(times), "}) - [:onto]->(e:word) "
-            else:
-                match_query = "MATCH p=(a:word)-[:onto]->(r:edge) "
-                c_match = ""
+            match_query = "MATCH p=(a:word)-[:onto]->(r:edge) "
+            c_match = ""
 
         c_query = "".join([c_match, c_where_query, c_with])
         query = "".join([c_query, match_query, where_query, return_query])
