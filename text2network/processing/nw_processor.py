@@ -200,7 +200,7 @@ class nw_processor():
             if (check_step(processing_folder, hash) and (self.processing_cache is not None)):
                 logging.info("Found processed cache for %s. Skipping", processing_folder)
             else:
-                del_limit=100000
+                del_limit=10000
                 if delete_incomplete_times:
                     logging.info("Checking for incomplete ties in network")
                     neowhere=hdf_query_into_neo4j(query)

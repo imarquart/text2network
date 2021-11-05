@@ -56,7 +56,7 @@ class query_dataset(Dataset):
         self.data = self.tables.root.textdata.table
 
         items = self.data.read_where(self.query)
-        self.nitems = len(items['text'])
+
         # Get data
         items_text = items['text']
         items_year = items['year']
@@ -83,7 +83,7 @@ class query_dataset(Dataset):
         length = self.data.text.apply(len)
         index=length >= 3
         self.data=self.data.loc[index,:]
-
+        self.nitems = len(self.data.text)
 
         # Setup unique words ID masking
         logging.info("Setting up unique words")
