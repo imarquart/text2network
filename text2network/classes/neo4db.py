@@ -379,167 +379,22 @@ class neo4j_database():
 
         return ties
 
-    def query_multiple_nodes(self, ids, times=None, weight_cutoff=None, context=None, norm_ties=False,
-                             context_mode="bidirectional", context_weight=True, mode="new"):
-        if (mode == "new" or context_weight) and norm_ties and context is not None:
-            logging.warning(
-                "Compositional mode only supported for contextual queries without context weights. Weights are derived by occurrences.")
-            context_weight = False
-            mode = "old"
-        if mode == "old":
-            logging.debug("Query Dispatch OLD")
-            return self.query_multiple_nodes1(ids=ids, times=times, weight_cutoff=weight_cutoff, context=context,
-                                              context_mode=context_mode, context_weight=context_weight)
-        else:
-            return self.query_multiple_nodes2(ids=ids, times=times, weight_cutoff=weight_cutoff, context=context,
-                                              context_mode=context_mode,
-                                              context_weight=context_weight)
-
-    def query_multiple_nodes1(self, ids, times=None, weight_cutoff=None, context=None, norm_ties=False,
-                              context_mode="bidirectional", context_weight=True):
-        """
-        Query multiple nodes by ID and over a set of time intervals
-
-
-        Parameters
-        ----------
-        :param ids: list of id's
-        :param times: either a number format YYYYMMDD, or an interval dict {"start":YYYYMMDD,"end":YYYYMMDD}
-        :param weight_cutoff: float in 0,1
-        :param norm_ties: Compositional mode
-        :return: list of tuples (u,v,Time,{weight:x})
-        """
-        logging.debug("Querying {} nodes in Neo4j database.".format(len(ids)))
-
-        # Optimization for time
-        if isinstance(times, list):
-            if len(times) == 1:
-                times = int(times[0])
-
-        # Format time to set for network
-        if isinstance(times, int):
-            nw_time = {"s": times, "e": times, "m": times}
-        elif isinstance(times, dict):
-            nw_time = {"s": times['start'], "e": times['end'], "m": int((times['end'] + times['start']) / 2)}
-        elif isinstance(times, list):
-            sort_times = np.sort(times)
-            nw_time = {"s": sort_times[0], "e": sort_times[-1], "m": int((sort_times[0] + sort_times[-1]) / 2)}
-        else:
-            nw_time = {"s": 0, "e": 0, "m": 0}
-
-        # Create params with or without time
-        if isinstance(times, (dict, int, list)):
-            params = {"ids": ids, "times": times}
-        else:
-            params = {"ids": ids}
-
-        if context is not None:
-            params.update({'contexts': context})
-
-        # QUERY CREATION
-        where_query = " WHERE b.token_id in $ids "
-
-        # Context if desired
-        if context is not None:
-            c_where_query = " WHERE  e.token_id IN $contexts "
-        else:
-            c_where_query = ""
-
-        # Allow cutoff value of (non-aggregated) weights and set up time-interval query
-        if weight_cutoff is not None:
-            where_query = ''.join([where_query, " AND r.weight >=", str(weight_cutoff), " "])
-            if context is not None:
-                c_where_query = ''.join([c_where_query, " AND q.weight >=", str(weight_cutoff), " "])
-        if isinstance(times, dict):
-            where_query = ''.join([where_query, " AND  $times.start <= r.time<= $times.end "])
-            if context is not None:
-                c_where_query = ''.join([c_where_query, " AND  $times.start <= q.time<= $times.end "])
-        elif isinstance(times, list):
-            where_query = ''.join([where_query, " AND  r.time in $times "])
-            if context is not None:
-                c_where_query = ''.join([c_where_query, " AND  q.time in $times "])
-
-        # Create query depending on graph direction and whether time variable is queried via where or node property
-        # By default, a->b when ego->is_replaced_by->b
-        # Given an id, we query b:id(sender)<-a(receiver)
-        # This gives all ties where b -replaces-> a
-        # Enable this for occurrences
-        # return_query = ''.join([" RETURN b.token_id AS sender,a.token_id AS receiver,count(r.pos) AS occurrences,",
-        #                        self.aggregate_operator, "(r.weight) AS agg_weight order by receiver"])
-        if context_weight and context is not None:
-            return_query = ''.join([" RETURN b.token_id AS sender,a.token_id AS receiver, ",
-                                    self.aggregate_operator, "(r.weight*qwd) AS agg_weight order by receiver"])
-        else:
-            return_query = ''.join([" RETURN b.token_id AS sender,a.token_id AS receiver, ",
-                                    self.aggregate_operator, "(r.weight) AS agg_weight order by receiver"])
-        if isinstance(times, int):
-            if context is not None:
-                match_query = "".join(
-                    ["MATCH p=(a:word)-[:onto]->(r:edge {time:", str(times), ", run_index:ridx})-[:onto]->(b:word) "])
-                if context_mode == "bidirectional":
-                    c_match = "".join(["MATCH (q:edge {time:", str(times), "}) - [:onto]-(e:word) "])
-                else:
-                    c_match = "".join(["MATCH (q:edge {time:", str(times), "}) - [:onto]->(e:word) "])
-            else:
-                match_query = "".join(["MATCH p=(a:word)-[:onto]->(r:edge {time:", str(times), "})-[:onto]->(b:word) "])
-                c_match = ""
-        else:
-            if context is not None:
-                match_query = "MATCH p=(a:word)-[:onto]->(r:edge {run_index:ridx})-[:onto]->(b:word) "
-                if context_mode == "bidirectional":
-                    c_match = "".join(["MATCH (q:edge) - [:onto]-(e:word) "])
-                else:
-                    c_match = "".join(["MATCH (q:edge) - [:onto]->(e:word) "])
-            else:
-                match_query = "MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word) "
-                c_match = ""
-
-        if context is not None:
-            if context_weight:
-                c_with = "WITH DISTINCT q.run_index as ridx, SUM(q.weight) as qwd "
-            else:
-                c_with = "WITH DISTINCT q.run_index as ridx "
-        else:
-            c_with = ""
-
-        c_query = "".join([c_match, c_where_query, c_with])
-
-        query = "".join([c_query, match_query, where_query, return_query])
-        logging.debug("Tie Query: {}".format(query))
-        res = self.receive_query(query, params)
-        # Normalization
-        # Ties should be normalized by the number of occurrences of the receiver
-        if norm_ties:
-            unique_receivers = [int(x) for x in np.unique([y['receiver'] for y in res])]
-            norms = dict(self.query_occurrences(unique_receivers, times, weight_cutoff, context))
-            ties = [(x['sender'], x['receiver'],
-                     {'weight': np.float((100 * x['agg_weight'] / norms[x['receiver']]) if norms[x['receiver']] else 0),
-                      'time': nw_time['m'], 'start': nw_time['s'], 'end': nw_time['e']}) for
-                    x in res]
-        else:
-            ties = [(x['sender'], x['receiver'],
-                     {'weight': np.float(x['agg_weight']), 'time': nw_time['m'], 'start': nw_time['s'],
-                      'end': nw_time['e']}) for
-                    x in res]
-
-        return ties
-
-    def query_multiple_nodes2(self, ids, times=None, weight_cutoff=None, context=None,
+    def query_multiple_nodes(self, ids, times=None, weight_cutoff=None, context=None,
                               context_mode="bidirectional", context_weight=True):
         """
         Query multiple nodes by ID and over a set of time intervals
 
 
         // Neo4j example query replicated here WITH CONTEXT
-        MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word)
-        WHERE b.token in ["zuckerberg"]
+        PROFILE
+        MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word) WHERE b.token in ["president","leader"] and a.token_id <> b.token_id
         With a,r,b
-        MATCH (z:word)- [:onto]-  (q:edge {run_index:r.run_index}) - [:onto]-(e:word) WHERE q.pos<>r.pos AND  e.token IN ["facebook"]
+        Match (r)-[:seq]-(s:sequence)-[:seq]-(q:edge) - [:onto]-(e:word) WHERE q.pos<>r.pos AND  e.token IN ["democracy",
+        "leadership","company"]
         With
-        r.pos as rpos, r.run_index as ridx, b.token AS sender,a.token AS receiver,
-        CASE WHEN sum(q.weight)>1.0 THEN 1 else sum(q.weight) END as cweight, head(collect(r.weight)) AS rweight
-        WITH DISTINCT(rpos) as rp, ridx, sender, receiver,  cweight,rweight,cweight*rweight as weight
-        RETURN sender, receiver, sum(cweight) as cw, sum(rweight) as rw, sum(weight) as agg_weight order by agg_weight DESC
+        r.pos as rpos, r.run_index as ridx, b.token AS sender,a.token AS receiver,CASE WHEN sum(q.weight)>1.0 THEN 1 else sum(q.weight) END as cweight, head(collect(r.weight)) AS rweight
+        WITH sender, receiver, rweight,cweight*rweight as weight
+        RETURN sender, receiver, sum(rweight) as rw, sum(weight) as agg_weight order by agg_weight DESC
 
         // Neo4j example query replicated here WITHOUT CONTEXT
         MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word)
@@ -588,9 +443,11 @@ class neo4j_database():
 
         if context is not None:
             if context_mode == "bidirectional":
-                c_match = "".join(["MATCH (q:edge {run_index:r.run_index}) - [:onto]-(e:word) "])
+                c_match = "".join(["MATCH (r)-[:seq]-(s:sequence)-[:seq]-(q:edge) - [:onto]-(e:word) "])
+            elif context_mode == "occuring":
+                c_match = "".join(["MATCH (r)-[:seq]-(s:sequence)-[:seq]-(q:edge)<- [:onto]-(e:word) "])
             else:
-                c_match = "".join(["MATCH (q:edge {run_index:r.run_index}) - [:onto]->(e:word) "])
+                c_match = "".join(["MATCH (r)-[:seq]-(s:sequence)-[:seq]-(q:edge) - [:onto]->(e:word) "])
         else:
             c_match = " "
 
@@ -598,13 +455,14 @@ class neo4j_database():
 
         if context is not None:
             with_query = "WITH a,r,b "
-            c_with = " WITH r.pos as rpos, r.run_index as ridx, b.token_id AS sender,a.token_id AS receiver, CASE WHEN sum(q.weight)>1.0 THEN 1 else sum(q.weight) END as cweight, head(collect(r.weight)) AS rweight WITH rpos as rp, ridx, sender, receiver,  cweight,rweight,cweight*rweight as weight "
+            c_with = " WITH r.pos as rpos, r.run_index as ridx, b.token_id AS sender,a.token_id AS receiver, CASE WHEN sum(q.weight)>1.0 THEN 1 else sum(q.weight) END as cweight, head(collect(r.weight)) AS rweight WITH sender, receiver,  rweight,cweight*rweight as weight "
         else:
             with_query = " "
-            c_with = " WITH r.pos as rpos, r.run_index as ridx, b.token_id AS sender,a.token_id AS receiver, head(collect(r.weight)) AS rweight"
+            c_with = " WITH b.token_id AS sender,a.token_id AS receiver, r.weight AS rweight "
 
         ### WHERE QUERIES
-        where_query = " WHERE b.token_id in $ids "
+        # Change 5.11.2021: Added " and b.token_id <> a.token_id "
+        where_query = " WHERE b.token_id in $ids and b.token_id <> a.token_id "
 
         # Context if desired
         if context is not None:
