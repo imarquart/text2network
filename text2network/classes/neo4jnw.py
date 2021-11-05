@@ -997,7 +997,7 @@ class neo4j_network(Sequence):
 
     # %% Conditioning sub-functions
 
-    def __year_condition(self, years, weight_cutoff=None, context=None, batchsize=None, query_mode="old",
+    def __year_condition(self, years, weight_cutoff=None, context=None, batchsize=None, query_mode="new",
                          max_degree: Optional[int] = None):
         """ Condition the entire network over all years """
 
@@ -1044,7 +1044,7 @@ class neo4j_network(Sequence):
                                   max_degree=max_degree)
 
     def __ego_condition_subset(self, years, token_ids, weight_cutoff=None, depth=None, context=None,
-                               batchsize=None, query_mode="old", max_degree: Optional[int] = None):
+                               batchsize=None, query_mode="new", max_degree: Optional[int] = None):
 
         # Same for batchsize
         if batchsize is None:
@@ -1075,7 +1075,7 @@ class neo4j_network(Sequence):
 
 
     def __ego_condition_search(self, years, token_ids, weight_cutoff=None, depth=None, context=None,
-                               batchsize=None, query_mode="old", max_degree: Optional[int] = None):
+                               batchsize=None, query_mode="new", max_degree: Optional[int] = None):
 
         if not self.conditioned:  # This is the first conditioning
             # Build graph
