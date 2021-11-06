@@ -379,7 +379,7 @@ class neo4j_database():
 
         return ties
 
-    def query_multiple_nodes(self, ids, times=None, weight_cutoff=None, context=None,
+    def query_multiple_nodes(self, ids, times=None, weight_cutoff=None, context=None, pos=None, return_sentiment=True,
                              context_mode="bidirectional", context_weight=True):
         """
         Query multiple nodes by ID and over a set of time intervals
@@ -407,7 +407,11 @@ class neo4j_database():
         :param ids: list of id's
         :param times: either a number format YYYYMMDD, or an interval dict {"start":YYYYMMDD,"end":YYYYMMDD}
         :param weight_cutoff: float in 0,1
-        :param norm_ties: Compositional mode
+        :param context: Tokens which are to appear in the context of the substitution
+        :param context_mode: Choose "occurring" if contextual token should occur, "substitution" if it should appear in
+            a substitution distribution, or "bidirectional" if either
+        :param pos: String/List indicating the Part Of Speech
+        :param return_sentiment: Return sentiment and objectivity scores
         :return: list of tuples (u,v,Time,{weight:x})
         """
         logging.debug("Querying {} nodes in Neo4j database.".format(len(ids)))
@@ -415,6 +419,9 @@ class neo4j_database():
         # Get rid of integer time to make query easier
         if isinstance(times, int):
             times = [times]
+
+        if isinstance(pos, str):
+            pos = [pos]
 
         # Format time to set for network
         if isinstance(times, int):
@@ -441,6 +448,13 @@ class neo4j_database():
         ### MATCH QUERIES
         match_query = "MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word) "
 
+        if pos is not None:
+            pos_match = " WTIH a,r,b MATCH (r)-[:pos]-(pos:part_of_speech) WHERE pos.part_of_speech in "
+            pos_vector = "["+",".join(["'"+str(x)+"'" for x in pos])+"] "
+            pos_match = " ".join([pos_match, pos_vector])
+            match_query = match_query + pos_match
+
+
         if context is not None:
             if context_mode == "bidirectional":
                 c_match = "".join(["MATCH (r)-[:seq]-(s:sequence)-[:seq]-(q:edge) - [:onto]-(e:word) "])
@@ -463,6 +477,7 @@ class neo4j_database():
         ### WHERE QUERIES
         # Change 5.11.2021: Added " and b.token_id <> a.token_id "
         where_query = " WHERE b.token_id in $ids and b.token_id <> a.token_id "
+
 
         # Context if desired
         if context is not None:
@@ -505,9 +520,14 @@ class neo4j_database():
         logging.debug("Tie Query: {}".format(query))
         res = self.receive_query(query, params)
 
+        if pos is not None:
+            pos = "-".join([str(x) for x in pos])
+        else:
+            pos ="None"
+
         ties = [(x['sender'], x['receiver'],
                  {'weight': np.float(x['agg_weight']), 'time': nw_time['m'], 'start': nw_time['s'],
-                  'end': nw_time['e']}) for
+                  'end': nw_time['e'], 'pos':pos}) for
                 x in res]
 
         return ties
