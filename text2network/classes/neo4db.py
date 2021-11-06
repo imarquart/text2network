@@ -469,10 +469,10 @@ class neo4j_database():
 
         if context is not None:
             with_query = "WITH a,r,b "
-            c_with = " WITH r.pos as rpos, r.run_index as ridx, b.token_id AS sender,a.token_id AS receiver, CASE WHEN sum(q.weight)>1.0 THEN 1 else sum(q.weight) END as cweight, head(collect(r.weight)) AS rweight WITH sender, receiver,  rweight,cweight*rweight as weight "
+            c_with = " WITH r.pos as rpos, r.run_index as ridx, b.token_id AS sender,a.token_id AS receiver, CASE WHEN sum(q.weight)>1.0 THEN 1 else sum(q.weight) END as cweight, head(collect(r.weight)) AS rweight,  head(collect(r.sentiment)) as sentiment,  head(collect(r.subjectivity)) as subjectivity WITH sender, receiver, sentiment, subjectivity,  rweight,cweight*rweight as weight "
         else:
             with_query = " "
-            c_with = " WITH b.token_id AS sender,a.token_id AS receiver, r.weight AS rweight "
+            c_with = " WITH b.token_id AS sender,a.token_id AS receiver, r.weight AS rweight, r.subjectivity as subjectivity, r.sentiment as sentiment "
 
         ### WHERE QUERIES
         # Change 5.11.2021: Added " and b.token_id <> a.token_id "
@@ -507,14 +507,18 @@ class neo4j_database():
         if context_weight and context is not None:
             if context_weight:
                 return_query = ''.join([" RETURN sender, receiver, ",
-                                        self.aggregate_operator, "(weight) as agg_weight order by receiver"])
+                                        self.aggregate_operator, "(weight) as agg_weight "])
             else:
                 return_query = ''.join([" RETURN sender, receiver, ",
-                                        self.aggregate_operator, "(rweight) as agg_weight order by receiver"])
+                                        self.aggregate_operator, "(rweight) as agg_weight "])
         else:
 
             return_query = ''.join(
-                [" RETURN sender, receiver, ", self.aggregate_operator, "(rweight) as agg_weight order by receiver"])
+                [" RETURN sender, receiver, ", self.aggregate_operator, "(rweight) as agg_weight "])
+
+        if return_sentiment:
+            return_query = return_query+", avg(sentiment) as sentiment, avg(subjectivity) as subjectivity "
+        return_query = return_query+" order by receiver"
 
         query = "".join([match_query, where_query, with_query, c_match, c_where_query, c_with, return_query])
         logging.debug("Tie Query: {}".format(query))
@@ -525,10 +529,16 @@ class neo4j_database():
         else:
             pos ="None"
 
-        ties = [(x['sender'], x['receiver'],
-                 {'weight': np.float(x['agg_weight']), 'time': nw_time['m'], 'start': nw_time['s'],
-                  'end': nw_time['e'], 'pos':pos}) for
-                x in res]
+        if return_sentiment:
+            ties = [(x['sender'], x['receiver'],
+                     {'weight': np.float(x['agg_weight']), 'time': nw_time['m'], 'start': nw_time['s'],
+                      'end': nw_time['e'], 'pos':pos, 'sentiment':x['sentiment', 'subjectivity': x['subjectivity']]}) for
+                    x in res]
+        else:
+            ties = [(x['sender'], x['receiver'],
+                     {'weight': np.float(x['agg_weight']), 'time': nw_time['m'], 'start': nw_time['s'],
+                      'end': nw_time['e'], 'pos':pos}) for
+                    x in res]
 
         return ties
 
