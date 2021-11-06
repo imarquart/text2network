@@ -618,13 +618,15 @@ class neo4j_network(Sequence):
     def get_dyad_context(self, dyads: Optional[Union[list, tuple]] = None,
                          occurrence: Optional[Union[list, str, int]] = None,
                          replacement: Optional[Union[list, str, int]] = None, years: Union[int, list, dict] = None,
-                         weight_cutoff: Optional[float] = None):
+                         weight_cutoff: Optional[float] = None, part_of_speech: Optional[str] = None,
+                         context_mode: Optional[str] = "bidirectional", return_sentiment: Optional[bool] = True):
         """
         Specify a dyad and get the distribution of contextual words.
         dyads are tuples of (occurrence,replacement), that is, in the graph, ties that go replacement->occurrence.
         You can pass a list of tuples.
+        You can also pass occurrences and replacement tokens as lists or individual tokens
 
-        You can also pass occurrences and replacement tokens as list. However, these have to
+
         Parameters
         ----------
         dyads
@@ -632,6 +634,10 @@ class neo4j_network(Sequence):
         replacement
         years
         weight_cutoff
+        part_of_speech
+        context_mode
+        return_sentiment
+
 
         Returns
         -------
@@ -666,19 +672,9 @@ class neo4j_network(Sequence):
         occurrence = np.array(self.ensure_ids(occurrence))
         replacement = np.array(self.ensure_ids(replacement))
 
-        try:
-            dyads = np.concatenate([occurrence.reshape(-1, 1), replacement.reshape(-1, 1)], axis=1)
-        except:
-            msg = "Could not broadcast occurrences to replacements"
-            logging.error(msg)
-            raise AttributeError(msg)
 
-        pd_dict = {}
-        for dyad in dyads:
-            cidx, cweights = self.db.query_tie_context(int(dyad[0]), int(dyad[1]), times=years,
-                                                       weight_cutoff=weight_cutoff)
-            contexts = dict(zip(cidx, cweights))
-            pd_dict.update({tuple(dyad): contexts})
+        pd_dict = self.db.query_tie_context(occurring=occurrence, replacing=replacement, times=years,
+                                                   weight_cutoff=weight_cutoff, pos=part_of_speech, return_sentiment=return_sentiment, context_mode=context_mode)
 
         return {'dyad_context': pd_dict}
 

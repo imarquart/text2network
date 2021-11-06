@@ -288,7 +288,7 @@ class neo4j_database():
         match = " ".join([match_query, where_query, c_match, c_where, pos_match])
 
         ### AGGREGATION QUERY
-        part1 = "With r.pos as rpos, r.run_index as ridx, b.token AS substitute,a.token AS occurrence,CASE WHEN sum(q.weight)>1.0 THEN 1 else sum(q.weight) END as cweight, head(collect(r.weight)) AS rweight, e.token as context, head(collect(r.sentiment)) AS sentiment, head(collect(r.subjectivity)) AS subjectivity"
+        part1 = "With r.pos as rpos, r.run_index as ridx, b.token_id AS substitute,a.token_id AS occurrence,CASE WHEN sum(q.weight)>1.0 THEN 1 else sum(q.weight) END as cweight, head(collect(r.weight)) AS rweight, e.token_id as context, head(collect(r.sentiment)) AS sentiment, head(collect(r.subjectivity)) AS subjectivity"
         part2 = "WITH  ridx, context, substitute, occurrence, CASE WHEN sum(cweight)>1.0 THEN 1 else sum(cweight) END as cweight,CASE WHEN sum(rweight)>1.0 THEN 1 else sum(rweight) END as rweight,avg(sentiment) as sentiment, avg(subjectivity) as subjectivity  order by ridx"
         part3 = "WITH ridx, context, substitute, occurrence, cweight*rweight as weight, sentiment, subjectivity, rweight, cweight"
 
