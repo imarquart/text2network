@@ -111,6 +111,8 @@ class nw_processor():
         self.cutoff_percent = int(self.processing_options['cutoff_percent'])
         self.max_degree = int(self.processing_options['max_degree'])
         self.sentiment = bool(self.processing_options['sentiment'])
+        self.own_tie = bool(self.processing_options['own_tie'])
+        self.normalize_ties = bool(self.processing_options['normalize_ties'])
         self.pos_tagging = bool(self.processing_options['pos_tagging'])
         self.prune_missing_tokens = bool(self.processing_options['prune_missing_tokens'])
         self.maxn = int(self.processing_options['maxn'])
@@ -407,9 +409,8 @@ class nw_processor():
                         # Flatten, since it is one row each
                         replacement = replacement.numpy().flatten()
                         # Sparsify
-                        # TODO: try without setting own-link to zero!
-                        # WARNING: TODO: HERE COMMENTED
-                        #replacement[token] = 0
+                        if not self.own_tie:
+                            replacement[token] = 0
                         replacement[replacement == np.min(replacement)] = 0
                         # Get rid of delnorm links
                         replacement[delwords] = 0
@@ -417,8 +418,8 @@ class nw_processor():
                         if self.prune_missing_tokens:
                             replacement[dataset.id_mask] = 0
                         # We norm the distributions here
-                        # WARNING: TODO: HERE COMMENTED
-                        #replacement = self.norm(replacement, min_zero=False)
+                        if self.normalize_ties:
+                            replacement = self.norm(replacement, min_zero=False)
 
                         # Add values to network
                         # Replacement ties
@@ -645,7 +646,8 @@ class nw_processor():
             if cutoff_probability > 0:
                 neighbors = neighbors[x[neighbors] >= cutoff_probability]
             # We norm here, because we want to represent the distribution
-            weights = self.norm(x[neighbors], min_zero=False)
+            if self.normalize_ties:
+                weights = self.norm(x[neighbors], min_zero=False)
             # Now in addition, we will artificially cut off below a threshold
             # TODO: test this
             if min_probability > 0:
