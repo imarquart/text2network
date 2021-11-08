@@ -9,7 +9,8 @@ from text2network.functions.graph_clustering import consensus_louvain
 from text2network.classes.neo4jnw import neo4j_network
 
 # Set a configuration path
-configuration_path = 'config/analyses/HBR40.ini'
+configuration_path = 'config/analyses/LeaderSenBert40.ini'
+
 # Settings
 years = list(range(1980, 2021))
 focal_token = "leader"
@@ -33,16 +34,16 @@ semantic_network = neo4j_network(config)
 level_list = [15]
 weight_list = [0]
 max_degree_list = [50,100,200,None]
-cl_clutoff_list = [0,99]
+cl_clutoff_list = [0]
 depth_list = [1]
 rs_list = [100]
-rev_ties_list = [True, False]
+rev_ties_list = [False]
 algolist=[consensus_louvain]
 alter_set=[None]
 focaladdlist=[True,False]
 comp_ties_list = [False]
 back_out_list= [False]
-symmetry_list=[True, False]
+symmetry_list=[True]
 param_list = product(depth_list, level_list, rs_list, weight_list, rev_ties_list, comp_ties_list, cl_clutoff_list,algolist,back_out_list,symmetry_list,focaladdlist,alter_set,max_degree_list)
 logging.info("------------------------------------------------")
 for depth, level, rs, cutoff, rev, comp, cluster_cutoff,algo,backout,sym,fadd,alters,max_degree in param_list:

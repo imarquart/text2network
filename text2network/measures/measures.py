@@ -136,11 +136,11 @@ def average_cluster_proximities(focal_token: str, nw, levels: int,
     # First, derive clusters
     if mode == "context":
         nw.context_condition(tokens=focal_token, times=query_times, depth=depth, weight_cutoff=weight_cutoff,
-                             occurrence=occurrence, batchsize=None, max_degree=max_degree)
+                             occurrence=occurrence, max_degree=max_degree, batchsize=10)
 
     else:
         nw.condition(tokens=focal_token, times=query_times, context=context, depth=depth, weight_cutoff=weight_cutoff,
-                     compositional=compositional, max_degree=max_degree)
+                     compositional=compositional, max_degree=max_degree, batchsize=10)
 
     if percentage > 0:
         nw.sparsify(percentage)
@@ -191,7 +191,7 @@ def average_cluster_proximities(focal_token: str, nw, levels: int,
                     year = -100
                     name = "-".join(list(proximate_nodes.nlargest(5).index))
 
-                    topelements_pr = list(cluster_pagerank.nlargest(6).index)
+                    topelements_pr = np.array(cluster_pagerank.nlargest(6).index)
                     topelements_pr = list(topelements_pr[topelements_pr != focal_token])
 
                     if topelements_pr == []:

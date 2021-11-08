@@ -568,7 +568,7 @@ class neo4j_database():
         if return_sentiment:
             ties = [(x['sender'], x['receiver'],
                      {'weight': np.float(x['agg_weight']), 'time': nw_time['m'], 'start': nw_time['s'],
-                      'end': nw_time['e'], 'pos':pos, 'sentiment':x['sentiment', 'subjectivity': x['subjectivity']]}) for
+                      'end': nw_time['e'], 'pos':pos, 'sentiment':x['sentiment'], 'subjectivity': x['subjectivity']}) for
                     x in res]
         else:
             ties = [(x['sender'], x['receiver'],
