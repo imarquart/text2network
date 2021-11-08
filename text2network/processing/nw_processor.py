@@ -1,5 +1,6 @@
 import logging
 import time
+from datetime import date
 
 import numpy as np
 import torch
@@ -243,6 +244,8 @@ class nw_processor():
         if prune_database:
             logging.info("Pruning Neo4j Database of all unused tokens")
             self.neo_interface.prune_database()
+        # Add config
+        self.add_configuration_information_to_db()
 
     def process_query(self, query, fname, text_db=None, logging_level=None):
         """
@@ -661,6 +664,20 @@ class nw_processor():
                       'p3': str(p3), 'p4': str(p4)}) for x in list(zip(neighbors, weights))]
         else:
             return None
+
+    def add_configuration_information_to_db(self):
+
+        today = date.today()
+        timestamp = today.strftime("%b-%d-%Y")
+
+        queries=[]
+        for key in self.processing_options:
+            val=self.processing_options[val]
+            qry="MERGE (c:configoption {"+str(key)+":"+str(val)+"})-[:configtime]-(:configoption {timestamp:"+str(timestamp)+"})"
+            queries.append(qry)
+
+        self.neo_interface.add_queries(queries, run=True)
+
 
     @staticmethod
     def norm(x, min_zero=True):
