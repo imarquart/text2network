@@ -615,9 +615,9 @@ class neo4j_network(Sequence):
 
     def get_dyad_context(self, dyads: Optional[Union[list, tuple]] = None,
                          occurrence: Optional[Union[list, str, int]] = None,
-                         replacement: Optional[Union[list, str, int]] = None, years: Union[int, list, dict] = None,
+                         replacement: Optional[Union[list, str, int]] = None, times: Union[int, list, dict] = None,
                          weight_cutoff: Optional[float] = None, part_of_speech: Optional[str] = None,
-                         context_mode: Optional[str] = "bidirectional", return_sentiment: Optional[bool] = True):
+                         context_mode: Optional[str] = "bidirectional", return_sentiment: Optional[bool] = True) -> dict:
         """
         Specify a dyad and get the distribution of contextual words.
         dyads are tuples of (occurrence,replacement), that is, in the graph, ties that go replacement->occurrence.
@@ -630,7 +630,7 @@ class neo4j_network(Sequence):
         dyads
         occurrence
         replacement
-        years
+        times
         weight_cutoff
         part_of_speech
         context_mode
@@ -655,23 +655,23 @@ class neo4j_network(Sequence):
             logging.error(msg)
             raise AttributeError(msg)
 
-        if years is None:
-            years = self.get_times_list()
+        if times is None:
+            times = self.get_times_list()
 
         input_check(tokens=occurrence)
         input_check(tokens=replacement)
-        input_check(years=years)
+        input_check(years=times)
 
         if isinstance(occurrence, (str, int)):
             occurrence = [occurrence]
         if isinstance(replacement, (str, int)):
             replacement = [replacement]
 
-        occurrence = np.array(self.ensure_ids(occurrence))
-        replacement = np.array(self.ensure_ids(replacement))
+        occurrence = np.array(self.ensure_ids(occurrence)).tolist()
+        replacement = np.array(self.ensure_ids(replacement)).tolist()
 
 
-        pd_dict = self.db.query_tie_context(occurring=occurrence, replacing=replacement, times=years,
+        pd_dict = self.db.query_tie_context(occurring=occurrence, replacing=replacement, times=times,
                                                    weight_cutoff=weight_cutoff, pos=part_of_speech, return_sentiment=return_sentiment, context_mode=context_mode)
 
         return {'dyad_context': pd_dict}
@@ -1558,7 +1558,7 @@ class neo4j_network(Sequence):
     def ensure_ids(self, tokens):
         """This is just to confirm mixed lists of tokens and ids get converted to ids"""
         if tokens is not None:
-            if isinstance(tokens, (list, tuple, np.ndarray)):
+            if isinstance(tokens, (list, tuple, pd.Series, np.ndarray)):
                 # Transform strings to corresponding IDs
                 tokens = [self.get_id_from_token(x) if not np.issubdtype(
                     type(x), np.integer) else x for x in tokens]
@@ -1574,7 +1574,7 @@ class neo4j_network(Sequence):
 
     def ensure_tokens(self, ids):
         """This is just to confirm mixed lists of tokens and ids get converted to ids"""
-        if isinstance(ids, list):
+        if isinstance(ids, (list, tuple, np.ndarray, pd.Series)):
             return [self.get_token_from_id(x) if not isinstance(x, str) else x for x in ids]
         else:
             if not isinstance(ids, str):
