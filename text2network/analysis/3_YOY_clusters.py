@@ -33,9 +33,9 @@ semantic_network = neo4j_network(config)
 
 #### Cluster yearly proximities
 ma_list = [None, (2, 0),(1, 0),(1, 1)]
-level_list = [3,5,12]
-weight_list = [0]
-max_degree_list = [50,100]
+level_list = [10]
+weight_list = [0.002]
+max_degree_list = [200]
 cl_clutoff_list = [0]
 depth_list = [1]
 rs_list = [100]

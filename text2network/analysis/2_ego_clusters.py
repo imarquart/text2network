@@ -32,15 +32,15 @@ semantic_network = neo4j_network(config)
 
 
 level_list = [15]
-weight_list = [0]
-max_degree_list = [50,100,200,None]
+weight_list = [0.0025]
+max_degree_list = [50,200]
 cl_clutoff_list = [0]
 depth_list = [1]
 rs_list = [100]
 rev_ties_list = [False]
 algolist=[consensus_louvain]
 alter_set=[None]
-focaladdlist=[True,False]
+focaladdlist=[False]
 comp_ties_list = [False]
 back_out_list= [False]
 symmetry_list=[True]

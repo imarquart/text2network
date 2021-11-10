@@ -129,18 +129,18 @@ def average_cluster_proximities(focal_token: str, nw, levels: int,
     if cluster_cutoff is None:
         cluster_cutoff = 0
 
-    if symmetric or reverse_ties:
-        if depth <= 1:
-            depth = 1
+    # Clustering requires depth>=1
+    if depth <= 1:
+        depth = 1
 
     # First, derive clusters
     if mode == "context":
         nw.context_condition(tokens=focal_token, times=query_times, depth=depth, weight_cutoff=weight_cutoff,
-                             occurrence=occurrence, max_degree=max_degree, batchsize=10)
+                             occurrence=occurrence, max_degree=max_degree, batchsize=50)
 
     else:
         nw.condition(tokens=focal_token, times=query_times, context=context, depth=depth, weight_cutoff=weight_cutoff,
-                     compositional=compositional, max_degree=max_degree, batchsize=10)
+                     compositional=compositional, max_degree=max_degree, batchsize=50)
 
     if percentage > 0:
         nw.sparsify(percentage)
