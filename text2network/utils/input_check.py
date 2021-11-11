@@ -54,8 +54,8 @@ def input_check(times=None, tokens=None):
                         msg = "Parameter times includes elements that could not be cast to integer"
                         logging.error(msg)
                         raise AttributeError(msg)
-    if token is not None:
-        if not isinstance(tokens, (np.ndarray, list, int, np.integer, np.str_, np.string_)):
+    if tokens is not None:
+        if not isinstance(tokens, (np.ndarray, list, int, str,np.integer, np.str_, np.string_)):
             logging.error("Token parameter should be string, int or list. Supplied: {}".format(type(tokens)))
             raise AttributeError("Token parameter should be string, int or list. Supplied: {}".format(type(tokens)))
         else:
