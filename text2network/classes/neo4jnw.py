@@ -269,8 +269,8 @@ class neo4j_network(Sequence):
         if batchsize is None:
             batchsize = self.neo_batch_size
 
-        input_check(tokens=tokens)
-        input_check(years=times)
+        tokens=input_check(tokens=tokens)
+        times=input_check(times=times)
 
         if isinstance(tokens, (list, np.ndarray)):
             nr_tokens = len(tokens)
@@ -383,9 +383,9 @@ class neo4j_network(Sequence):
         if batchsize is None:
             batchsize = self.neo_batch_size
 
-        input_check(tokens=tokens)
-        input_check(tokens=context)
-        input_check(years=times)
+        tokens=input_check(tokens=tokens)
+        tokens=input_check(tokens=context)
+        times= input_check(times=times)
         tokens = self.ensure_ids(tokens)
         context = self.ensure_ids(context)
 
@@ -503,8 +503,8 @@ class neo4j_network(Sequence):
         list of cluster-dictionaries.
         """
 
-        input_check(tokens=interest_list)
-        input_check(tokens=add_ego_tokens)
+        interest_list=input_check(tokens=interest_list)
+        add_ego_tokens = input_check(tokens=add_ego_tokens)
 
         if interest_list is not None:
             interest_list = self.ensure_ids(interest_list)
@@ -583,21 +583,21 @@ class neo4j_network(Sequence):
         """
         return proximities(self, focal_tokens=focal_tokens, alter_subset=alter_subset)
 
-    def get_node_context(self, tokens: Union[list, int, str], years: Union[int, list, dict] = None,
+    def get_node_context(self, tokens: Union[list, int, str], times: Union[int, list, dict] = None,
                          weight_cutoff: Optional[float] = None, occurrence: Optional[bool] = False):
 
-        if years is None:
-            years = self.get_times_list()
+        if times is None:
+            times = self.get_times_list()
 
-        input_check(tokens=tokens)
-        input_check(years=years)
+        tokens=input_check(tokens=tokens)
+        times=input_check(times=times)
 
         if isinstance(tokens, (str, int)):
             tokens = [tokens]
 
         tokens = self.ensure_ids(tokens)
 
-        res = self.db.query_context_of_node(tokens, times=years, weight_cutoff=weight_cutoff, occurrence=occurrence)
+        res = self.db.query_context_of_node(tokens, times=times, weight_cutoff=weight_cutoff, occurrence=occurrence)
 
         tokens = np.array([x[0] for x in res])
         alters = np.array([x[1] for x in res])
@@ -658,9 +658,9 @@ class neo4j_network(Sequence):
         if times is None:
             times = self.get_times_list()
 
-        input_check(tokens=occurrence)
-        input_check(tokens=replacement)
-        input_check(years=times)
+        occurrence=input_check(tokens=occurrence)
+        replacement=input_check(tokens=replacement)
+        times=input_check(times=times)
 
         if isinstance(occurrence, (str, int)):
             occurrence = [occurrence]
@@ -686,7 +686,7 @@ class neo4j_network(Sequence):
         if not self.conditioned:
             self.__condition_error(call=inspect.stack()[1][3])
 
-        input_check(years=times)
+        times=input_check(times=times)
 
         self.__add_frequencies(times=times, context=context)
 
@@ -714,8 +714,8 @@ class neo4j_network(Sequence):
             self.__condition_error(call=inspect.stack()[1][3])
 
         # TODO: Add Compositional Here
-        input_check(years=times)
-        input_check(tokens=context)
+        times=input_check(times=times)
+        tokens=input_check(tokens=context)
 
         # Get nodes in network
         node_list = list(self.graph.nodes)
@@ -740,7 +740,7 @@ class neo4j_network(Sequence):
                 "You have invoked compositional mode more than once. This means ties are normalized by frequency^k!")
             pass
         else:
-            self.cond_dict['backout'] = True
+            self.cond_dict['compositional'] = True
 
     def norm_by_total_nr_sequences(self, times: Union[list, int]):
         """
@@ -963,12 +963,12 @@ class neo4j_network(Sequence):
             # if not isinstance(i[1], dict):
             #    assert isinstance(
             #        i[1], int), "Please timestamp as <time>, or {'start:'<time>, 'end':<time>}"
-            input_check(years=i[1], tokens=i[0])
+            year, i = input_check(times=i[1], tokens=i[0])
             year = i[1]
             i = i[0]
         else:
             year = None
-            input_check(tokens=i)
+            i=input_check(tokens=i)
 
         i = self.ensure_ids(i)
         if not self.conditioned:
