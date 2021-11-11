@@ -32,6 +32,7 @@ def average_cluster_proximities(focal_token: str, nw, levels: int,
                                 export_network: Optional[bool] = False,
                                 add_focal_to_clusters: Optional[bool] = False,
                                 mode: Optional[str] = "replacement", occurrence: Optional[bool] = False,
+                                batchsize: Optional[int] = 10,
                                 seed: Optional[int] = None) -> pd.DataFrame:
     """
     First, derives clusters from overall network (across all years), then creates year-by-year average proximities for these clusters
@@ -136,11 +137,11 @@ def average_cluster_proximities(focal_token: str, nw, levels: int,
     # First, derive clusters
     if mode == "context":
         nw.context_condition(tokens=focal_token, times=query_times, depth=depth, weight_cutoff=weight_cutoff,
-                             occurrence=occurrence, max_degree=max_degree, batchsize=50)
+                             occurrence=occurrence, max_degree=max_degree, batchsize=batchsize)
 
     else:
         nw.condition(tokens=focal_token, times=query_times, context=context, depth=depth, weight_cutoff=weight_cutoff,
-                     compositional=compositional, max_degree=max_degree, batchsize=50)
+                     compositional=compositional, max_degree=max_degree, batchsize=batchsize)
 
     if percentage > 0:
         nw.sparsify(percentage)
@@ -259,7 +260,7 @@ def average_cluster_proximities(focal_token: str, nw, levels: int,
 
             else:
                 nw.condition(tokens=focal_token, depth=depth, times=ma_years, weight_cutoff=weight_cutoff,
-                             context=context, compositional=compositional, max_degree=max_degree)
+                             context=context, compositional=compositional, max_degree=max_degree, batchsize=batchsize)
 
             if to_back_out:
                 nw.to_backout()

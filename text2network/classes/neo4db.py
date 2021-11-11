@@ -421,7 +421,7 @@ class neo4j_database():
 
         return ties
 
-    def query_nodes_in_dyadic_context(self, ids, occurring, replacing,  times=None, weight_cutoff=None, return_sentiment=True, context_weight=True):
+    def query_nodes_in_dyadic_context(self, ids, occurring, replacing,  times=None, weight_cutoff=None, return_sentiment=True):
         """
         // Substitution in context of Dyad
         MATCH p=(a:word)-[:onto]->(r:edge {time:2020})-[:onto]->(b:word) WHERE b.token in ["leader"] and a.token in ["ceo"] and a.token_id <> b.token_id
@@ -437,6 +437,8 @@ class neo4j_database():
 
         Parameters
         ----------
+        return_sentiment
+        ids
         occurring
         replacing
         times
@@ -454,6 +456,12 @@ class neo4j_database():
 
         if isinstance(ids, int):
             ids = [ids]
+
+        if isinstance(occurring, int):
+            occurring = [occurring]
+
+        if isinstance(replacing, int):
+            replacing = [replacing]
 
         if isinstance(occurring, np.ndarray):
             occurring = occurring.tolist()
@@ -501,7 +509,7 @@ class neo4j_database():
             c_where = ''.join([c_where, " AND q.weight >=", str(weight_cutoff), " "])
 
         ### MATCH QUERY 3: Replacing ties
-        pos_match = " WITH a,r,b,q MATCH (e:word) -[:onto]->(q)-[:onto]->(f:word) WHERE f.token_id in $idx "
+        pos_match = " WITH a,r,b,q MATCH (e:word) -[:onto]->(q)-[:onto]->(f:word) WHERE f.token_id in $idx and e.token_id <> f.token_id "
 
         ### FINAL MATCH
         match = " ".join([match_query, where_query, c_match, c_where, pos_match])
@@ -510,7 +518,7 @@ class neo4j_database():
         agg = " WITH r.run_index as ridx, f.token_id as sub, e.token_id as occ, b.token_id AS rep_dyad,a.token_id AS occ_dyad,sum(q.weight)*sum(r.weight) as weight, avg(r.sentiment) as sentiment, avg(r.subjectivity) as subjectivity "
 
         # RETURN QUERY
-        return_query = "RETURN sub,occ,rep_dyad+occ_dyad as dyad ,sum(weight) as weight "
+        return_query = "RETURN sub,occ,[rep_dyad,occ_dyad] as dyad ,sum(weight) as weight "
         if return_sentiment:
             return_query = return_query + ", avg(sentiment) as sentiment, avg(subjectivity) as subjectivity "
         return_query = return_query + " order by occ"
@@ -521,12 +529,12 @@ class neo4j_database():
 
         if return_sentiment:
             ties = [(x['sub'], x['occ'],
-                     {'weight': np.float(x['agg_weight']), 'dyad':str(x['dyad']), 'time': nw_time['m'], 'start': nw_time['s'],
+                     {'weight': np.float(x['weight']), 'dyad':str(x['dyad']), 'time': nw_time['m'], 'start': nw_time['s'],
                       'end': nw_time['e'], 'sentiment': np.float(x['sentiment']), 'subjectivity':  np.float(x['subjectivity'])}) for
                     x in res]
         else:
-            ties = [(x['sender'], x['receiver'],
-                     {'weight': np.float(x['agg_weight']), 'dyad':str(x['dyad']), 'time': nw_time['m'], 'start': nw_time['s'],
+            ties = [(x['sub'], x['occ'],
+                     {'weight': np.float(x['weight']), 'dyad':str(x['dyad']), 'time': nw_time['m'], 'start': nw_time['s'],
                       'end': nw_time['e']}) for
                     x in res]
 

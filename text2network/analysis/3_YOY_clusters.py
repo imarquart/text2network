@@ -32,7 +32,7 @@ setup_logger(config['Paths']['log'], config['General']['logging_level'], "3_YOY_
 semantic_network = neo4j_network(config)
 
 #### Cluster yearly proximities
-ma_list = [None, (2, 0),(1, 0),(1, 1)]
+ma_list = [(2, 2),(1, 0),(1, 1)]
 level_list = [10]
 weight_list = [0.002]
 max_degree_list = [200]
