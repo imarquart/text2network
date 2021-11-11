@@ -61,7 +61,7 @@ def input_check(times=None, tokens=None):
         else:
             # We use lists instead of arrays here
             if isinstance(tokens, np.ndarray):
-                tokens = times.tolist()
+                tokens = tokens.tolist()
             # If a list, we do need Python builtins instead of np data types due to database requirements
             if isinstance(tokens, list):
                 for i, token in enumerate(tokens):
@@ -70,14 +70,6 @@ def input_check(times=None, tokens=None):
                     elif isinstance(token, (np.str_, np.string_)):
                         tokens[i] = str(token)
                     elif not isinstance(token, (str, int)):
-                        msg = "Parameter times includes elements that could not be cast to integer"
-                        logging.error(msg)
-                        raise AttributeError(msg)
-            if isinstance(times, dict):
-                for key in times:
-                    try:
-                        times[key] = int(times[key])
-                    except:
                         msg = "Parameter times includes elements that could not be cast to integer"
                         logging.error(msg)
                         raise AttributeError(msg)
