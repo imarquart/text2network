@@ -234,7 +234,7 @@ class neo4j_database():
         -------
 
         """
-        logging.debug("Querying tie between {}->replacing->{}.".format(replacing, occurring))
+        logging.debug("Querying tie between {}->replacing->{} at {}.".format(replacing, occurring,times))
 
         if weight_cutoff is not None:
             if weight_cutoff <= 1e-07:
@@ -307,7 +307,7 @@ class neo4j_database():
         return_query = return_query+" order by substitute"
 
         query = "".join([match, agg, return_query])
-        logging.debug("Tie Context Query: {}".format(query))
+        #logging.debug("Tie Context Query: {}".format(query))
         res = self.receive_query(query, params)
 
         if pos is not None:
