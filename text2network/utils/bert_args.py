@@ -73,7 +73,7 @@ class bert_args():
         self.fp16 = False
         self.fp16_opt_level = "01"
         self.local_rank = -1
-        self.n_gpu = 2
+        self.n_gpu = 1
         self.server_ip = ''
         self.eval_loss_limit = eval_loss_limit
         self.server_port = ''
