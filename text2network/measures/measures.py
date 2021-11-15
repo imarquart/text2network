@@ -235,6 +235,9 @@ def average_cluster_proximities(focal_token: str, nw, levels: int,
                                 df_dict.update(pagerank_measures)
                                 df_dict.update(overall_pagerank_measures)
                                 cluster_dataframe.append(df_dict.copy())
+    if filename is not None:
+        if export_network:
+            nw.export_gefx(filename=check_create_folder(filename + ".gexf"))
 
     if year_by_year:
         for year in times:
@@ -329,8 +332,6 @@ def average_cluster_proximities(focal_token: str, nw, levels: int,
     df = pd.DataFrame(cluster_dataframe)
 
     if filename is not None:
-        if export_network:
-            nw.export_gefx(filename=check_create_folder(filename + ".gexf"))
         filename = check_create_folder(filename + ".xlsx")
         df.to_excel(filename)
 
