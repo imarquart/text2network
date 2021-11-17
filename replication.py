@@ -319,7 +319,7 @@ def make_regression_data(semantic_network, csv_folder, years,focal_token, symmet
 
 
 # Set a configuration path
-configuration_path = 'config/analyses/replicationHBR40.ini'
+configuration_path = 'config/analyses/SenCMR40.ini'
 # Settings
 years = list(range(1980, 2021))
 focal_token = "manager"
@@ -347,12 +347,12 @@ make_regression_data(semantic_network=semantic_network, csv_folder=csv_folder, f
 make_regression_data(semantic_network=semantic_network, csv_folder=csv_folder, focal_token=focal_token, years=years, symmetric=False, compositional=False, reverse=False)
 
 
-#get_year_clusters(semantic_network=semantic_network, csv_folder=csv_folder, years=years, focal_token=focal_token, symmetric=False, compositional=False, reverse=False)
-#get_year_clusters(semantic_network=semantic_network, csv_folder=csv_folder, years=years, focal_token=focal_token, symmetric=True, compositional=False, reverse=False)
+get_year_clusters(semantic_network=semantic_network, csv_folder=csv_folder, years=years, focal_token=focal_token, symmetric=False, compositional=False, reverse=False)
+get_year_clusters(semantic_network=semantic_network, csv_folder=csv_folder, years=years, focal_token=focal_token, symmetric=True, compositional=False, reverse=False)
 
 
-#proximities_and_centralities(semantic_network=semantic_network, csv_folder=csv_folder, focal_token=focal_token, years=years, symmetric=True, compositional=False, reverse=False)
-#proximities_and_centralities(semantic_network=semantic_network, csv_folder=csv_folder, focal_token=focal_token, years=years, symmetric=False, compositional=False, reverse=False)
+proximities_and_centralities(semantic_network=semantic_network, csv_folder=csv_folder, focal_token=focal_token, years=years, symmetric=True, compositional=False, reverse=False)
+proximities_and_centralities(semantic_network=semantic_network, csv_folder=csv_folder, focal_token=focal_token, years=years, symmetric=False, compositional=False, reverse=False)
 
 
 get_networks(semantic_network=semantic_network, csv_folder=csv_folder, years=years, focal_token=focal_token, symmetric=False, compositional=False, reverse=False)
