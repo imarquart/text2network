@@ -429,7 +429,7 @@ def run_bert(args, tokenizer=None, model=None):
     # Setup CUDA, GPU & distributed training
 
     # Disable dist
-    args.local_rank = -1
+    args.local_rank = 0#-1
     device = torch.device("cuda:1" if torch.cuda.is_available() and not args.no_cuda else "cpu")
     # args.n_gpu = torch.cuda.device_count()
     args.n_gpu = 1
@@ -439,8 +439,8 @@ def run_bert(args, tokenizer=None, model=None):
     logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                         datefmt='%m/%d/%Y %H:%M:%S',
                         level=args.logging_level if args.local_rank in [-1, 0] else logging.WARN)
-    # logger.warning("Process rank: %s, device: %s, n_gpu: %s, distributed training: %s, 16-bits training: %s",
-    #              args.local_rank, device, args.n_gpu, bool(args.local_rank != -1), args.fp16)
+    logger.warning("Process rank: %s, device: %s, n_gpu: %s, distributed training: %s, 16-bits training: %s",
+                  args.local_rank, device, args.n_gpu, bool(args.local_rank != -1), args.fp16)
     logging.disable(args.logging_level)
     logging.getLogger("transformers.modeling_utils").setLevel(args.logging_level)
     # Set seed
