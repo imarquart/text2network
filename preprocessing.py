@@ -6,7 +6,7 @@ import json
 import os
 
 from text2network.preprocessing.nw_preprocessor import nw_preprocessor
-from text2network.utils.file_helpers import check_create_folder
+from text2network.utils.file_helpers import check_create_folder, check_folder
 from text2network.utils.logging_helpers import setup_logger
 
 import nltk
@@ -33,7 +33,7 @@ if __name__ == '__main__':
     preprocessor = nw_preprocessor(config)
     exclude_list = json.loads(config.get('Preprocessing', 'exclude_list'))
 
-    globpath=os.path.join(os.getcwd(),os.path.normpath(config['Paths']['import_folder']), os.sep, '*', os.sep)
+    globpath="".join([check_folder(config['Paths']['import_folder']), os.sep, '*', os.sep])
     from glob import glob
     logging.info("Checking files and folders in {}".format(globpath))
     paths = glob(globpath)
