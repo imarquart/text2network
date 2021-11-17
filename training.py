@@ -14,7 +14,7 @@ def find_gpus(nums=6):
     usingGPUs =  ','.join(usingGPUs)
     print('using GPU idx: #', usingGPUs)
     return usingGPUs
-os.environ['CUDA_VISIBLE_DEVICES'] = find_gpus(nums=1)
+#os.environ['CUDA_VISIBLE_DEVICES'] = find_gpus(nums=1)
 
 import argparse
 import configparser
