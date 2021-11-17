@@ -1,5 +1,6 @@
 import logging
 import time
+from datetime import date
 
 import numpy as np
 import torch
@@ -11,7 +12,7 @@ from torch.utils.data import BatchSampler, SequentialSampler, DataLoader
 from text2network.datasets.text_dataset import query_dataset, text_dataset_collate_batchsample
 from text2network.utils.delwords import create_stopword_list
 from text2network.functions.rowvec_tools import simple_norm
-from text2network.utils.get_uniques import get_uniques
+from text2network.utils.get_uniques import get_uniques, hdf_query_into_neo4j
 from text2network.utils.load_bert import get_bert_and_tokenizer, get_full_vocabulary
 from text2network.processing.neo4j_insertion_interface import Neo4j_Insertion_Interface
 import gc
@@ -111,6 +112,8 @@ class nw_processor():
         self.cutoff_percent = int(self.processing_options['cutoff_percent'])
         self.max_degree = int(self.processing_options['max_degree'])
         self.sentiment = bool(self.processing_options['sentiment'])
+        self.own_tie = bool(self.processing_options['own_tie'])
+        self.normalize_ties = bool(self.processing_options['normalize_ties'])
         self.pos_tagging = bool(self.processing_options['pos_tagging'])
         self.prune_missing_tokens = bool(self.processing_options['prune_missing_tokens'])
         self.maxn = int(self.processing_options['maxn'])
@@ -167,7 +170,7 @@ class nw_processor():
         self.DICT_SIZE = len(tokenizer)
         return tokenizer, bert
 
-    def run_all_queries(self, delete_all=False, delete_incomplete=True, split_hierarchy=None, logging_level=None,
+    def run_all_queries(self, delete_all=False, delete_incomplete_times=True, split_hierarchy=None, logging_level=None,
                         prune_database=True):
 
         # SEt up logging
@@ -185,8 +188,6 @@ class nw_processor():
             logging.warning("Cleaning Neo4j Database of all prior connections")
             self.neo_interface.delete_database()
 
-        # Delete incompletes
-        # TODO
 
         for idx, query_filename in enumerate(self.uniques['query_filename']):
             # Get File name
@@ -202,6 +203,34 @@ class nw_processor():
             if (check_step(processing_folder, hash) and (self.processing_cache is not None)):
                 logging.info("Found processed cache for %s. Skipping", processing_folder)
             else:
+                del_limit=10000
+                if delete_incomplete_times:
+                    logging.info("Checking for incomplete ties in network")
+                    neowhere=hdf_query_into_neo4j(query)
+                    check_query="MATCH (r:edge) WHERE "+neowhere+" RETURN count(*) as nr"
+                    nr_nodes=self.neo_interface.receive_query(check_query)[0]['nr']
+                    if nr_nodes > 0:
+                        logging.warning("{} incomplete tie nodes found for query {}".format(nr_nodes, check_query))
+                        del_query = "MATCH (r:edge) WHERE " + neowhere + " WITH r LIMIT "+ str(del_limit)+ " DETACH DELETE r"
+                        logging.warning("Deleting with query: {} \n THIS OPERATION CAN TAKE SOME TIME!".format(del_query))
+                        while nr_nodes > 0:
+                            # Delete edge nodes
+                            self.neo_interface.add_query(del_query, run=True)
+                            nr_nodes = self.neo_interface.receive_query(check_query)[0]['nr']
+                            logging.info("Network has %i incomplete tie nodes", (nr_nodes))
+                        seqquery="MATCH(n:sequence) WHERE NOT n--() RETURN count(*) as nr"
+                        nr_nodes=self.neo_interface.receive_query(seqquery)[0]['nr']
+                        if nr_nodes > 0:
+                            logging.warning(
+                                "{} disconnected sequence nodes found for query {}".format(nr_nodes, check_query))
+                            delseqquery="MATCH(n:sequence) WHERE NOT n--() WITH r LIMIT "+ str(del_limit)+ "  DELETE n"
+                            logging.warning("Deleting with query: {}".format(delseqquery))
+                            while nr_nodes > 0:
+                                # Delete edge nodes
+                                self.neo_interface.add_query(delseqquery, run=True)
+                                nr_nodes =  self.neo_interface.receive_query(seqquery)[0]['nr']
+                                logging.info("Network has %i incomplete tie nodes", (nr_nodes))
+
                 gc.collect()
                 torch.cuda.empty_cache()
                 logging.info("Processing query {}".format(query))
@@ -215,6 +244,8 @@ class nw_processor():
         if prune_database:
             logging.info("Pruning Neo4j Database of all unused tokens")
             self.neo_interface.prune_database()
+        # Add config
+        self.add_configuration_information_to_db()
 
     def process_query(self, query, fname, text_db=None, logging_level=None):
         """
@@ -381,8 +412,8 @@ class nw_processor():
                         # Flatten, since it is one row each
                         replacement = replacement.numpy().flatten()
                         # Sparsify
-                        # TODO: try without setting own-link to zero!
-                        replacement[token] = 0
+                        if not self.own_tie:
+                            replacement[token] = 0
                         replacement[replacement == np.min(replacement)] = 0
                         # Get rid of delnorm links
                         replacement[delwords] = 0
@@ -390,25 +421,8 @@ class nw_processor():
                         if self.prune_missing_tokens:
                             replacement[dataset.id_mask] = 0
                         # We norm the distributions here
-                        replacement = self.norm(replacement, min_zero=False)
-
-                        # %% Context Element
-                        # context = (
-                        #    torch.sum((seq_ce[pos] * dists[context_index, :].transpose(-1, 0)).transpose(-1, 0),
-                        #              dim=0).unsqueeze(0))
-                        # Flatten, since it is one row each
-                        # context = context.numpy().flatten()
-                        # Sparsify
-                        # TODO: try without setting own-link to zero!
-                        # context[token] = 0
-                        # context[context == np.min(context)] = 0
-                        # Get rid of delnorm links
-                        # context[delwords] = 0
-                        # Get rid of tokens not in text
-                        # if self.prune_missing_tokens:
-                        #    context[dataset.id_mask] = 0
-                        # We norm the distributions here
-                        # context = self.norm(context, min_zero=False)
+                        if self.normalize_ties:
+                            replacement = self.norm(replacement, min_zero=False)
 
                         # Add values to network
                         # Replacement ties
@@ -635,7 +649,8 @@ class nw_processor():
             if cutoff_probability > 0:
                 neighbors = neighbors[x[neighbors] >= cutoff_probability]
             # We norm here, because we want to represent the distribution
-            weights = self.norm(x[neighbors], min_zero=False)
+            if self.normalize_ties:
+                weights = self.norm(x[neighbors], min_zero=False)
             # Now in addition, we will artificially cut off below a threshold
             # TODO: test this
             if min_probability > 0:
@@ -649,6 +664,20 @@ class nw_processor():
                       'p3': str(p3), 'p4': str(p4)}) for x in list(zip(neighbors, weights))]
         else:
             return None
+
+    def add_configuration_information_to_db(self):
+
+        today = date.today()
+        timestamp = today.strftime("%b-%d-%Y")
+
+        queries=[]
+        for key in self.processing_options:
+            val=self.processing_options[val]
+            qry="MERGE (c:configoption {"+str(key)+":"+str(val)+"})-[:configtime]-(:configoption {timestamp:"+str(timestamp)+"})"
+            queries.append(qry)
+
+        self.neo_interface.add_queries(queries, run=True)
+
 
     @staticmethod
     def norm(x, min_zero=True):

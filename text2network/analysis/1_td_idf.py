@@ -5,7 +5,7 @@ import numpy as np
 from text2network.classes.neo4jnw import neo4j_network
 
 # Set a configuration path
-configuration_path = 'config/analyses/HBR40.ini'
+configuration_path = 'config/analyses/LeaderSenBert40.ini'
 # Settings
 years = None
 # Load Configuration file

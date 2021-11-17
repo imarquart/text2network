@@ -1,6 +1,17 @@
 import tables
 
 
+def hdf_query_into_neo4j(query):
+    """
+    We save HDF queries but in some situations we want to use this to query edge nodes, so we need to translate
+    """
+    query = query.replace("==", "=")
+    query = query.replace("year", "time")
+    query = query.replace("(", "(r.")
+    query = query.replace("&", " and ")
+    return query
+
+
 def get_uniques(split_hierarchy, db_folder):
     """
     Queries database to get unique values according to hierarchy provided.

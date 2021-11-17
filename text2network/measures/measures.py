@@ -32,6 +32,7 @@ def average_cluster_proximities(focal_token: str, nw, levels: int,
                                 export_network: Optional[bool] = False,
                                 add_focal_to_clusters: Optional[bool] = False,
                                 mode: Optional[str] = "replacement", occurrence: Optional[bool] = False,
+                                batchsize: Optional[int] = 10,
                                 seed: Optional[int] = None) -> pd.DataFrame:
     """
     First, derives clusters from overall network (across all years), then creates year-by-year average proximities for these clusters
@@ -129,18 +130,18 @@ def average_cluster_proximities(focal_token: str, nw, levels: int,
     if cluster_cutoff is None:
         cluster_cutoff = 0
 
-    if symmetric or reverse_ties:
-        if depth <= 1:
-            depth = 1
+    # Clustering requires depth>=1
+    if depth <= 1:
+        depth = 1
 
     # First, derive clusters
     if mode == "context":
         nw.context_condition(tokens=focal_token, times=query_times, depth=depth, weight_cutoff=weight_cutoff,
-                             occurrence=occurrence, batchsize=None, max_degree=max_degree)
+                             occurrence=occurrence, max_degree=max_degree, batchsize=batchsize)
 
     else:
         nw.condition(tokens=focal_token, times=query_times, context=context, depth=depth, weight_cutoff=weight_cutoff,
-                     compositional=compositional, max_degree=max_degree)
+                     compositional=compositional, max_degree=max_degree, batchsize=batchsize)
 
     if percentage > 0:
         nw.sparsify(percentage)
@@ -191,7 +192,7 @@ def average_cluster_proximities(focal_token: str, nw, levels: int,
                     year = -100
                     name = "-".join(list(proximate_nodes.nlargest(5).index))
 
-                    topelements_pr = list(cluster_pagerank.nlargest(6).index)
+                    topelements_pr = np.array(cluster_pagerank.nlargest(6).index)
                     topelements_pr = list(topelements_pr[topelements_pr != focal_token])
 
                     if topelements_pr == []:
@@ -234,6 +235,9 @@ def average_cluster_proximities(focal_token: str, nw, levels: int,
                                 df_dict.update(pagerank_measures)
                                 df_dict.update(overall_pagerank_measures)
                                 cluster_dataframe.append(df_dict.copy())
+    if filename is not None:
+        if export_network:
+            nw.export_gefx(filename=check_create_folder(filename + ".gexf"))
 
     if year_by_year:
         for year in times:
@@ -259,7 +263,7 @@ def average_cluster_proximities(focal_token: str, nw, levels: int,
 
             else:
                 nw.condition(tokens=focal_token, depth=depth, times=ma_years, weight_cutoff=weight_cutoff,
-                             context=context, compositional=compositional, max_degree=max_degree)
+                             context=context, compositional=compositional, max_degree=max_degree, batchsize=batchsize)
 
             if to_back_out:
                 nw.to_backout()
@@ -328,8 +332,6 @@ def average_cluster_proximities(focal_token: str, nw, levels: int,
     df = pd.DataFrame(cluster_dataframe)
 
     if filename is not None:
-        if export_network:
-            nw.export_gefx(filename=check_create_folder(filename + ".gexf"))
         filename = check_create_folder(filename + ".xlsx")
         df.to_excel(filename)
 

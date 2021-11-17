@@ -270,7 +270,7 @@ class Neo4j_Insertion_Interface():
         self.db_ids = np.array(self.db_ids)
         self.db_tokens = np.array(self.db_tokens)
 
-    def delete_database(self, time=None, del_limit=1000000):
+    def delete_database(self, time=None, del_limit=10000):
         # DEBUG
         nr_nodes = self.receive_query("MATCH (n:edge) RETURN count(n) AS nodes")[0]['nodes']
         logging.info("Before cleaning: Network has %i edge-nodes ", (nr_nodes))
@@ -564,7 +564,7 @@ class Neo4j_Insertion_Interface():
         if run:
             self.write_queue()
 
-    def add_queries(self, query, params=None):
+    def add_queries(self, query, params=None, run=False):
         """
         Add a list of query to queue
         :param query: list - Neo4j queries
@@ -585,6 +585,8 @@ class Neo4j_Insertion_Interface():
 
         # Check for queue size if not conditioned!
         if (len(self.neo_queue) > self.queue_size):
+            self.write_queue()
+        if run:
             self.write_queue()
 
     def write_queue(self):
