@@ -68,7 +68,8 @@ if __name__ == '__main__':
             print(torch.cuda.is_available())
             torch.cuda.empty_cache()
             logging.info("trying to continue")
-            continue
+            raise
+            #continue
         if sucvar == 0:
             logging.info("Successfully trained BERTs, canceling")
             success=True
