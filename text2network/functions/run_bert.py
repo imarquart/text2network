@@ -441,8 +441,8 @@ def run_bert(args, tokenizer=None, model=None):
                         level=args.logging_level if args.local_rank in [-1, 0] else logging.WARN)
     logger.warning("Process rank: %s, device: %s, n_gpu: %s, distributed training: %s, 16-bits training: %s",
                   args.local_rank, device, args.n_gpu, bool(args.local_rank != -1), args.fp16)
-    logging.disable(args.logging_level)
-    logging.getLogger("transformers.modeling_utils").setLevel(args.logging_level)
+    #logging.disable(args.logging_level)
+    #logging.getLogger("transformers.modeling_utils").setLevel(args.logging_level)
     # Set seed
     set_seed(args)
 
