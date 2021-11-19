@@ -1579,6 +1579,9 @@ class neo4j_network(Sequence):
                         "Found {} isolated nodes in graph, deleting.".format(len(isolates)))
                     cleaned_graph.remove_nodes_from(isolates)
                 nx.write_gexf(cleaned_graph, path)
+                logging.info(
+                    "Saving {} nodes, {} edges: \n {} as {}".format(len(cleaned_graph.nodes), len(cleaned_graph.edges),
+                                                                    self.filename, path))
 
             except:
                 raise SystemError("Could not save to %s " % path)
@@ -1619,6 +1622,7 @@ class neo4j_network(Sequence):
                         "Found {} isolated nodes in graph, deleting.".format(len(isolates)))
                     cleaned_graph.remove_nodes_from(isolates)
                 nx.write_edgelist(cleaned_graph, path, delimiter=",", data=True)
+                logging.info("Saving {} nodes, {} edges: \n {} as {}".format(len(cleaned_graph.nodes),len(cleaned_graph.edges),self.filename, path))
             except:
                 raise SystemError("Could not save to %s " % path)
 

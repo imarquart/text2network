@@ -343,6 +343,11 @@ semantic_network = neo4j_network(config)
 
 csv_folder = check_create_folder(config['Paths']['csv_outputs'])
 
+get_networks(semantic_network=semantic_network, csv_folder=csv_folder, years=years, focal_token=focal_token, symmetric=False, compositional=False, reverse=False)
+get_networks(semantic_network=semantic_network, csv_folder=csv_folder, years=years, focal_token=focal_token, symmetric=True, compositional=False, reverse=False)
+
+
+
 make_regression_data(semantic_network=semantic_network, csv_folder=csv_folder, focal_token=focal_token, years=years, symmetric=True, compositional=False, reverse=False)
 make_regression_data(semantic_network=semantic_network, csv_folder=csv_folder, focal_token=focal_token, years=years, symmetric=False, compositional=False, reverse=False)
 
@@ -355,7 +360,5 @@ proximities_and_centralities(semantic_network=semantic_network, csv_folder=csv_f
 proximities_and_centralities(semantic_network=semantic_network, csv_folder=csv_folder, focal_token=focal_token, years=years, symmetric=False, compositional=False, reverse=False)
 
 
-get_networks(semantic_network=semantic_network, csv_folder=csv_folder, years=years, focal_token=focal_token, symmetric=False, compositional=False, reverse=False)
-get_networks(semantic_network=semantic_network, csv_folder=csv_folder, years=years, focal_token=focal_token, symmetric=True, compositional=False, reverse=False)
 
 
