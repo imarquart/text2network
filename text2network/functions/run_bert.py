@@ -430,21 +430,19 @@ def run_bert(args, tokenizer=None, model=None):
 
     # Disable dist
     args.local_rank = -1
-
-    device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
+    device = torch.device("cuda:1" if torch.cuda.is_available() and not args.no_cuda else "cpu")
     # args.n_gpu = torch.cuda.device_count()
     args.n_gpu = 1
-
     args.device = device
 
     # Setup logging
     logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                         datefmt='%m/%d/%Y %H:%M:%S',
                         level=args.logging_level if args.local_rank in [-1, 0] else logging.WARN)
-    # logger.warning("Process rank: %s, device: %s, n_gpu: %s, distributed training: %s, 16-bits training: %s",
-    #              args.local_rank, device, args.n_gpu, bool(args.local_rank != -1), args.fp16)
-    logging.disable(args.logging_level)
-    logging.getLogger("transformers.modeling_utils").setLevel(args.logging_level)
+    logger.warning("Process rank: %s, device: %s, n_gpu: %s, distributed training: %s, 16-bits training: %s",
+                  args.local_rank, device, args.n_gpu, bool(args.local_rank != -1), args.fp16)
+    #logging.disable(args.logging_level)
+    #logging.getLogger("transformers.modeling_utils").setLevel(args.logging_level)
     # Set seed
     set_seed(args)
 
@@ -467,6 +465,7 @@ def run_bert(args, tokenizer=None, model=None):
     if args.block_size <= 0:
         args.block_size = tokenizer.max_len_single_sentence  # Our input block size will be the max possible for the model
     args.block_size = min(args.block_size, tokenizer.max_len_single_sentence)
+    logging.info("Pushing to device")
     model.to(args.device)
 
     if args.local_rank == 0:
@@ -476,12 +475,12 @@ def run_bert(args, tokenizer=None, model=None):
     if args.do_train:
         if args.local_rank not in [-1, 0]:
             torch.distributed.barrier()  # Barrier to make sure only the first process in distributed training process the dataset, and the others will use the cache
-
+        logging.info("Loading Dataset")
         train_dataset = load_and_cache_examples(args, tokenizer, evaluate=False)
 
         if args.local_rank == 0:
             torch.distributed.barrier()
-
+        logging.info("Beginning Training")
         global_step, tr_loss = train(args, train_dataset, model, tokenizer)
         logger.info(" global_step = %s, average loss = %s", global_step, tr_loss)
 

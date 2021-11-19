@@ -1,4 +1,21 @@
 # %% Imports
+
+# Trying to use only one GPU, the one less used??
+import os
+def find_gpus(nums=6):
+    os.system('nvidia-smi -q -d Memory |grep -A4 GPU|grep Free >tmp_free_gpus')
+    with open('tmp_free_gpus', 'r') as lines_txt:
+        frees = lines_txt.readlines()
+        idx_freeMemory_pair = [ (idx,int(x.split()[2]))
+                              for idx,x in enumerate(frees) ]
+    idx_freeMemory_pair.sort(key=lambda my_tuple:my_tuple[1],reverse=True)
+    usingGPUs = [str(idx_memory_pair[0])
+                    for idx_memory_pair in idx_freeMemory_pair[:nums] ]
+    usingGPUs =  ','.join(usingGPUs)
+    print('using GPU idx: #', usingGPUs)
+    return usingGPUs
+#os.environ['CUDA_VISIBLE_DEVICES'] = find_gpus(nums=1)
+
 import argparse
 import configparser
 import logging
@@ -50,7 +67,8 @@ if __name__ == '__main__':
             gc.collect()
             print(torch.cuda.is_available())
             torch.cuda.empty_cache()
-            logging.info("trying to continue")
+            logging.info("{}: trying to continue".format(value))
+            #raise
             continue
         if sucvar == 0:
             logging.info("Successfully trained BERTs, canceling")

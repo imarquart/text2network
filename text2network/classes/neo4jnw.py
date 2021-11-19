@@ -1125,7 +1125,7 @@ class neo4j_network(Sequence):
 
             # Loop batched over all tokens to condition
             for i in tqdm(range(0, len(worklist), batchsize), leave=False, position=0,
-                          desc="Querying {} nodes in batches of {}".format(len(worklist, batchsize))):
+                          desc="Querying {} nodes in batches of {}".format(len(worklist), batchsize)):
                 token_ids = worklist[i:i + batchsize]
                 logging.debug(
                     "Conditioning by query batch {} of {} tokens.".format(i, len(token_ids)))

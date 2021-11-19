@@ -209,8 +209,8 @@ def get_networks(semantic_network, csv_folder, years,focal_token, symmetric=Fals
     network_folder = check_create_folder(csv_folder + "/yearly_networks")
 
     ffolder = check_create_folder(network_folder + "/" + str(prefix)+"ego")
-    extract_yearly_ego_networks(semantic_network, ego_token=focal_token, symmetric=symmetric, compositional=compositional, reverse_ties=reverse, folder=ffolder, times=years, symmetric_method="sum",
-                            prune_min_frequency=prune_min_frequency)
+    #extract_yearly_ego_networks(semantic_network, ego_token=focal_token, symmetric=symmetric, compositional=compositional, reverse_ties=reverse, folder=ffolder, times=years, symmetric_method="sum",
+    #                        prune_min_frequency=prune_min_frequency)
 
     # Extract yearly networks
     #######################
@@ -343,8 +343,8 @@ semantic_network = neo4j_network(config)
 
 csv_folder = check_create_folder(config['Paths']['csv_outputs'])
 
-make_regression_data(semantic_network=semantic_network, csv_folder=csv_folder, focal_token=focal_token, years=years, symmetric=True, compositional=False, reverse=False)
-make_regression_data(semantic_network=semantic_network, csv_folder=csv_folder, focal_token=focal_token, years=years, symmetric=False, compositional=False, reverse=False)
+#make_regression_data(semantic_network=semantic_network, csv_folder=csv_folder, focal_token=focal_token, years=years, symmetric=True, compositional=False, reverse=False)
+#make_regression_data(semantic_network=semantic_network, csv_folder=csv_folder, focal_token=focal_token, years=years, symmetric=False, compositional=False, reverse=False)
 
 
 #get_year_clusters(semantic_network=semantic_network, csv_folder=csv_folder, years=years, focal_token=focal_token, symmetric=False, compositional=False, reverse=False)
@@ -354,7 +354,7 @@ make_regression_data(semantic_network=semantic_network, csv_folder=csv_folder, f
 #proximities_and_centralities(semantic_network=semantic_network, csv_folder=csv_folder, focal_token=focal_token, years=years, symmetric=True, compositional=False, reverse=False)
 #proximities_and_centralities(semantic_network=semantic_network, csv_folder=csv_folder, focal_token=focal_token, years=years, symmetric=False, compositional=False, reverse=False)
 
-
+years=[1980]
 get_networks(semantic_network=semantic_network, csv_folder=csv_folder, years=years, focal_token=focal_token, symmetric=False, compositional=False, reverse=False)
 get_networks(semantic_network=semantic_network, csv_folder=csv_folder, years=years, focal_token=focal_token, symmetric=True, compositional=False, reverse=False)
 

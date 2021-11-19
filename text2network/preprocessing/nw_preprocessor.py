@@ -290,6 +290,17 @@ class nw_preprocessor():
             file_name = re.split(".txt", file_name)[0]
             file_source = file_name
 
+
+            # Manual check for old coca naming ;>
+            check_for_COCA=re.split(self.split_symbol,
+                                file_name)
+            if check_for_COCA[0]== "w":
+
+                check_for_COCA.reverse()
+                file_name=str(self.split_symbol).join(check_for_COCA)
+                logging.info("Old COCA dataset found, renaming to {}...".format(file_name))
+
+
             if ext_year is None:
                 logging.debug("Loading file %s", file_name)
                 year = re.split(self.split_symbol,
