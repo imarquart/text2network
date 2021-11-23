@@ -7,6 +7,35 @@ from text2network.functions.node_measures import proximity
 from text2network.utils.input_check import input_check
 
 
+def get_top_100(semantic_network, focal_tokens: Optional[List] = None, times: Optional[list] = None,
+                symmetric: Optional[bool] = False, compositional: Optional[bool] = False,
+                reverse: Optional[bool] = False, prune_min_frequency:Optional[int]=None):
+    if symmetric or reverse:
+        depth = 1
+    else:
+        depth = 0
+
+    logging.info("Extracting Top 100 Tokens")
+
+    semantic_network.condition(tokens=focal_tokens, times=times, depth=depth, prune_min_frequency=prune_min_frequency,
+                               max_degree=150)
+    # semantic_network.norm_by_total_nr_occurrences(times=years)
+    if compositional:
+        semantic_network.to_compositional()
+    if reverse:
+        semantic_network.to_reverse()
+    if symmetric:
+        semantic_network.to_symmetric(technique="sum")
+
+    cent = semantic_network.proximities(focal_tokens=focal_tokens)
+    cent = semantic_network.pd_format(cent)[0]
+    cent = cent.T
+    cent = cent.sort_values(by="manager", ascending=False)
+    cent = cent[0:100]
+
+    return cent
+
+
 def proximities(snw, focal_tokens: Optional[List] = None, alter_subset: Optional[List] = None) -> Dict:
     """
     Calculate proximities for given tokens.
@@ -59,10 +88,10 @@ def proximities(snw, focal_tokens: Optional[List] = None, alter_subset: Optional
 def yearly_proximities(snw, year_list: Union[list, int], focal_tokens: Optional[Union[list, str]] = None,
                        alter_subset: Optional[list] = None, max_degree: Optional[int] = None,
                        context: Optional[Union[list, str]] = None, weight_cutoff: Optional[float] = None,
-                       moving_average: Optional[tuple] = None,symmetric:Optional[bool]=False,
-                        compositional:Optional[bool]=False,
-                        reverse:Optional[bool]=False, normalization: Optional[str] = None,
-                       symmetric_method:Optional[str]=None, prune_min_frequency: Optional[int] = None):
+                       moving_average: Optional[tuple] = None, symmetric: Optional[bool] = False,
+                       compositional: Optional[bool] = False,
+                       reverse: Optional[bool] = False, normalization: Optional[str] = None,
+                       symmetric_method: Optional[str] = None, prune_min_frequency: Optional[int] = None):
     """
     Compute directly year-by-year centralities for provided list.
 
@@ -123,9 +152,9 @@ def yearly_proximities(snw, year_list: Union[list, int], focal_tokens: Optional[
     """
 
     if symmetric or reverse:
-        depth=1
+        depth = 1
     else:
-        depth=0
+        depth = 0
 
     cent_year = {}
     if not isinstance(year_list, list):
@@ -137,9 +166,9 @@ def yearly_proximities(snw, year_list: Union[list, int], focal_tokens: Optional[
     orig_focal_tokens = focal_tokens.copy()
     if alter_subset is not None:
         # Add alter subset to focal tokens
-        focal_tokens = list(set(focal_tokens+alter_subset))
+        focal_tokens = list(set(focal_tokens + alter_subset))
         # Set depth=0 to only get this network
-        depth=0
+        depth = 0
 
     for year in year_list:
         snw.decondition()
@@ -160,13 +189,13 @@ def yearly_proximities(snw, year_list: Union[list, int], focal_tokens: Optional[
             ma_years = year
 
         snw.condition(tokens=focal_tokens, times=ma_years, depth=depth, context=context, weight_cutoff=weight_cutoff,
-                      max_degree=max_degree,prune_min_frequency=prune_min_frequency)
-        if normalization=="sequences":
+                      max_degree=max_degree, prune_min_frequency=prune_min_frequency)
+        if normalization == "sequences":
             snw.norm_by_total_nr_sequences(times=ma_years)
-        elif normalization=="occurrences":
+        elif normalization == "occurrences":
             snw.norm_by_total_nr_occurrences(times=ma_years)
         elif normalization is not None:
-            msg="For yearly normalization, please either specify 'sequences' or 'occcurrences' or None"
+            msg = "For yearly normalization, please either specify 'sequences' or 'occcurrences' or None"
             logging.error(msg)
             raise AttributeError(msg)
         if reverse:

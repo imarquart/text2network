@@ -2018,7 +2018,7 @@ class neo4j_network(Sequence):
 
         else:  # Remove conditioning and recondition
             self.decondition()
-            self.condition_given_dyad(dyad_substitute=dyad_substitute, dyad_occurring=dyad_occurring, times=times, tokens=tokens, weight_cutoff=weight_cutoff,
+            self.condition_given_dyad(dyad_substitute=dyad_substitute, dyad_occurring=dyad_occurring, times=times, focal_tokens=tokens, weight_cutoff=weight_cutoff,
                            depth=depth, dyad_mode=dyad_mode,context_mode=context_mode, max_degree=max_degree)
 
         # Continue conditioning

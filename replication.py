@@ -209,8 +209,8 @@ def get_networks(semantic_network, csv_folder, years,focal_token, symmetric=Fals
     network_folder = check_create_folder(csv_folder + "/yearly_networks")
 
     ffolder = check_create_folder(network_folder + "/" + str(prefix)+"ego")
-    #extract_yearly_ego_networks(semantic_network, ego_token=focal_token, symmetric=symmetric, compositional=compositional, reverse_ties=reverse, folder=ffolder, times=years, symmetric_method="sum",
-    #                        prune_min_frequency=prune_min_frequency)
+    extract_yearly_ego_networks(semantic_network, ego_token=focal_token, symmetric=symmetric, compositional=compositional, reverse_ties=reverse, folder=ffolder, times=years, symmetric_method="sum",
+                            prune_min_frequency=prune_min_frequency)
 
     # Extract yearly networks
     #######################
