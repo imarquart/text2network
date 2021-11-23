@@ -430,7 +430,7 @@ def run_bert(args, tokenizer=None, model=None):
 
     # Disable dist
     args.local_rank = -1
-    device = torch.device("cuda:1" if torch.cuda.is_available() and not args.no_cuda else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
     # args.n_gpu = torch.cuda.device_count()
     args.n_gpu = 1
     args.device = device
