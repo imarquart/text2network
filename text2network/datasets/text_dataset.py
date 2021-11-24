@@ -243,7 +243,7 @@ class bert_dataset(Dataset):
         logging_level: logging.level
         """
         self.database = database
-        logging.disable(logging_level)
+        #logging.disable(logging_level)
         logging.info("Creating features from database file at {} with query {}".format(database,where_string))
 
         self.tables = tables.open_file(self.database, mode="r")
