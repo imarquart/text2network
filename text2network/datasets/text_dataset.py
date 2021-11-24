@@ -249,9 +249,13 @@ class bert_dataset(Dataset):
         self.tables = tables.open_file(self.database, mode="r")
         self.data = self.tables.root.textdata.table
         nr_rows = self.data.nrows
-        logging.info("HDF Table has {} rows.".format(nr_rows))
+        logging.warning("HDF Table has {} rows.".format(nr_rows))
+
         self.where_string=where_string
 
+        coordinates= self.data.get_where_list(where_string)
+        nr_rows_to_read = len(coordinates)
+        logging.warning("Query plan reading {} rows.".format(nr_rows_to_read))
 
         self.examples = []
 
@@ -293,7 +297,8 @@ class bert_dataset(Dataset):
         else:
 
             # Get text
-            for item in tqdm(self.data.where(where_string), desc="Loading Training data "):
+            for item in tqdm(self.data.itersequence(coordinates), desc="Loading Training data ", total=nr_rows_to_read):
+            #for item in tqdm(self.data.where(where_string), desc="Loading Training data ", total=nr_rows_to_read):
                 item=item['text']
                 item = item.decode("utf-8")
                 text=tokenizer.tokenize(item)
