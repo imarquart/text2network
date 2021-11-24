@@ -308,7 +308,6 @@ class bert_dataset(Dataset):
                 else:
                     text=tokenizer.build_inputs_with_special_tokens(text[0:block_size])
 
-                print(text)
                 self.examples.append(text)
 
 
