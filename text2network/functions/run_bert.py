@@ -225,10 +225,12 @@ def train(args, train_dataset, model, tokenizer):
     last_batch = tokenizer.decode(last_batch)
     logging.warning("Example Sentence before start of training: {}...".format(last_batch))
 
+    check_every = int(len(train_dataloader) * args.logging_steps)
+    logging.warning("Will evaluate every {} Steps".format(check_every))
+
     for _ in train_iterator:
         descr = "Epoch %i, Batch: " % max(1, global_step / len(train_dataloader))
 
-        check_every = int(len(train_dataloader)*args.logging_steps)
 
         epoch_iterator = tqdm(train_dataloader, desc=descr, leave=False, position=0,
                               disable=args.local_rank not in [-1, 0])
