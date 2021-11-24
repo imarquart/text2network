@@ -248,6 +248,8 @@ class bert_dataset(Dataset):
 
         self.tables = tables.open_file(self.database, mode="r")
         self.data = self.tables.root.textdata.table
+        nr_rows = self.data.nrows
+        logging.info("HDF Table has {} rows.".format(nr_rows))
         self.where_string=where_string
 
 
@@ -292,6 +294,7 @@ class bert_dataset(Dataset):
 
             # Get text
             for item in tqdm(self.data.where(where_string), desc="Loading Training data "):
+                print(item)
                 item=item['text']
                 item = item.decode("utf-8")
                 text=tokenizer.tokenize(item)
