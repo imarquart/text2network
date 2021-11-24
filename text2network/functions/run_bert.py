@@ -131,7 +131,7 @@ def train(args, train_dataset, model, tokenizer):
     if args.local_rank in [-1, 0]:
         tb_writer = None #SummaryWriter()
 
-    logging.disable(args.logging_level)
+    #logging.disable(args.logging_level)
 
     args.train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
     train_sampler = RandomSampler(train_dataset) if args.local_rank == -1 else DistributedSampler(train_dataset)
@@ -353,7 +353,7 @@ def train(args, train_dataset, model, tokenizer):
 
 
 def evaluate(args, model, tokenizer, prefix=""):
-    logging.disable(args.logging_level)
+    #logging.disable(args.logging_level)
 
     # Loop to handle MNLI double evaluation (matched, mis-matched)
     eval_output_dir = args.output_dir
