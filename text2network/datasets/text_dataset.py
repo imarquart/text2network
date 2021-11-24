@@ -299,9 +299,12 @@ class bert_dataset(Dataset):
                 text=tokenizer.tokenize(item)
                 text=tokenizer.convert_tokens_to_ids(text)
 
-                if (len(text) < block_size):
+                # this will change so save it
+                ln_text=len(text)
+
+                if (ln_text < block_size):
                     text = tokenizer.build_inputs_with_special_tokens(text)
-                    text[len(text):block_size] = np.repeat(tokenizer.pad_token_id, block_size - len(text))
+                    text[len(text):block_size] = np.repeat(tokenizer.pad_token_id, block_size - ln_text)
                 else:
                     text=tokenizer.build_inputs_with_special_tokens(text[0:block_size])
 
