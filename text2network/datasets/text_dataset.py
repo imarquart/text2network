@@ -213,7 +213,7 @@ class query_dataset(Dataset):
 
 
 
-class bert_dataset_old(Dataset):
+class bert_dataset(Dataset):
     # TODO: Padd sentences instead of joining and splitting!
     def __init__(self, tokenizer, database, where_string, block_size=30, check_vocab=False, freq_cutoff=10, logging_level=logging.DEBUG):
         """
