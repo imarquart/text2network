@@ -289,6 +289,7 @@ class bert_dataset(Dataset):
             queryds=query_dataset(data_path=database, tokenizer=tokenizer, fixed_seq_length=block_size, maxn=None, query=where_string,
                  logging_level=logging_level, pos=False, sentiment=False)
             self.examples = queryds
+            logging.info("Loaded {} examples".format(len(self.examples)))
             #for data in tqdm(queryds, desc="Tokenized sentence for query {}".format(where_string)):
             #    self.examples.append(data[0][0])
         self.tables.close()
