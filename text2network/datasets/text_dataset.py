@@ -294,11 +294,8 @@ class bert_dataset(Dataset):
 
             # Get text
             for item in tqdm(self.data.where(where_string), desc="Loading Training data "):
-                print(item)
-                print(item['text'])
                 item=item['text']
                 item = item.decode("utf-8")
-                print(item)
                 text=tokenizer.tokenize(item)
                 text=tokenizer.convert_tokens_to_ids(text)
 
@@ -308,6 +305,7 @@ class bert_dataset(Dataset):
                 else:
                     text=tokenizer.build_inputs_with_special_tokens(text[0:block_size])
 
+                print(text)
                 self.examples.append(text)
 
 
