@@ -48,7 +48,7 @@ ma=(2,2)
 
 cent = get_top_100(semantic_network=semantic_network, focal_tokens=focal_token, times=times, symmetric=sym, compositional=compositional,
                    reverse=rev)
-top100 = list(cent.manager[0:100].index)
+top100 = list(cent.iloc[0:100,0].index)
 
 filename = "".join(
     [config['Paths']['csv_outputs'], "/ClusteredRoles", str(focal_token), "__", str('top100'),"_t3", "_max_degree", str(max_degree), "_sym",

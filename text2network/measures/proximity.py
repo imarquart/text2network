@@ -30,7 +30,7 @@ def get_top_100(semantic_network, focal_tokens: Optional[List] = None, times: Op
     cent = semantic_network.proximities(focal_tokens=focal_tokens)
     cent = semantic_network.pd_format(cent)[0]
     cent = cent.T
-    cent = cent.sort_values(by="manager", ascending=False)
+    cent = cent.sort_values(by=focal_tokens, ascending=False)
     cent = cent[0:100]
 
     return cent
