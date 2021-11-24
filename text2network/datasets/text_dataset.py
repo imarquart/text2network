@@ -213,15 +213,19 @@ class query_dataset(Dataset):
 
 
 
-class bert_dataset(Dataset):
+class bert_dataset_old(Dataset):
     # TODO: Padd sentences instead of joining and splitting!
-    def __init__(self, tokenizer, database, where_string, block_size=30, check_vocab=False, freq_cutoff=10,
-                 logging_level=logging.DEBUG):
+    def __init__(self, tokenizer, database, where_string, block_size=30, check_vocab=False, freq_cutoff=10, logging_level=logging.DEBUG):
         """
         Loads data from database according to where string.
+        This dataset is only used to train BERT and cuts texts without respecting sentence logic in database.
+        For processing, another dataset is used.
 
-        This is the new version that is based on sentences. In fact, it uses internally the dataset class used for inference
+        If check_vocab= True, this dataset will not load any data but merely save the set of missing tokens
+        in self.missing_tokens. This can be used to augment BERT's vocabulary before training.
 
+        We generally use a custom tokenizer subclass that gets rid of performance problems associated with
+        adding tokens. This problem seems to be fixed in later versions of pyTorch transformers.
 
         Parameters
         ----------
@@ -240,65 +244,76 @@ class bert_dataset(Dataset):
         """
         self.database = database
         logging.disable(logging_level)
-        logging.info("Creating features from database file at {} with query {}".format(database, where_string))
+        logging.info("Creating features from database file at {} with query {}".format(database,where_string))
 
         self.tables = tables.open_file(self.database, mode="r")
         self.data = self.tables.root.textdata.table
-        self.where_string = where_string
-        # Get text
-        items = self.data.read_where(where_string)['text']
+        self.where_string=where_string
 
-        # Because of pyTables, we have to encode.
-        items = [x.decode("utf-8") for x in items]
-
-        text = ' '.join(items)
 
         self.examples = []
 
+
         if check_vocab:
+
+            items = self.data.read_where(where_string)['text']
+            # Because of pyTables, we have to encode.
+            items = [x.decode("utf-8") for x in items]
+            text = ' '.join(items)
             # Get unique tokens
 
-            nltk_tokens = nltk.word_tokenize(text)
-            nltk_tokens = [w.lower() for w in nltk_tokens if (w.isalpha() and len(w) > 3)]
+            nltk_tokens=nltk.word_tokenize(text)
+            nltk_tokens=[w.lower() for w in nltk_tokens if (w.isalpha() and len(w) > 3)]
             stop_words = set(stopwords.words('english'))
             nltk_tokens = [w for w in nltk_tokens if not w in stop_words]
-            # nltk_tokens=list(np.setdiff1d(nltk_tokens,['']))
+            #nltk_tokens=list(np.setdiff1d(nltk_tokens,['']))
             # Get frequencies
             freq_table = {}
             for word in nltk_tokens:
-                # word=ps.stem(word)
+                #word=ps.stem(word)
                 if word in freq_table:
                     freq_table[word] += 1
                 else:
                     freq_table[word] = 1
-            if len(freq_table) > 0:
+            if len(freq_table)>0:
                 freq_table = pd.DataFrame(list(freq_table.values()), index=list(freq_table.keys()))
                 freq_table = freq_table.sort_values(by=0, ascending=False)
                 freq_table = freq_table[freq_table > freq_cutoff].dropna()
-                nltk_tokens = list(freq_table.index)
-                ids, tokenizer_vocab = get_full_vocabulary(tokenizer)
-                self.missing_tokens = list(np.setdiff1d(nltk_tokens, tokenizer_vocab))
+                nltk_tokens=list(freq_table.index)
+                ids,tokenizer_vocab=get_full_vocabulary(tokenizer)
+                self.missing_tokens=list(np.setdiff1d(nltk_tokens, tokenizer_vocab))
                 if len(self.missing_tokens) > 1:
                     logging.warning("{} missing tokens in vocabulary".format(len(self.missing_tokens)))
             else:
                 logging.warning("Text with query {} has no words".format(where_string))
-                self.missing_tokens = []
-            self.examples = []
+                self.missing_tokens=[]
+            self.examples=[]
         else:
-            logging.info("Setting up sentence-based dataset for BERT training examples")
-            queryds=query_dataset(data_path=database, tokenizer=tokenizer, fixed_seq_length=block_size, maxn=None, query=where_string,
-                 logging_level=logging_level, pos=False, sentiment=False)
-            self.examples = queryds
-            logging.info("Loaded {} examples".format(len(self.examples)))
-            #for data in tqdm(queryds, desc="Tokenized sentence for query {}".format(where_string)):
-            #    self.examples.append(data[0][0])
+
+            # Get text
+            for item in tqdm(self.data.where(where_string)['text'], desc="Loading Training data "):
+                item = item.decode("utf-8")
+                text=tokenizer.tokenize(item)
+                text=tokenizer.convert_tokens_to_ids(text)
+
+                if (len(text) < block_size):
+                    text = tokenizer.build_inputs_with_special_tokens(text)
+                    text[len(text):block_size] = np.repeat(tokenizer.pad_token_id, block_size - len(text))
+                else:
+                    text=tokenizer.build_inputs_with_special_tokens(text[0:block_size])
+
+                self.examples.append(text)
+
+
         self.tables.close()
 
     def __len__(self):
         return len(self.examples)
 
     def __getitem__(self, item):
-        return self.examples[item][0][0]
+        return torch.tensor(self.examples[item])
+
+
 
 
 
@@ -387,6 +402,8 @@ class bert_dataset_old2(Dataset):
 
     def __getitem__(self, item):
         return self.examples[item]
+
+
 
 
 class bert_dataset_old(Dataset):
