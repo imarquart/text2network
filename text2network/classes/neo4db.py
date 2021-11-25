@@ -244,11 +244,17 @@ class neo4j_database():
             if weight_cutoff <= 1e-07:
                 weight_cutoff=None
 
-        if isinstance(occurring, np.ndarray):
-            occurring=occurring.tolist()
 
-        if isinstance(replacing, np.ndarray):
-            occurring=replacing.tolist()
+        if occurring is not None:
+            if isinstance(occurring, int):
+                occurring = [occurring]
+            if isinstance(occurring, np.ndarray):
+                occurring = occurring.tolist()
+        if replacing is not None:
+            if isinstance(replacing, int):
+                replacing = [replacing]
+            if isinstance(replacing, np.ndarray):
+                occurring = replacing.tolist()
 
         # Get rid of integer time to make query easier
         if isinstance(times, int):
@@ -257,17 +263,24 @@ class neo4j_database():
         if isinstance(pos, str):
             pos = [pos]
 
+        params={}
         # Create params with or without time
         if isinstance(times, (dict, int, list)):
-            params = {"id_occ": occurring, "id_repl": replacing, "times": times}
-        else:
-            params = {"id_occ": occurring, "id_repl": replacing}
-
+            params = {"times": times}
+        if occurring is not None:
+            params["id_occ"]=occurring
+        if replacing is not None:
+            params["id_repl"]=replacing
         # QUERY CREATION
 
         ### MATCH QUERY 1: TIES
         match_query = "MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word) "
-        where_query = " WHERE b.token_id in $id_repl and a.token_id in $id_occ and b.token_id <> a.token_id "
+        where_query = " WHERE b.token_id <> a.token_id "
+        if replacing is not None:
+            where_query = ''.join([where_query," and b.token_id in $id_repl "])
+        if occurring is not None:
+            where_query = ''.join([where_query, " and a.token_id in $id_occ "])
+
         if weight_cutoff is not None:
             where_query = ''.join([where_query, " AND r.weight >=", str(weight_cutoff), " "])
         if isinstance(times, dict):
@@ -430,7 +443,7 @@ class neo4j_database():
 
         return ties
 
-    def query_substitution_in_dyadic_context(self, ids, occurring, replacing,  times=None, scale=100,weight_cutoff=None, return_sentiment=True):
+    def query_substitution_in_dyadic_context(self, ids, occurring=None, replacing=None,  times=None, scale=100,weight_cutoff=None, return_sentiment=True):
         """
         // PY:query_substitution_in_dyadic_context
         MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word) WHERE b.token in ["leader"] and a.token in ["ceo"] and a.token_id <> b.token_id and r.time in [1990,1991,1992]
@@ -473,7 +486,7 @@ class neo4j_database():
                 occurring = [occurring]
             if isinstance(occurring, np.ndarray):
                 occurring = occurring.tolist()
-        if replacing is not None:  
+        if replacing is not None:
             if isinstance(replacing, int):
                 replacing = [replacing]
             if isinstance(replacing, np.ndarray):
@@ -496,15 +509,23 @@ class neo4j_database():
 
         # Create params with or without time
         if isinstance(times, (dict, int, list)):
-            params = {"idx": ids, "id_occ": occurring, "id_repl": replacing, "times": times}
+            params = {"idx": ids, "times": times}
         else:
-            params = {"idx": ids, "id_occ": occurring, "id_repl": replacing}
+            params = {"idx": ids}
+        if occurring is not None:
+            params["id_occ"]=occurring
+        if replacing is not None:
+            params["id_repl"]=replacing
 
         # QUERY CREATION
 
         ### MATCH QUERY 1: TIES
         match_query = "MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word) "
-        where_query = " WHERE b.token_id in $id_repl and a.token_id in $id_occ and b.token_id <> a.token_id "
+        where_query = " WHERE b.token_id <> a.token_id "
+        if replacing is not None:
+            where_query = ''.join([where_query," and b.token_id in $id_repl "])
+        if occurring is not None:
+            where_query = ''.join([where_query, " and a.token_id in $id_occ "])
         if weight_cutoff is not None:
             where_query = ''.join([where_query, " AND r.weight >=", str(weight_cutoff), " "])
         if isinstance(times, dict):
