@@ -16,7 +16,6 @@ from text2network.functions.graph_clustering import consensus_louvain
 from text2network.measures.measures import return_measure_dict
 from text2network.utils.file_helpers import check_create_folder
 
-
 def get_pos_profile(snw: neo4j_network, focal_token: Union[str, int], role_cluster: Union[str, int, list],
                     times: Union[list, int], pos: str, context_mode: Optional[str] = "bidirectional",
                     return_sentiment: Optional[bool] = True, weight_cutoff: Optional[float] = 0) -> pd.DataFrame:

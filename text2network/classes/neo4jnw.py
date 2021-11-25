@@ -728,66 +728,75 @@ class neo4j_network(Sequence):
 
         return {'proximity': pd_dict}
 
-    def get_dyad_context(self, dyads: Optional[Union[list, tuple]] = None,
-                         occurrence: Optional[Union[list, str, int]] = None,
-                         replacement: Optional[Union[list, str, int]] = None, times: Union[int, list, dict] = None,
-                         weight_cutoff: Optional[float] = None, part_of_speech: Optional[str] = None,
-                         context_mode: Optional[str] = "bidirectional",
-                         return_sentiment: Optional[bool] = True) -> dict:
+    def get_dyad_context(self, focal_substitutes: Optional[Union[list,str, int]]=None, focal_occurrences: Optional[Union[list,str, int]]=None,
+                           context_pos: Optional[str]=None, times: Union[list, int]=None,context_mode:Optional[str] = "bidirectional", return_sentiment: Optional[bool] = True, weight_cutoff: Optional[float] = None) -> pd.dict:
         """
-        Specify a dyad and get the distribution of contextual words.
-        dyads are tuples of (occurrence,replacement), that is, in the graph, ties that go replacement->occurrence.
-        You can pass a list of tuples.
-        You can also pass occurrences and replacement tokens as lists or individual tokens
+        This function returns a dataframe with a list of contextual tokens that appear in the context of another dyad.
+        The focal dyad can be specified by occurrence tokens, and substitute tokens, given as lists. The algorithm
+        will consider the combination of each element dyad=(occurrence, substitute).
+
+        For each such dyad, contextual tokens are returned, also from a dyad that occurs in the same sequence.
+        Which token gets returned, and with which weight, depends on the parameter context mode
+        If context_mode="occuring", give the likelihood that the token appears as written in the context of a substitution
+        If context_mode="bidirectional", give the likelihood that the token appears, or according to BERT could appear
+        If context_mode="substitution", give the likelihood that the token could appear when it does not
+
+        Values are aggregated across sequences with the substitution weight of the original dyad.
 
 
         Parameters
         ----------
-        dyads
-        occurrence
-        replacement
-        times
-        weight_cutoff
-        part_of_speech
-        context_mode
-        return_sentiment
+        snw : neo4j_network
+            Semantic Network
 
+        focal_substitutes: list, str, int, Optional
+            Terms that substitute for an occurring term in the focal dyad
 
-        Returns
-        -------
+        focal_occurrences:  list, str, int, Optional
+            Terms that occur in the focal dyad
+
+        context_pos: str, Optional
+            Only consider context terms, where the occurring word is classified as the given Part of Speech
+
+        times: list, Optional
+            Aggregate across these times
+
+        context_mode: str, Optional, Default "bidirectional"
+            If context_mode="occuring", give the likelihood that the token appears as written in the context of a substitution
+            If context_mode="bidirectional", give the likelihood that the token appears, or according to BERT could appear
+            If context_mode="substitution", give the likelihood that the token could appear when it does not
+
+        return_sentiment: bool, Optional, Default True
+            Return sentiment and subjectivity (Averaged) for the focal tie
+
+        weight_cutoff: float, Optional, Default None
+            Ignore any network ties that are less than this value in weight
 
         """
 
-        # Untangle dyad lists
-        if dyads is not None:
-            if isinstance(dyads, list):
-                occurrence = [x[0] for x in dyads]
-                replacement = [x[1] for x in dyads]
-            else:
-                occurrence = dyads[0]
-                replacement = dyads[1]
-        elif replacement is None or occurrence is None:
-            msg = "Please provide either dyads as list of tuples (occurrence, replacement) or individual lists of occurrences and replacements!"
+
+        if focal_substitutes is None and focal_occurrences is None:
+            msg = "Please provide either focal_substitutes and/or focal_occurrences from dyads!"
             logging.error(msg)
             raise AttributeError(msg)
 
         if times is None:
             times = self.get_times_list()
 
-        occurrence = input_check(tokens=occurrence)
-        replacement = input_check(tokens=replacement)
+        focal_occurrences = input_check(tokens=focal_occurrences)
+        focal_substitutes = input_check(tokens=focal_substitutes)
         times = input_check(times=times)
 
-        if isinstance(occurrence, (str, int)):
-            occurrence = [occurrence]
-        if isinstance(replacement, (str, int)):
-            replacement = [replacement]
+        if isinstance(focal_occurrences, (str, int)):
+            focal_occurrences = [focal_occurrences]
+        if isinstance(focal_substitutes, (str, int)):
+            focal_substitutes = [focal_substitutes]
 
-        occurrence = np.array(self.ensure_ids(occurrence)).tolist()
-        replacement = np.array(self.ensure_ids(replacement)).tolist()
+        focal_occurrences = [int(x) for x in np.array(self.ensure_ids(focal_occurrences)).tolist()]
+        focal_substitutes = [int(x) for x in np.array(self.ensure_ids(focal_substitutes)).tolist()]
 
-        pd_dict = self.db.query_tie_context(occurring=occurrence, replacing=replacement, times=times,
-                                            weight_cutoff=weight_cutoff, pos=part_of_speech,
+        pd_dict = self.db.query_tie_context(occurring=focal_occurrences, replacing=focal_substitutes, times=times,
+                                            weight_cutoff=weight_cutoff, pos=context_pos,
                                             return_sentiment=return_sentiment, context_mode=context_mode)
 
         return {'dyad_context': pd_dict}

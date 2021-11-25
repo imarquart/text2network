@@ -210,6 +210,8 @@ class neo4j_database():
 
     def query_tie_context(self, occurring, replacing, times=None, pos=None, context_mode="bidirectional", return_sentiment=True, weight_cutoff=None):
         """
+        This returns contextual words, weighted by
+
 
         // Dyadic Context (Bidirectional)
         MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word) WHERE b.token in ["leader"] and a.token in ["ceo"] and a.token_id <> b.token_id
@@ -289,6 +291,8 @@ class neo4j_database():
             pos_match = " WITH a,r,b,q,e MATCH (q)-[:pos]-(pos:part_of_speech) WHERE pos.part_of_speech in "
             pos_vector = "["+",".join(["'"+str(x)+"'" for x in pos])+"] "
             pos_match = " ".join([pos_match, pos_vector])
+        else:
+            pos_match = " "
 
         ### FINAL MATCH
         match = " ".join([match_query, where_query, c_match, c_where, pos_match])
@@ -426,11 +430,13 @@ class neo4j_database():
         // Substitution in context of Dyad
         MATCH p=(a:word)-[:onto]->(r:edge {time:2020})-[:onto]->(b:word) WHERE b.token in ["leader"] and a.token in ["ceo"] and a.token_id <> b.token_id
         With a,r,b
+        Match (r)-[:seq]-(s:sequence)-[:seq]-(q:edge) WHERE q.pos<>r.pos
+        WITH count(DISTINCT([q.pos,q.run_index])) as seq_length, a,r,b
         Match (r)-[:seq]-(s:sequence)<-[:seq]-(q:edge) WHERE q.pos<>r.pos
-        WITH a,r,b,q
+        WITH a,r,b,q,seq_length
         MATCH (e:word) -[:onto]->(q)-[:onto]->(f:word) WHERE f.token in ["inspire"]
         WITH
-        r.run_index as ridx, f.token as sub, e.token as occ, b.token AS rep_dyad,a.token AS occ_dyad,sum(q.weight)*sum(r.weight) as weight
+        r.run_index as ridx, f.token as sub, e.token as occ, b.token AS rep_dyad,a.token AS occ_dyad,100*sum(q.weight)*sum(r.weight)/seq_length as weight
         RETURN
         sub,occ,rep_dyad,occ_dyad,sum(weight) as weight
         ORDER by weight DESC

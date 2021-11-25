@@ -32,7 +32,7 @@ def average_cluster_proximities(focal_token: str, nw, levels: int,
                                 export_network: Optional[bool] = False,
                                 add_focal_to_clusters: Optional[bool] = False,
                                 mode: Optional[str] = "replacement", occurrence: Optional[bool] = False,
-                                batchsize: Optional[int] = 10,
+                                batchsize: Optional[int] = 1000,
                                 seed: Optional[int] = None) -> pd.DataFrame:
     """
     First, derives clusters from overall network (across all years), then creates year-by-year average proximities for these clusters
