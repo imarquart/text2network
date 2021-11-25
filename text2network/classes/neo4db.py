@@ -208,7 +208,7 @@ class neo4j_database():
 
     # %% Query Functions
 
-    def query_tie_context(self, occurring, replacing, times=None, pos=None, context_mode="bidirectional", return_sentiment=True, weight_cutoff=None):
+    def query_tie_context(self, occurring, replacing, times=None, pos=None, scale=100, context_mode="bidirectional", return_sentiment=True, weight_cutoff=None):
         """
         This returns contextual words, weighted by
 
@@ -216,13 +216,15 @@ class neo4j_database():
         // Dyadic Context (Bidirectional)
         MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word) WHERE b.token in ["leader"] and a.token in ["ceo"] and a.token_id <> b.token_id
         With a,r,b
+        Match (r)-[:seq]-(s:sequence)-[:seq]-(q:edge) WHERE q.pos<>r.pos
+        WITH count(DISTINCT([q.pos,q.run_index])) as seq_length, a,r,b
         Match (r)-[:seq]-(s:sequence)-[:seq]-(q:edge) - [:onto]-(e:word) WHERE q.pos<>r.pos
-        WITH a,r,b,q,e
+        WITH a,r,b,q,e, seq_length
         MATCH (q)-[:pos]-(pos:part_of_speech) WHERE pos.part_of_speech in ["VERB"]
         With
-        r.pos as rpos, r.run_index as ridx, b.token AS substitute,a.token AS occurrence,CASE WHEN sum(q.weight)>1.0 THEN 1 else sum(q.weight) END as cweight, head(collect(r.weight)) AS rweight, e.token as context, head(collect(r.sentiment)) AS sentiment, head(collect(r.subjectivity)) AS subjectivity
-        WITH  ridx, context, substitute, occurrence, CASE WHEN sum(cweight)>1.0 THEN 1 else sum(cweight) END as cweight,CASE WHEN sum(rweight)>1.0 THEN 1 else sum(rweight) END as rweight,avg(sentiment) as sentiment, avg(subjectivity) as subjectivity  order by ridx
-        WITH ridx, context, substitute, occurrence, cweight*rweight as weight, sentiment, subjectivity, rweight, cweight
+        r.pos as rpos, r.run_index as ridx, b.token AS substitute,a.token AS occurrence,CASE WHEN sum(q.weight)>1.0 THEN 1 else sum(q.weight) END as cweight, head(collect(r.weight)) AS rweight, e.token as context, head(collect(r.sentiment)) AS sentiment, head(collect(r.subjectivity)) AS subjectivity, seq_length
+        WITH  ridx, context, substitute, occurrence, CASE WHEN sum(cweight)>1.0 THEN 1 else sum(cweight) END as cweight,CASE WHEN sum(rweight)>1.0 THEN 1 else sum(rweight) END as rweight,avg(sentiment) as sentiment, avg(subjectivity) as subjectivity, seq_length
+        WITH ridx, context, substitute, occurrence, 100*cweight*rweight/seq_length as weight, sentiment, subjectivity, rweight, cweight
         RETURN context, substitute, occurrence, sum(weight) as weight, sum(rweight) as subst_weight, sum(cweight) as context_weight, avg(sentiment) as sentiment, avg(subjectivity) as subjectivity ORDER by weight DESC
 
         Parameters
@@ -273,13 +275,16 @@ class neo4j_database():
         elif isinstance(times, list):
             where_query = ''.join([where_query, " AND  r.time in $times "])
 
+        # MATCH QUERY: Sequence Length
+        sqlength_match= "Match (r)-[:seq]-(s:sequence)-[:seq]-(q:edge) WHERE q.pos<>r.pos "
+
         ### MATCH QUERY 2: CONTEXT
         if context_mode == "bidirectional":
-            c_match = "".join([" WITH a,r,b MATCH (r)-[:seq]-(s:sequence)-[:seq]-(q:edge) - [:onto]-(e:word) "])
+            c_match = "".join([" WITH count(DISTINCT([q.pos,q.run_index])) as seq_length, a,r,b  MATCH (r)-[:seq]-(s:sequence)-[:seq]-(q:edge) - [:onto]-(e:word) "])
         elif context_mode == "occuring":
-            c_match = "".join([" WITH a,r,b MATCH (r)-[:seq]-(s:sequence)-[:seq]-(q:edge)<- [:onto]-(e:word) "])
+            c_match = "".join([" WITH count(DISTINCT([q.pos,q.run_index])) as seq_length, a,r,b MATCH (r)-[:seq]-(s:sequence)-[:seq]-(q:edge)<- [:onto]-(e:word) "])
         else:
-            c_match = "".join([" WITH a,r,b MATCH (r)-[:seq]-(s:sequence)-[:seq]-(q:edge) - [:onto]->(e:word) "])
+            c_match = "".join([" WITH count(DISTINCT([q.pos,q.run_index])) as seq_length, a,r,b MATCH (r)-[:seq]-(s:sequence)-[:seq]-(q:edge) - [:onto]->(e:word) "])
 
         c_where = " WHERE q.pos<>r.pos "
         if weight_cutoff is not None:
@@ -288,19 +293,19 @@ class neo4j_database():
 
         ### MATCH QUERY 3: PART OF SPEECH
         if pos is not None:
-            pos_match = " WITH a,r,b,q,e MATCH (q)-[:pos]-(pos:part_of_speech) WHERE pos.part_of_speech in "
+            pos_match = " WITH a,r,b,q,e,seq_length MATCH (q)-[:pos]-(pos:part_of_speech) WHERE pos.part_of_speech in "
             pos_vector = "["+",".join(["'"+str(x)+"'" for x in pos])+"] "
             pos_match = " ".join([pos_match, pos_vector])
         else:
             pos_match = " "
 
         ### FINAL MATCH
-        match = " ".join([match_query, where_query, c_match, c_where, pos_match])
+        match = " ".join([match_query, sqlength_match, where_query, c_match, c_where, pos_match])
 
         ### AGGREGATION QUERY
-        part1 = "WITH r.pos as rpos, r.run_index as ridx, b.token_id AS substitute,a.token_id AS occurrence,CASE WHEN sum(q.weight)>1.0 THEN 1 else sum(q.weight) END as cweight, head(collect(r.weight)) AS rweight, e.token_id as context, head(collect(r.sentiment)) AS sentiment, head(collect(r.subjectivity)) AS subjectivity"
-        part2 = "WITH  ridx, context, substitute, occurrence, CASE WHEN sum(cweight)>1.0 THEN 1 else sum(cweight) END as cweight,CASE WHEN sum(rweight)>1.0 THEN 1 else sum(rweight) END as rweight,avg(sentiment) as sentiment, avg(subjectivity) as subjectivity "
-        part3 = "WITH ridx, context, substitute, occurrence, cweight*rweight as weight, sentiment, subjectivity, rweight, cweight "
+        part1 = "WITH r.pos as rpos, r.run_index as ridx, b.token_id AS substitute,a.token_id AS occurrence,CASE WHEN sum(q.weight)>1.0 THEN 1 else sum(q.weight) END as cweight, head(collect(r.weight)) AS rweight, e.token_id as context, head(collect(r.sentiment)) AS sentiment, head(collect(r.subjectivity)) AS subjectivity, seq_length "
+        part2 = "WITH  ridx, context, substitute, occurrence, CASE WHEN sum(cweight)>1.0 THEN 1 else sum(cweight) END as cweight,CASE WHEN sum(rweight)>1.0 THEN 1 else sum(rweight) END as rweight,avg(sentiment) as sentiment, avg(subjectivity) as subjectivity,seq_length "
+        part3 = "WITH ridx, context, substitute, occurrence, cweight*rweight/seq_length*{} as weight, sentiment, subjectivity, rweight, cweight ".format(scale)
 
         agg = " ".join([part1, part2, part3])
 
@@ -463,17 +468,16 @@ class neo4j_database():
         if isinstance(ids, int):
             ids = [ids]
 
-        if isinstance(occurring, int):
-            occurring = [occurring]
-
-        if isinstance(replacing, int):
-            replacing = [replacing]
-
-        if isinstance(occurring, np.ndarray):
-            occurring = occurring.tolist()
-
-        if isinstance(replacing, np.ndarray):
-            occurring = replacing.tolist()
+        if occurring is not None:
+            if isinstance(occurring, int):
+                occurring = [occurring]
+            if isinstance(occurring, np.ndarray):
+                occurring = occurring.tolist()
+        if replacing is not None:  
+            if isinstance(replacing, int):
+                replacing = [replacing]
+            if isinstance(replacing, np.ndarray):
+                occurring = replacing.tolist()
 
         # Get rid of integer time to make query easier
         if isinstance(times, int):
@@ -521,10 +525,10 @@ class neo4j_database():
         pos_match = " WITH a,r,b,q,seq_length MATCH (e:word) -[:onto]->(q)-[:onto]->(f:word) WHERE f.token_id in $idx and e.token_id <> f.token_id "
 
         ### FINAL MATCH
-        match = " ".join([match_query, where_query, c_match, c_where, pos_match])
+        match = " ".join([match_query,sqlength_match, where_query, c_match, c_where, pos_match])
 
         ### AGGREGATION QUERY
-        agg = " WITH r.run_index as ridx, f.token_id as sub, e.token_id as occ, b.token_id AS rep_dyad,a.token_id AS occ_dyad,seq_length*sum(q.weight)*sum(r.weight)*{} as weight, avg(r.sentiment) as sentiment, avg(r.subjectivity) as subjectivity ".format(scale)
+        agg = " WITH r.run_index as ridx, f.token_id as sub, e.token_id as occ, b.token_id AS rep_dyad,a.token_id AS occ_dyad,sum(q.weight)*sum(r.weight)/seq_length*{} as weight, avg(r.sentiment) as sentiment, avg(r.subjectivity) as subjectivity ".format(scale)
 
         # RETURN QUERY
         return_query = "RETURN sub,occ,[rep_dyad,occ_dyad] as dyad ,sum(weight) as weight "

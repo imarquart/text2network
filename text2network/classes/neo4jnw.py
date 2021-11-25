@@ -1980,7 +1980,7 @@ class neo4j_network(Sequence):
                     # Query Neo4j
                     try:
                         self.__add_edges(
-                            self.db.query_nodes_in_dyadic_context(ids=id_batch, occurring=dyad_occurring, replacing=dyad_substitute,times=times, weight_cutoff=weight_cutoff),
+                            self.db.query_substitution_in_dyadic_context(ids=id_batch, occurring=dyad_occurring, replacing=dyad_substitute,times=times, weight_cutoff=weight_cutoff),
                             max_degree=max_degree)
                     except:
                         logging.error("Could not condition given dyad by query method.")
