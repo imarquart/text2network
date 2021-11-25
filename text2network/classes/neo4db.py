@@ -425,21 +425,21 @@ class neo4j_database():
 
         return ties
 
-    def query_nodes_in_dyadic_context(self, ids, occurring, replacing,  times=None, weight_cutoff=None, return_sentiment=True):
+    def query_substitution_in_dyadic_context(self, ids, occurring, replacing,  times=None, scale=100,weight_cutoff=None, return_sentiment=True):
         """
-        // Substitution in context of Dyad
-        MATCH p=(a:word)-[:onto]->(r:edge {time:2020})-[:onto]->(b:word) WHERE b.token in ["leader"] and a.token in ["ceo"] and a.token_id <> b.token_id
+        // PY:query_substitution_in_dyadic_context
+        MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word) WHERE b.token in ["leader"] and a.token in ["ceo"] and a.token_id <> b.token_id and r.time in [1990,1991,1992]
         With a,r,b
         Match (r)-[:seq]-(s:sequence)-[:seq]-(q:edge) WHERE q.pos<>r.pos
         WITH count(DISTINCT([q.pos,q.run_index])) as seq_length, a,r,b
         Match (r)-[:seq]-(s:sequence)<-[:seq]-(q:edge) WHERE q.pos<>r.pos
         WITH a,r,b,q,seq_length
-        MATCH (e:word) -[:onto]->(q)-[:onto]->(f:word) WHERE f.token in ["inspire"]
+        MATCH (e:word) -[:onto]->(q)-[:onto]->(f:word) WHERE f.token in ["make"]
         WITH
         r.run_index as ridx, f.token as sub, e.token as occ, b.token AS rep_dyad,a.token AS occ_dyad,100*sum(q.weight)*sum(r.weight)/seq_length as weight
         RETURN
         sub,occ,rep_dyad,occ_dyad,sum(weight) as weight
-        ORDER by weight DESC
+        ORDER by occ DESC
 
         Parameters
         ----------
@@ -508,20 +508,23 @@ class neo4j_database():
         elif isinstance(times, list):
             where_query = ''.join([where_query, " AND  r.time in $times "])
 
+        # MATCH QUERY 2: Sequence Length
+        sqlength_match= "Match (r)-[:seq]-(s:sequence)-[:seq]-(q:edge) WHERE q.pos<>r.pos "
+
         ### MATCH QUERY 2: OCCURRING TOKEN
-        c_match = "".join([" WITH a,r,b MATCH  (r)-[:seq]-(s:sequence)<-[:seq]-(q:edge) "])
+        c_match = "".join([" WITH count(DISTINCT([q.pos,q.run_index])) as seq_length, a,r,b  MATCH  (r)-[:seq]-(s:sequence)<-[:seq]-(q:edge) "])
         c_where = " WHERE q.pos<>r.pos "
         if weight_cutoff is not None:
             c_where = ''.join([c_where, " AND q.weight >=", str(weight_cutoff), " "])
 
         ### MATCH QUERY 3: Replacing ties
-        pos_match = " WITH a,r,b,q MATCH (e:word) -[:onto]->(q)-[:onto]->(f:word) WHERE f.token_id in $idx and e.token_id <> f.token_id "
+        pos_match = " WITH a,r,b,q,seq_length MATCH (e:word) -[:onto]->(q)-[:onto]->(f:word) WHERE f.token_id in $idx and e.token_id <> f.token_id "
 
         ### FINAL MATCH
         match = " ".join([match_query, where_query, c_match, c_where, pos_match])
 
         ### AGGREGATION QUERY
-        agg = " WITH r.run_index as ridx, f.token_id as sub, e.token_id as occ, b.token_id AS rep_dyad,a.token_id AS occ_dyad,sum(q.weight)*sum(r.weight) as weight, avg(r.sentiment) as sentiment, avg(r.subjectivity) as subjectivity "
+        agg = " WITH r.run_index as ridx, f.token_id as sub, e.token_id as occ, b.token_id AS rep_dyad,a.token_id AS occ_dyad,seq_length*sum(q.weight)*sum(r.weight)*{} as weight, avg(r.sentiment) as sentiment, avg(r.subjectivity) as subjectivity ".format(scale)
 
         # RETURN QUERY
         return_query = "RETURN sub,occ,[rep_dyad,occ_dyad] as dyad ,sum(weight) as weight "
