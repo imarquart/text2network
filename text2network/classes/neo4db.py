@@ -225,8 +225,7 @@ class neo4j_database():
         r.pos as rpos, r.run_index as ridx, b.token AS substitute,a.token AS occurrence,CASE WHEN sum(q.weight)>1.0 THEN 1 else sum(q.weight) END as cweight, head(collect(r.weight)) AS rweight, e.token as context, head(collect(r.sentiment)) AS sentiment, head(collect(r.subjectivity)) AS subjectivity, seq_length
         WITH  ridx, context, substitute, occurrence, CASE WHEN sum(cweight)>1.0 THEN 1 else sum(cweight) END as cweight,CASE WHEN sum(rweight)>1.0 THEN 1 else sum(rweight) END as rweight,avg(sentiment) as sentiment, avg(subjectivity) as subjectivity, seq_length
         WITH ridx, context, substitute, occurrence, 100*cweight*rweight/seq_length as weight, sentiment, subjectivity, rweight, cweight
-        RETURN context, substitute, occurrence, sum(weight) as weight, sum(rweight) as subst_weight, sum(cweight) as context_weight, avg(sentiment) as sentiment, avg(subjectivity) as subjectivity ORDER by weight DESC
-
+        RETURN context,  sum(weight) as weight, collect(DISTINCT(substitute)) as substitute, collect(DISTINCT(occurrence)) as occurrence,sum(rweight) as subst_weight, sum(cweight) as context_weight, avg(sentiment) as sentiment, avg(subjectivity) as subjectivity ORDER by weight DESC
         Parameters
         ----------
         occurring
@@ -323,7 +322,7 @@ class neo4j_database():
         agg = " ".join([part1, part2, part3])
 
         # RETURN QUERY
-        return_query = "RETURN context, substitute, occurrence, sum(weight) as weight "
+        return_query = "RETURN context, collect(distinct(substitute)) as substitute, collect(distinct(occurrence)) as occurrence, sum(weight) as weight "
         if return_sentiment:
             return_query = return_query+", avg(sentiment) as sentiment, avg(subjectivity) as subjectivity "
         return_query = return_query+" order by substitute"
@@ -456,7 +455,7 @@ class neo4j_database():
         WITH
         r.run_index as ridx, f.token as sub, e.token as occ, b.token AS rep_dyad,a.token AS occ_dyad,100*sum(q.weight)*sum(r.weight)/seq_length as weight
         RETURN
-        sub,occ,rep_dyad,occ_dyad,sum(weight) as weight
+        sub,occ,sum(weight) as weight,[collect(distinct(rep_dyad)),collect(distinct(occ_dyad))] as dyad
         ORDER by occ DESC
 
         Parameters
@@ -552,7 +551,143 @@ class neo4j_database():
         agg = " WITH r.run_index as ridx, f.token_id as sub, e.token_id as occ, b.token_id AS rep_dyad,a.token_id AS occ_dyad,sum(q.weight)*sum(r.weight)/seq_length*{} as weight, avg(r.sentiment) as sentiment, avg(r.subjectivity) as subjectivity ".format(scale)
 
         # RETURN QUERY
-        return_query = "RETURN sub,occ,[rep_dyad,occ_dyad] as dyad ,sum(weight) as weight "
+        return_query = "RETURN sub,occ,[collect(distinct(rep_dyad)),collect(distinct(occ_dyad))] as dyad ,sum(weight) as weight "
+        if return_sentiment:
+            return_query = return_query + ", avg(sentiment) as sentiment, avg(subjectivity) as subjectivity "
+        return_query = return_query + " order by occ"
+
+        query = "".join([match, agg, return_query])
+        logging.debug("Tie Context Query: {}".format(query))
+        res = self.receive_query(query, params)
+
+        if return_sentiment:
+            ties = [(x['sub'], x['occ'],
+                     {'weight': np.float(x['weight']), 'dyad':str(x['dyad']), 'time': nw_time['m'], 'start': nw_time['s'],
+                      'end': nw_time['e'], 'sentiment': np.float(x['sentiment']), 'subjectivity':  np.float(x['subjectivity'])}) for
+                    x in res]
+        else:
+            ties = [(x['sub'], x['occ'],
+                     {'weight': np.float(x['weight']), 'dyad':str(x['dyad']), 'time': nw_time['m'], 'start': nw_time['s'],
+                      'end': nw_time['e']}) for
+                    x in res]
+
+        return ties
+
+    def query_context_in_dyadic_context(self, ids, occurring=None, replacing=None,  times=None, scale=100,weight_cutoff=None, return_sentiment=True):
+        """
+        // PY: query_context_in_dyadic_context
+        MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word) WHERE b.token in ["leader"]  and a.token_id <> b.token_id and r.time in [1990,1991,1992]
+        With a,r,b
+        Match (r)-[:seq]-(s:sequence)-[:seq]-(q:edge) WHERE q.pos<>r.pos
+        WITH count(DISTINCT([q.pos,q.run_index])) as seq_length, a,r,b
+        Match (r)-[:seq]-(s:sequence)-[:seq]-(q:edge) WHERE q.pos<>r.pos
+        WITH a,r,b,q,seq_length
+        MATCH (f:word) -[:onto]-(q)-[:seq]-(s:sequence)-[:seq]-(t:edge)-[:onto]-(e:word) WHERE f.token in ["make"] and f.token <> e.token
+        WITH
+        r.run_index as ridx, f.token as occ1, e.token as occ2, b.token AS rep_dyad,a.token AS occ_dyad,
+        CASE WHEN sum(q.weight)>1.0 THEN 1 else sum(q.weight) END as qweight,
+        CASE WHEN sum(t.weight)>1.0 THEN 1 else sum(t.weight) END as tweight,
+        head(collect(r.weight)) as rweight,seq_length
+        RETURN
+         occ1, occ2,100*sum(qweight*tweight*rweight)/seq_length as weight,[collect(distinct(rep_dyad)),collect(distinct(occ_dyad))] as dyad order by weight DESC
+
+        Parameters
+        ----------
+        return_sentiment
+        ids
+        occurring
+        replacing
+        times
+        weight_cutoff
+
+        Returns
+        -------
+
+        """
+        logging.debug("Querying tie between {}->replacing->{}.".format(replacing, occurring))
+
+        if weight_cutoff is not None:
+            if weight_cutoff <= 1e-07:
+                weight_cutoff = None
+
+        if isinstance(ids, int):
+            ids = [ids]
+
+        if occurring is not None:
+            if isinstance(occurring, int):
+                occurring = [occurring]
+            if isinstance(occurring, np.ndarray):
+                occurring = occurring.tolist()
+        if replacing is not None:
+            if isinstance(replacing, int):
+                replacing = [replacing]
+            if isinstance(replacing, np.ndarray):
+                occurring = replacing.tolist()
+
+        # Get rid of integer time to make query easier
+        if isinstance(times, int):
+            times = [times]
+
+        # Format time to set for network
+        if isinstance(times, int):
+            nw_time = {"s": times, "e": times, "m": times}
+        elif isinstance(times, dict):
+            nw_time = {"s": times['start'], "e": times['end'], "m": int((times['end'] + times['start']) / 2)}
+        elif isinstance(times, list):
+            sort_times = np.sort(times)
+            nw_time = {"s": sort_times[0], "e": sort_times[-1], "m": int((sort_times[0] + sort_times[-1]) / 2)}
+        else:
+            nw_time = {"s": 0, "e": 0, "m": 0}
+
+        # Create params with or without time
+        if isinstance(times, (dict, int, list)):
+            params = {"idx": ids, "times": times}
+        else:
+            params = {"idx": ids}
+        if occurring is not None:
+            params["id_occ"]=occurring
+        if replacing is not None:
+            params["id_repl"]=replacing
+
+        # QUERY CREATION
+
+        ### MATCH QUERY 1: TIES
+        match_query = "MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word) "
+        where_query = " WHERE b.token_id <> a.token_id "
+        if replacing is not None:
+            where_query = ''.join([where_query," and b.token_id in $id_repl "])
+        if occurring is not None:
+            where_query = ''.join([where_query, " and a.token_id in $id_occ "])
+        if weight_cutoff is not None:
+            where_query = ''.join([where_query, " AND r.weight >=", str(weight_cutoff), " "])
+        if isinstance(times, dict):
+            where_query = ''.join([where_query, " AND  $times.start <= r.time<= $times.end "])
+        elif isinstance(times, list):
+            where_query = ''.join([where_query, " AND  r.time in $times "])
+
+        # MATCH QUERY 2: Sequence Length
+        sqlength_match= "Match (r)-[:seq]-(s:sequence)-[:seq]-(q:edge) WHERE q.pos<>r.pos "
+
+        ### MATCH QUERY 2: OCCURRING TOKEN
+        c_match = "".join([" WITH count(DISTINCT([q.pos,q.run_index])) as seq_length, a,r,b,s  MATCH  (r)-[:seq]-(s)-[:seq]-(q:edge) "])
+        c_where = " WHERE q.pos<>r.pos "
+        if weight_cutoff is not None:
+            c_where = ''.join([c_where, " AND q.weight >=", str(weight_cutoff), " "])
+
+        ### MATCH QUERY 3: Replacing ties
+        pos_with = " WITH a,r,b,q,seq_length,s "
+
+        pos_match = "MATCH (f: word) -[: onto]-(q) - [: seq]-(s) - [: seq]-(t:edge) - [: onto]-(e:word) "
+        pos_where = " WHERE f.token_id <> e.token_id and f.token_id in $idx "
+
+        ### FINAL MATCH
+        match = " ".join([match_query,sqlength_match, where_query, c_match, c_where, pos_with, pos_match, pos_where])
+
+        ### AGGREGATION QUERY
+        agg = " r.run_index as ridx, f.token as sub, e.token as occ, b.token AS rep_dyad,a.token AS occ_dyad,avg(r.sentiment) as sentiment, avg(r.subjectivity) as subjectivity,  CASE WHEN sum(q.weight)>1.0 THEN 1 else sum(q.weight) END as qweight, CASE WHEN sum(t.weight)>1.0 THEN 1 else sum(t.weight) END as tweight, head(collect(r.weight)) as rweight,seq_length "
+
+        # RETURN QUERY
+        return_query = "RETURN sub, occ,{}*sum(qweight*tweight*rweight)/seq_length as weight,[collect(distinct(rep_dyad)),collect(distinct(occ_dyad))] as dyad ".format(scale)
         if return_sentiment:
             return_query = return_query + ", avg(sentiment) as sentiment, avg(subjectivity) as subjectivity "
         return_query = return_query + " order by occ"
