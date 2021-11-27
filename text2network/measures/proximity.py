@@ -7,7 +7,7 @@ from text2network.functions.node_measures import proximity
 from text2network.utils.input_check import input_check
 
 
-def get_top_100(semantic_network, focal_tokens: Optional[List] = None, times: Optional[list] = None,
+def get_top_100(semantic_network, focal_tokens: Optional[Union[list,str,int]] = None, times: Optional[list] = None,
                 symmetric: Optional[bool] = False, compositional: Optional[bool] = False,
                 reverse: Optional[bool] = False, prune_min_frequency:Optional[int]=None):
     if symmetric or reverse:

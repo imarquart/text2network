@@ -288,7 +288,7 @@ class neo4j_database():
             where_query = ''.join([where_query, " AND  r.time in $times "])
 
         # MATCH QUERY: Sequence Length
-        sqlength_match= "Match (r)-[:seq]-(s:sequence)-[:seq]-(q:edge) WHERE q.pos<>r.pos "
+        sqlength_match= " With a,r,b Match (r)-[:seq]-(s:sequence)-[:seq]-(q:edge) WHERE q.pos<>r.pos "
 
         ### MATCH QUERY 2: CONTEXT
         if context_mode == "bidirectional":
@@ -312,12 +312,12 @@ class neo4j_database():
             pos_match = " "
 
         ### FINAL MATCH
-        match = " ".join([match_query, sqlength_match, where_query, c_match, c_where, pos_match])
+        match = " ".join([match_query,where_query, sqlength_match,  c_match, c_where, pos_match])
 
         ### AGGREGATION QUERY
         part1 = "WITH r.pos as rpos, r.run_index as ridx, b.token_id AS substitute,a.token_id AS occurrence,CASE WHEN sum(q.weight)>1.0 THEN 1 else sum(q.weight) END as cweight, head(collect(r.weight)) AS rweight, e.token_id as context, head(collect(r.sentiment)) AS sentiment, head(collect(r.subjectivity)) AS subjectivity, seq_length "
         part2 = "WITH  ridx, context, substitute, occurrence, CASE WHEN sum(cweight)>1.0 THEN 1 else sum(cweight) END as cweight,CASE WHEN sum(rweight)>1.0 THEN 1 else sum(rweight) END as rweight,avg(sentiment) as sentiment, avg(subjectivity) as subjectivity,seq_length "
-        part3 = "WITH ridx, context, substitute, occurrence, cweight*rweight/seq_length*{} as weight, sentiment, subjectivity, rweight, cweight ".format(scale)
+        part3 = "WITH ridx, context, substitute, occurrence, {}*cweight*rweight/seq_length as weight, sentiment, subjectivity, rweight, cweight ".format(scale)
 
         agg = " ".join([part1, part2, part3])
 
@@ -336,9 +336,6 @@ class neo4j_database():
         else:
             pos ="None"
 
-        dyad = np.array([(x['substitute'], x['occurrence']) for x in res])
-        context_token = np.array([x['context'] for x in res])
-        weights = np.array([x['weight'] for x in res])
 
         if return_sentiment:
             ret = [{'substitute': x['substitute'], 'occurrence': x['occurrence'], 'idx': x['context'], 'weight': x['weight'], 'sentiment': x['sentiment'],'subjectivity': x['subjectivity'],'pos': pos}
@@ -474,6 +471,7 @@ class neo4j_database():
         logging.debug("Querying tie between {}->replacing->{}.".format(replacing, occurring))
 
         if weight_cutoff is not None:
+            logging.warning("Weight cutoff {}".format(weight_cutoff))
             if weight_cutoff <= 1e-07:
                 weight_cutoff = None
 
@@ -533,7 +531,7 @@ class neo4j_database():
             where_query = ''.join([where_query, " AND  r.time in $times "])
 
         # MATCH QUERY 2: Sequence Length
-        sqlength_match= "Match (r)-[:seq]-(s:sequence)-[:seq]-(q:edge) WHERE q.pos<>r.pos "
+        sqlength_match= " WITH a,r,b Match (r)-[:seq]-(s:sequence)-[:seq]-(q:edge) WHERE q.pos<>r.pos "
 
         ### MATCH QUERY 2: OCCURRING TOKEN
         c_match = "".join([" WITH count(DISTINCT([q.pos,q.run_index])) as seq_length, a,r,b  MATCH  (r)-[:seq]-(s:sequence)<-[:seq]-(q:edge) "])
@@ -545,7 +543,7 @@ class neo4j_database():
         pos_match = " WITH a,r,b,q,seq_length MATCH (e:word) -[:onto]->(q)-[:onto]->(f:word) WHERE f.token_id in $idx and e.token_id <> f.token_id "
 
         ### FINAL MATCH
-        match = " ".join([match_query,sqlength_match, where_query, c_match, c_where, pos_match])
+        match = " ".join([match_query,where_query, sqlength_match,  c_match, c_where, pos_match])
 
         ### AGGREGATION QUERY
         agg = " WITH r.run_index as ridx, f.token_id as sub, e.token_id as occ, b.token_id AS rep_dyad,a.token_id AS occ_dyad,sum(q.weight)*sum(r.weight)/seq_length*{} as weight, avg(r.sentiment) as sentiment, avg(r.subjectivity) as subjectivity ".format(scale)
@@ -607,6 +605,7 @@ class neo4j_database():
         logging.debug("Querying tie between {}->replacing->{}.".format(replacing, occurring))
 
         if weight_cutoff is not None:
+            logging.warning("Weight cutoff {}".format(weight_cutoff))
             if weight_cutoff <= 1e-07:
                 weight_cutoff = None
 
@@ -666,7 +665,7 @@ class neo4j_database():
             where_query = ''.join([where_query, " AND  r.time in $times "])
 
         # MATCH QUERY 2: Sequence Length
-        sqlength_match= "Match (r)-[:seq]-(s:sequence)-[:seq]-(q:edge) WHERE q.pos<>r.pos "
+        sqlength_match= " WITH a,r,b Match (r)-[:seq]-(s:sequence)-[:seq]-(q:edge) WHERE q.pos<>r.pos "
 
         ### MATCH QUERY 2: OCCURRING TOKEN
         c_match = "".join([" WITH count(DISTINCT([q.pos,q.run_index])) as seq_length, a,r,b,s  MATCH  (r)-[:seq]-(s)-[:seq]-(q:edge) "])
@@ -681,10 +680,10 @@ class neo4j_database():
         pos_where = " WHERE f.token_id <> e.token_id and f.token_id in $idx "
 
         ### FINAL MATCH
-        match = " ".join([match_query,sqlength_match, where_query, c_match, c_where, pos_with, pos_match, pos_where])
+        match = " ".join([match_query, where_query,sqlength_match, c_match, c_where, pos_with, pos_match, pos_where])
 
         ### AGGREGATION QUERY
-        agg = " r.run_index as ridx, f.token as sub, e.token as occ, b.token AS rep_dyad,a.token AS occ_dyad,avg(r.sentiment) as sentiment, avg(r.subjectivity) as subjectivity,  CASE WHEN sum(q.weight)>1.0 THEN 1 else sum(q.weight) END as qweight, CASE WHEN sum(t.weight)>1.0 THEN 1 else sum(t.weight) END as tweight, head(collect(r.weight)) as rweight,seq_length "
+        agg = " WITH r.run_index as ridx, f.token_id as sub, e.token_id as occ, b.token_id AS rep_dyad,a.token_id AS occ_dyad,avg(r.sentiment) as sentiment, avg(r.subjectivity) as subjectivity,  CASE WHEN sum(q.weight)>1.0 THEN 1 else sum(q.weight) END as qweight, CASE WHEN sum(t.weight)>1.0 THEN 1 else sum(t.weight) END as tweight, head(collect(r.weight)) as rweight,seq_length "
 
         # RETURN QUERY
         return_query = "RETURN sub, occ,{}*sum(qweight*tweight*rweight)/seq_length as weight,[collect(distinct(rep_dyad)),collect(distinct(occ_dyad))] as dyad ".format(scale)

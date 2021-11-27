@@ -35,17 +35,19 @@ except:
     GraphDict = Dict[str, Union[str, int, Dict, List, defaultdict]]
 
 
-def infomap_cluster(graph, num_trials=100, seed=42, prefer_modular_solution =True, markov_time=1):
+def infomap_cluster(graph, num_trials=100, seed=42, prefer_modular_solution =True, markov_time=1, accepted_min=3):
     if Infomap is None:
         logging.error("Could not load infomap package, using python louvain instead")
         return louvain_cluster(graph)
     else:
-        im = Infomap(num_trials=num_trials, seed=seed,prefer_modular_solution=prefer_modular_solution,silent=True, directed=True,two_level =False, markov_time=markov_time)
+        nr_n=len(graph.nodes)
+        pref_nr = int(nr_n/3)
+        im = Infomap(num_trials=num_trials,seed=seed,preferred_number_of_modules=pref_nr,prefer_modular_solution=prefer_modular_solution,silent=True, directed=True,two_level =True, markov_time=markov_time)
         im.add_networkx_graph(graph, weight='weight')
         im.run()
         cluster_list=[]
         cluster_ids=np.unique(list(im.getModules(-1).values()))
-        if len(cluster_ids) <=2 and markov_time-0.1 > 0:
+        if len(cluster_ids) <=2 and markov_time-0.05 > 0 and len(graph.nodes) > accepted_min:
             markov_time=markov_time-0.05
             logging.debug("Infomap no new clusters for level, re-running with lower markov time scaling {}".format(markov_time))
             return infomap_cluster(graph, num_trials=num_trials, seed=seed, prefer_modular_solution=prefer_modular_solution, markov_time=markov_time)

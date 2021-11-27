@@ -3,7 +3,6 @@ import inspect
 import random
 from collections.abc import Sequence
 
-import numpy as np
 import pandas as pd
 from networkx import compose_all
 from tqdm import tqdm
@@ -216,11 +215,11 @@ class neo4j_network(Sequence):
     def condition_given_dyad(self, dyad_substitute: Optional[Union[int, str, list]],
                              dyad_occurring: Optional[Union[int, str, list]],
                              times: Optional[Union[int, list]] = None, focal_tokens: Union[list, int, str] = None,
-                             weight_cutoff: Optional[float] = None,
+                             contextual_relations: Optional[bool] = False,
+                             context_mode: Optional[str] = "bidirectional", dyad_mode: Optional[str] = "substitution",
                              depth: Optional[int] = None, max_degree: Optional[int] = None,
                              keep_only_tokens: Optional[bool] = False,
-                             batchsize: Optional[int] = None, context_mode: Optional[str] = "bidirectional",
-                             dyad_mode: Optional[str] = "substitution",
+                             batchsize: Optional[int] = None, weight_cutoff: Optional[float] = None,
                              post_cutoff: Optional[float] = None, post_norm: Optional[bool] = False,
                              compositional: Optional[bool] = False,
                              reverse: Optional[bool] = False, ):
@@ -246,15 +245,17 @@ class neo4j_network(Sequence):
         dyad_mode: str, optional
             "substitution": A dyad is one where dyad_substitute substitutes the dyad_occurring
             "occurrence": Reverse of this
+            Note that this just flips the inputs
+
+        contextual_relations: bool, optional, Default False
+            If False, relations exist when (in the context of a dyad) two tokens substitute for each other (see context_mode)
+            If True, relations exist when (in context of a dyad) two tokens occurr or substitute for elements in the same sequence.
 
         context_mode: str, optional
             Designate how a token can appear "in context" of the dyad
             "occurrence": A token appears in context (with weight k) iff it appears k times in the sequence of the dyad
             "substitution": A token appears in context if it substitutes for some other tokens that occur in the sequence
             "bidirectional": A token appears with probability 1 if it occurs, and with the probability of substition if it substitutes for another token.
-
-        weight_cutoff: float, optinal
-            Ties below this cutoff value are discarded
 
         depth: int, optional
             The depth of the ego networks to consider.
@@ -270,6 +271,9 @@ class neo4j_network(Sequence):
 
         keep_only_tokens : bool, optional
             If True, the network will only include tokens provided in "tokens" and their ties (according to depth).
+
+        weight_cutoff: float, optinal
+            Ties below this cutoff value are discarded
 
         Technical Parameters
         ----------
@@ -304,17 +308,22 @@ class neo4j_network(Sequence):
         # Create Conditioning Dict to keep track of state and create filename
         cond_dict_list = [('type', "dyad_context"),
                           ('cutoff', weight_cutoff),
-                          ('depth', depth), ('max_degree', max_degree), ('dyad_mode', dyad_mode), ('context_mode', context_mode)]
+                          ('depth', depth), ('max_degree', max_degree), ('dyad_mode', dyad_mode),
+                          ('context_mode', context_mode)]
 
         self.cond_dict = self.__make_condition_dict(focal_tokens, times, cond_dict_list)
 
         if focal_tokens is None:
             logging.debug("Dyad Context Conditioning dispatch: Yearly")
-            self.__dyad_yearly_condition(dyad_substitute=dyad_substitute, dyad_occurring=dyad_occurring, times=times, max_degree=max_degree, dyad_mode=dyad_mode, context_mode= context_mode, weight_cutoff=weight_cutoff, batchsize=batchsize)
+            self.__dyad_yearly_condition(dyad_substitute=dyad_substitute, dyad_occurring=dyad_occurring, times=times,
+                                         max_degree=max_degree, contextual_relations=contextual_relations,
+                                         context_mode=context_mode, weight_cutoff=weight_cutoff, batchsize=batchsize)
         else:
             logging.debug("Dyad Context Conditioning dispatch: Ego")
-            self.__dyad_ego_conditioning(dyad_substitute=dyad_substitute, dyad_occurring=dyad_occurring,times=times, tokens=focal_tokens, weight_cutoff=weight_cutoff, depth=depth ,
-                                            max_degree=max_degree, dyad_mode=dyad_mode, context_mode= context_mode,  batchsize=batchsize)
+            self.__dyad_ego_conditioning(dyad_substitute=dyad_substitute, dyad_occurring=dyad_occurring, times=times,
+                                         tokens=focal_tokens, contextual_relations=contextual_relations,
+                                         weight_cutoff=weight_cutoff, depth=depth,
+                                         max_degree=max_degree, context_mode=context_mode, batchsize=batchsize)
         if keep_only_tokens:
             self.__prune_by_tokens(focal_tokens)
         self.__cut_and_norm(post_cutoff, post_norm)
@@ -728,8 +737,11 @@ class neo4j_network(Sequence):
 
         return {'proximity': pd_dict}
 
-    def get_dyad_context(self, focal_substitutes: Optional[Union[list,str, int]]=None, focal_occurrences: Optional[Union[list,str, int]]=None,
-                           context_pos: Optional[str]=None, times: Union[list, int]=None,context_mode:Optional[str] = "bidirectional", return_sentiment: Optional[bool] = True, weight_cutoff: Optional[float] = None) -> pd.dict:
+    def get_dyad_context(self, focal_substitutes: Optional[Union[list, str, int]] = None,
+                         focal_occurrences: Optional[Union[list, str, int]] = None,
+                         context_pos: Optional[str] = None, times: Union[list, int] = None,
+                         context_mode: Optional[str] = "bidirectional", return_sentiment: Optional[bool] = True,
+                         weight_cutoff: Optional[float] = None) -> dict:
         """
         This function returns a dataframe with a list of contextual tokens that appear in the context of another dyad.
         The focal dyad can be specified by occurrence tokens, and substitute tokens, given as lists. The algorithm
@@ -774,7 +786,6 @@ class neo4j_network(Sequence):
 
         """
 
-
         if focal_substitutes is None and focal_occurrences is None:
             msg = "Please provide either focal_substitutes and/or focal_occurrences from dyads!"
             logging.error(msg)
@@ -792,8 +803,10 @@ class neo4j_network(Sequence):
         if isinstance(focal_substitutes, (str, int)):
             focal_substitutes = [focal_substitutes]
 
-        focal_occurrences = [int(x) for x in np.array(self.ensure_ids(focal_occurrences)).tolist()]
-        focal_substitutes = [int(x) for x in np.array(self.ensure_ids(focal_substitutes)).tolist()]
+        if focal_occurrences is not None:
+            focal_occurrences = [int(x) for x in np.array(self.ensure_ids(focal_occurrences)).tolist()]
+        if focal_substitutes is not None:
+            focal_substitutes = [int(x) for x in np.array(self.ensure_ids(focal_substitutes)).tolist()]
 
         pd_dict = self.db.query_tie_context(occurring=focal_occurrences, replacing=focal_substitutes, times=times,
                                             weight_cutoff=weight_cutoff, pos=context_pos,
@@ -1795,7 +1808,9 @@ class neo4j_network(Sequence):
                         "Found {} isolated nodes in graph, deleting.".format(len(isolates)))
                     cleaned_graph.remove_nodes_from(isolates)
                 nx.write_edgelist(cleaned_graph, path, delimiter=",", data=True)
-                logging.info("Saving {} nodes, {} edges: \n {} as {}".format(len(cleaned_graph.nodes),len(cleaned_graph.edges),self.filename, path))
+                logging.info(
+                    "Saving {} nodes, {} edges: \n {} as {}".format(len(cleaned_graph.nodes), len(cleaned_graph.edges),
+                                                                    self.filename, path))
             except:
                 raise SystemError("Could not save to %s " % path)
 
@@ -1920,11 +1935,13 @@ class neo4j_network(Sequence):
         return self.query_nodes(ids, context, times, weight_cutoff)
 
     def __dyad_yearly_condition(self, dyad_substitute, dyad_occurring, times, dyad_mode, context_mode, weight_cutoff,
+                                contextual_relations,
                                 batchsize, max_degree):
         raise NotImplementedError("Currently, please condition on a subset of focal tokens for a given dyad.")
 
     def __dyad_ego_conditioning(self, dyad_substitute, dyad_occurring, times, tokens, weight_cutoff, depth, max_degree,
-                                dyad_mode, context_mode:Optional[str]="bidirectional", batchsize:Optional[int]=None):
+                                contextual_relations=None, context_mode: Optional[str] = "bidirectional",
+                                batchsize: Optional[int] = None):
 
         # Same for batchsize
         if batchsize is None:
@@ -1979,11 +1996,22 @@ class neo4j_network(Sequence):
                         "Conditioning by query batch {} of {} tokens.".format(i, len(ids_to_check)))
                     # Query Neo4j
                     try:
-                        self.__add_edges(
-                            self.db.query_substitution_in_dyadic_context(ids=id_batch, occurring=dyad_occurring, replacing=dyad_substitute,times=times, weight_cutoff=weight_cutoff),
-                            max_degree=max_degree)
+                        if contextual_relations:
+                            self.__add_edges(
+                                self.db.query_context_in_dyadic_context(ids=id_batch, occurring=dyad_occurring,
+                                                                        replacing=dyad_substitute, times=times,
+                                                                        weight_cutoff=weight_cutoff),
+                                max_degree=max_degree)
+                        else:
+                            self.__add_edges(
+                                self.db.query_substitution_in_dyadic_context(ids=id_batch, occurring=dyad_occurring,
+                                                                             replacing=dyad_substitute, times=times,
+                                                                             weight_cutoff=weight_cutoff),
+                                max_degree=max_degree)
                     except:
-                        logging.error("Could not condition given dyad by query method.")
+                        logging.error(
+                            "Could not condition given dyad by query method with contextual relations {} and context_mode {}.".format(
+                                contextual_relations, context_mode))
                         raise
 
                 # Delete disconnected nodes
@@ -2027,7 +2055,9 @@ class neo4j_network(Sequence):
 
         else:  # Remove conditioning and recondition
             self.decondition()
-            self.condition_given_dyad(dyad_substitute=dyad_substitute, dyad_occurring=dyad_occurring, times=times, focal_tokens=tokens, weight_cutoff=weight_cutoff,
-                           depth=depth, dyad_mode=dyad_mode,context_mode=context_mode, max_degree=max_degree)
+            self.condition_given_dyad(dyad_substitute=dyad_substitute, dyad_occurring=dyad_occurring, times=times,
+                                      focal_tokens=tokens, weight_cutoff=weight_cutoff,
+                                      depth=depth, context_mode=context_mode, contextual_relations=contextual_relations,
+                                      max_degree=max_degree)
 
         # Continue conditioning
