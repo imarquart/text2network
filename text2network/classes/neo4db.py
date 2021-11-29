@@ -223,7 +223,7 @@ class neo4j_database():
         MATCH (q)-[:pos]-(pos:part_of_speech) WHERE pos.part_of_speech in ["VERB"]
         With
         r.pos as rpos, r.run_index as ridx, b.token AS substitute,a.token AS occurrence,CASE WHEN sum(q.weight)>1.0 THEN 1 else sum(q.weight) END as cweight, head(collect(r.weight)) AS rweight, e.token as context, head(collect(r.sentiment)) AS sentiment, head(collect(r.subjectivity)) AS subjectivity, seq_length
-        WITH  ridx, context, substitute, occurrence, CASE WHEN sum(cweight)>1.0 THEN 1 else sum(cweight) END as cweight,CASE WHEN sum(rweight)>1.0 THEN 1 else sum(rweight) END as rweight,avg(sentiment) as sentiment, avg(subjectivity) as subjectivity, seq_length
+        WITH  ridx, context, substitute, occurrence, CASE WHEN sum(cweight)>1.0 THEN 1 else sum(cweight) END as cweight,CASE WHEN sum(DISTINCT(rweight))>1.0 THEN 1 else sum(DISTINCT(rweight))END as rweight,avg(sentiment) as sentiment, avg(subjectivity) as subjectivity, seq_length
         WITH ridx, context, substitute, occurrence, 100*cweight*rweight/seq_length as weight, sentiment, subjectivity, rweight, cweight
         RETURN context,  sum(weight) as weight, collect(DISTINCT(substitute)) as substitute, collect(DISTINCT(occurrence)) as occurrence,sum(rweight) as subst_weight, sum(cweight) as context_weight, avg(sentiment) as sentiment, avg(subjectivity) as subjectivity ORDER by weight DESC
         Parameters
@@ -316,7 +316,7 @@ class neo4j_database():
 
         ### AGGREGATION QUERY
         part1 = "WITH r.pos as rpos, r.run_index as ridx, b.token_id AS substitute,a.token_id AS occurrence,CASE WHEN sum(q.weight)>1.0 THEN 1 else sum(q.weight) END as cweight, head(collect(r.weight)) AS rweight, e.token_id as context, head(collect(r.sentiment)) AS sentiment, head(collect(r.subjectivity)) AS subjectivity, seq_length "
-        part2 = "WITH  ridx, context, substitute, occurrence, CASE WHEN sum(cweight)>1.0 THEN 1 else sum(cweight) END as cweight,CASE WHEN sum(rweight)>1.0 THEN 1 else sum(rweight) END as rweight,avg(sentiment) as sentiment, avg(subjectivity) as subjectivity,seq_length "
+        part2 = "WITH  ridx, context, substitute, occurrence, CASE WHEN sum(cweight)>1.0 THEN 1 else sum(cweight) END as cweight,CASE WHEN sum(DISTINCT(rweight))>1.0 THEN 1 else sum(DISTINCT(rweight)) END as rweight,avg(sentiment) as sentiment, avg(subjectivity) as subjectivity,seq_length "
         part3 = "WITH ridx, context, substitute, occurrence, {}*cweight*rweight/seq_length as weight, sentiment, subjectivity, rweight, cweight ".format(scale)
 
         agg = " ".join([part1, part2, part3])
@@ -546,7 +546,7 @@ class neo4j_database():
         match = " ".join([match_query,where_query, sqlength_match,  c_match, c_where, pos_match])
 
         ### AGGREGATION QUERY
-        agg = " WITH r.run_index as ridx, f.token_id as sub, e.token_id as occ, b.token_id AS rep_dyad,a.token_id AS occ_dyad,sum(q.weight)*sum(r.weight)/seq_length*{} as weight, avg(r.sentiment) as sentiment, avg(r.subjectivity) as subjectivity ".format(scale)
+        agg = " WITH r.run_index as ridx, f.token_id as sub, e.token_id as occ, b.token_id AS rep_dyad,a.token_id AS occ_dyad,sum(q.weight)*sum(distinct(r.weight))/seq_length*{} as weight, avg(r.sentiment) as sentiment, avg(r.subjectivity) as subjectivity ".format(scale)
 
         # RETURN QUERY
         return_query = "RETURN sub,occ,[collect(distinct(rep_dyad)),collect(distinct(occ_dyad))] as dyad ,sum(weight) as weight "

@@ -310,6 +310,118 @@ def context_cluster_per_pos(snw: neo4j_network, focal_substitutes: Union[list, s
     return df
 
 
+
+def context_cluster_all_pos(snw: neo4j_network, focal_substitutes: Union[list, str, int]=None, focal_occurrences: Union[list, str, int]=None,
+                               level: int=10, cluster_cutoff: Optional[float] = 0.0,
+                               pos_list: Optional[list] = None, times: Optional[Union[list, int]] = None,
+                               keep_top_k: Optional[int] = None, weight_cutoff: Optional[float] = None,
+                               context_mode: Optional[str] = "bidirectional",
+                               add_individual_nodes: Optional[bool] = True,
+                                contextual_relations: Optional[bool] = False,
+                               max_degree: Optional[int] = None, include_all_levels: Optional[bool] = True,
+                               sym: Optional[bool] = False, depth: Optional[int] = 1, algorithm: Optional[Callable] = None,
+                               export_network: Optional[bool] = True, filename: Optional[str] = None):
+
+    if algorithm is None:
+        algorithm = consensus_louvain
+    if pos_list is not None:
+        logging.warning("Extracting context clusters for part of speech {}".format(pos_list))
+    # Get role profiles
+
+    df = context_per_pos(snw=snw, focal_substitutes=focal_substitutes, focal_occurrences=focal_occurrences, times=times,
+                                     keep_top_k=keep_top_k, context_mode=context_mode, pos_list=pos_list)
+    cluster_dict = {}
+    cluster_dataframe = []
+
+    interest_list = np.unique(df.context_token).tolist()
+
+    # If a word appears in several distinct POS, change context token description for one instance
+    df=df.set_index(df.context_token)
+    df.loc[df.index.duplicated(), "context_token"] = df.context_token.loc[df.index.duplicated()] + df.pos.loc[
+        df.index.duplicated()]
+    df = df.set_index(df.context_token)
+    assert len(df.index[df.index.duplicated()]) ==0
+
+    proxim = df[["idx", "context_token", "pos", "weight"]]
+    proxim = proxim.set_index(proxim.context_token)
+    sentiment = df[["idx", "context_token", "pos", "sentiment"]]
+    sentiment = sentiment.set_index(sentiment.context_token)
+    subjectivity = df[["idx", "context_token", "pos", "subjectivity"]]
+    subjectivity = subjectivity.set_index(subjectivity.context_token)
+    if depth==0:
+        keep_only_tokens = True
+        logging.info("Keeping only contextual tokens in conditioning network!")
+    else:
+        keep_only_tokens= False
+    snw.condition_given_dyad(dyad_substitute=focal_substitutes, dyad_occurring=focal_occurrences, times=times,
+                             focal_tokens=interest_list, weight_cutoff=weight_cutoff, depth=depth, keep_only_tokens=keep_only_tokens,
+                             contextual_relations=contextual_relations,
+                             max_degree=max_degree)
+    logging.info("Finished conditioning")
+    clusters = snw.cluster(levels=level, interest_list=interest_list, algorithm=algorithm)
+    logging.info("Finished clustering, found {} clusters".format(len(clusters)))
+    logging.info("Extracting relevant clusters at level {} across all years {}".format(level, times))
+    for cl in tqdm(clusters, desc="Extracting all clusters"):
+        if len(cl['graph'].nodes) > 0 and (
+                cl['level'] == level or include_all_levels):  # Consider only the last level
+            # Get List of tokens
+            nodes = snw.ensure_tokens(list(cl['graph'].nodes))
+            # Check if this is a cluster of interest
+            if len(np.intersect1d(nodes, interest_list)) > 0:
+                proxim_in_cluster = proxim.reindex(nodes, fill_value=0)
+                proxim_in_cluster = proxim_in_cluster[proxim_in_cluster.weight > cluster_cutoff]
+                sentiment_in_cluster = sentiment.reindex(proxim_in_cluster.context_token, fill_value=0)
+                subjectivity_in_cluster = subjectivity.reindex(proxim_in_cluster.context_token, fill_value=0)
+                if len(proxim_in_cluster) > 0:
+                    cluster_measures = return_measure_dict(proxim_in_cluster.weight)
+                    sent_measures = return_measure_dict(sentiment_in_cluster.sentiment, prefix="sentiment_")
+                    sub_measures = return_measure_dict(subjectivity_in_cluster.subjectivity, prefix="subjectivity_")
+                    # Default cluster entry
+                    year = -100
+                    name = "-".join(list(proxim_in_cluster.weight.nlargest(5).index))
+                    top_node = proxim_in_cluster.weight.idxmax()
+                    df_dict = {'Year': year, 'POS': "ALL", 'Token': name,
+                               'Prom_Node': top_node, 'Level': cl['level'],
+                               'Cluster_Id': cl['name'],
+                               'Parent': cl['parent'], 'Nr_ProxNodes': len(proxim_in_cluster),
+                               'NrNodes': len(nodes), 'Ma': 0, 'Node_Weight': 0,
+                               'Node_Sentiment': 0, 'Node_Subjectivity': 0, 'Type': "Cluster"}
+                    cluster_dict.update({name: cl})
+                    df_dict.update(cluster_measures)
+                    df_dict.update(sent_measures)
+                    df_dict.update(sub_measures)
+                    cluster_dataframe.append(df_dict.copy())
+                    # Add each node
+                    if add_individual_nodes:
+                        for node in list(proxim_in_cluster.index):
+                            if proxim.reindex([node], fill_value=0).weight[0] > 0:
+                                node_prox = proxim.reindex([node], fill_value=0).weight[0]
+                                node_sent = sentiment.reindex([node], fill_value=0).sentiment[0]
+                                node_sub = subjectivity.reindex([node], fill_value=0).subjectivity[0]
+                                df_dict = {'Year': year, 'POS': "ALL", 'Token': node,
+                                           'Prom_Node': top_node, 'Level': cl['level'],
+                                           'Cluster_Id': cl['name'],
+                                           'Parent': cl['parent'],
+                                           'Nr_ProxNodes': len(proxim_in_cluster),
+                                           'NrNodes': len(nodes), 'Ma': 0, 'Node_Weight': node_prox,
+                                           'Node_Sentiment': node_sent, 'Node_Subjectivity': node_sub,
+                                           'Type': "Cluster"}
+                                df_dict.update(cluster_measures)
+                                df_dict.update(sent_measures)
+                                df_dict.update(sub_measures)
+                                cluster_dataframe.append(df_dict.copy())
+
+
+    df = pd.DataFrame(cluster_dataframe)
+
+    if filename is not None:
+        if export_network:
+            snw.export_gefx(filename=check_create_folder(filename + ".gexf"))
+        filename = check_create_folder(filename + ".xlsx")
+        df.to_excel(filename)
+
+    return df, clusters
+
 def grouped_dyadic_context(snw: neo4j_network, focal_substitutes: Optional[Union[list, str, int]] = None,
                            focal_occurrences: Optional[Union[list, str, int]] = None, groups: Optional[list] = None,
                            context_pos: Optional[str] = None, times: Union[list, int] = None,

@@ -7,11 +7,13 @@ Created on Fri Dec 18 21:16:52 2020
 import itertools
 import logging
 from _collections import defaultdict
-from typing import Optional, Callable, Tuple, List, Dict, Union
+from typing import Optional, Callable, Tuple, List, Dict, Union, Iterable, TypedDict
 import numpy as np
 import networkx as nx
 from community import best_partition
 from text2network.functions.network_tools import make_symmetric
+import pandas as pd
+
 
 try:
     from infomap import Infomap
@@ -20,19 +22,84 @@ except:
 
 
 # Type definition
-try:
-    from typing import TypedDict
+class GraphDict(TypedDict):
+    graph: nx.DiGraph
+    name: str
+    parent: int
+    level: int
+    measures: List
+    metadata: Union[Dict, defaultdict]
 
 
-    class GraphDict(TypedDict):
-        graph: nx.DiGraph
-        name: str
-        parent: int
-        level: int
-        measures: List
-        metadata: [Union[Dict, defaultdict]]
-except:
-    GraphDict = Dict[str, Union[str, int, Dict, List, defaultdict]]
+def get_cluster_dict(clusterlist:List[GraphDict], level:int, subset_name_list:Optional[list]=None):
+    all_nodes = []
+    clusterdict = {}
+    # Get clusters and tokens
+    for cl in clusterlist:
+        if cl["level"] == level:
+            if subset_name_list is not None:
+                if cl["name"] in subset_name_list:
+                    clusterdict[cl["name"]] = list(cl["graph"].nodes)
+                    all_nodes.extend(list(cl["graph"].nodes))
+            else:
+                clusterdict[cl["name"]] = list(cl["graph"].nodes)
+                all_nodes.extend(list(cl["graph"].nodes))
+
+    all_nodes = list(set(all_nodes))
+    return clusterdict, all_nodes
+
+def cluster_distances(graph:nx.Graph, clusterdict:dict)->nx.Graph:
+
+    cl_names = list(clusterdict.keys())
+
+    clustergraph = nx.DiGraph()
+    clustergraph.add_nodes_from(cl_names)
+
+    clustercombination = list(itertools.combinations(cl_names, 2))
+    logging.info("Finding cluster distances giving {} combinations".format(len(clustercombination)))
+    for focalcluster, altercluster in clustercombination:
+        focal_nodes = clusterdict[focalcluster]
+        alter_nodes = clusterdict[altercluster]
+        combination_nodes = focal_nodes + alter_nodes
+        combination_mat = nx.convert_matrix.to_pandas_adjacency(graph, nodelist=combination_nodes)
+
+        focal_mat = combination_mat.loc[focal_nodes,alter_nodes]
+        alter_mat = combination_mat.loc[alter_nodes, focal_nodes]
+
+        assert list(focal_mat.index) == list(alter_mat.columns)
+
+        focal_dict = {}
+        focal_dict["weight"] = focal_mat.mean().mean()
+        focal_dict["min"] = focal_mat.min().min()
+        focal_dict["max"] = focal_mat.max().max()
+        focal_dict["std0"] = focal_mat.std(axis=0).mean()
+        focal_dict["std1"] = focal_mat.std(axis=0).mean()
+        focal_dict["min_dyad"] = focal_mat.stack().idxmin()
+        focal_dict["max_dyad"] = focal_mat.stack().idxmax()
+        alter_dict = {}
+        alter_dict["weight"] = alter_mat.mean().mean()
+        alter_dict["min"] = alter_mat.min().min()
+        alter_dict["max"] = alter_mat.max().max()
+        alter_dict["std0"] = alter_mat.std(axis=0).mean()
+        alter_dict["std1"] = alter_mat.std(axis=0).mean()
+        alter_dict["min_dyad"] = alter_mat.stack().idxmin()
+        alter_dict["max_dyad"] = alter_mat.stack().idxmax()
+
+        clustergraph.add_edges_from([(focalcluster, altercluster, focal_dict)])
+        clustergraph.add_edges_from([(altercluster, focalcluster, alter_dict)])
+
+
+    return clustergraph # Use nx.convert_matrix.to_pandas_edgelist(clustergraph)
+
+def cluster_distances_from_clusterlist(clusterlist:List[GraphDict], level:int, subset_name_list:Optional[list]=None):
+
+    zerograph = clusterlist[0]["graph"]
+    clusterdict, all_nodes=get_cluster_dict(clusterlist, level, subset_name_list)
+
+    return cluster_distances(zerograph, clusterdict) # Use nx.convert_matrix.to_pandas_edgelist(clustergraph)
+
+
+
 
 
 def infomap_cluster(graph, num_trials=100, seed=42, prefer_modular_solution =True, markov_time=1, accepted_min=3):
