@@ -208,7 +208,7 @@ class neo4j_database():
 
     # %% Query Functions
 
-    def query_tie_context(self, occurring, replacing, times=None, pos=None, scale=100, context_mode="bidirectional", return_sentiment=True, weight_cutoff=None):
+    def query_tie_context(self, occurring, replacing, times=None, pos=None, scale=40, context_mode="bidirectional", return_sentiment=True, weight_cutoff=None):
         """
         This returns contextual words, weighted by
 
@@ -439,7 +439,7 @@ class neo4j_database():
 
         return ties
 
-    def query_substitution_in_dyadic_context(self, ids, occurring=None, replacing=None,  times=None, scale=100,weight_cutoff=None, return_sentiment=True):
+    def query_substitution_in_dyadic_context(self, ids, occurring=None, replacing=None,  times=None, scale=40,weight_cutoff=None, return_sentiment=True):
         """
         // PY:query_substitution_in_dyadic_context
         MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word) WHERE b.token in ["leader"] and a.token in ["ceo"] and a.token_id <> b.token_id and r.time in [1990,1991,1992]
@@ -571,7 +571,7 @@ class neo4j_database():
 
         return ties
 
-    def query_context_in_dyadic_context(self, ids, occurring=None, replacing=None,  times=None, scale=100,weight_cutoff=None, return_sentiment=True):
+    def query_context_in_dyadic_context(self, ids, occurring=None, replacing=None,  times=None, scale=40,weight_cutoff=None, return_sentiment=True):
         """
         // PY: query_context_in_dyadic_context
         MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word) WHERE b.token in ["leader"]  and a.token_id <> b.token_id and r.time in [1990,1991,1992]
@@ -686,7 +686,7 @@ class neo4j_database():
         agg = " WITH r.run_index as ridx, f.token_id as sub, e.token_id as occ, b.token_id AS rep_dyad,a.token_id AS occ_dyad,avg(r.sentiment) as sentiment, avg(r.subjectivity) as subjectivity,  CASE WHEN sum(q.weight)>1.0 THEN 1 else sum(q.weight) END as qweight, CASE WHEN sum(t.weight)>1.0 THEN 1 else sum(t.weight) END as tweight, head(collect(r.weight)) as rweight,seq_length "
 
         # RETURN QUERY
-        return_query = "RETURN sub, occ,{}*sum(qweight*tweight*rweight)/seq_length as weight,[collect(distinct(rep_dyad)),collect(distinct(occ_dyad))] as dyad ".format(scale)
+        return_query = "RETURN sub, occ,sum({}*qweight*tweight*rweight/seq_length) as weight,[collect(distinct(rep_dyad)),collect(distinct(occ_dyad))] as dyad ".format(scale)
         if return_sentiment:
             return_query = return_query + ", avg(sentiment) as sentiment, avg(subjectivity) as subjectivity "
         return_query = return_query + " order by occ"
