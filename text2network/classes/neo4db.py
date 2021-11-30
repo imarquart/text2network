@@ -208,7 +208,7 @@ class neo4j_database():
 
     # %% Query Functions
 
-    def query_tie_context(self, occurring, replacing, times=None, pos=None, scale=40, context_mode="bidirectional", return_sentiment=True, weight_cutoff=None):
+    def query_tie_context(self, occurring, replacing, times=None, pos=None, scale=40, tfidf=None, context_mode="bidirectional", return_sentiment=True, weight_cutoff=None):
         """
         This returns contextual words, weighted by
 
@@ -336,6 +336,42 @@ class neo4j_database():
         else:
             pos ="None"
 
+        if tfidf is not None:
+            import pandas as pd
+            df=pd.DataFrame(res)
+            context_words = df.context.to_list()
+
+            if context_mode == "bidirectional":
+                match_query = "MATCH p=(a:word)-[:onto]-(r:edge)-[:onto]-(b:word) "
+            elif context_mode == "occuring":
+                match_query = "MATCH p=(a:word)<-[:onto]-(r:edge)<-[:onto]-(b:word)"
+            else:
+                match_query = "MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word)"
+
+            with_query = "WITH count(DISTINCT([q.pos,q.run_index])) as seq_length, a,r,b"
+            return_query = " RETURN b.token_id as context, sum(r.weight/seq_length) as tweight"
+
+            tfidfmatch = " ".join([match_query, where_query, sqlength_match,with_query, return_query])
+            params['id_repl'] = context_words
+
+            res_tfidf = self.receive_query(tfidfmatch, params)
+            df_tfidf = pd.DataFrame(res_tfidf)
+
+            total_df = pd.merge(left=df,right=df_tfidf,how="inner",on="context", validate="one_to_one")
+            total_df.tweight=total_df.tweight/total_df.tweight.sum()
+            total_df["nweight"]=total_df.weight/total_df.weight.sum()
+            total_df["pmi"] = -np.log(total_df.tweight)+np.log(total_df.nweight)
+            total_df["pmi_weight"] = total_df["weight"] * total_df["pmi"]
+            total_df["rel_weight"] = total_df.nweight / total_df.tweight
+
+            if return_sentiment:
+                ret = [{'substitute': x['substitute'], 'occurrence': x['occurrence'], 'idx': x['context'],
+                        'weight': x[tfidf], 'sentiment': x['sentiment'], 'subjectivity': x['subjectivity'],
+                        'pos': pos}
+                       for index, x in total_df.iterrows()]
+            else:
+                ret = [{'substitute': x['substitute'], 'occurrence': x['occurrence'], 'idx': x['context'],
+                        'weight': x[tfidf], 'pos': pos} for index, x in total_df.iterrows()]
 
         if return_sentiment:
             ret = [{'substitute': x['substitute'], 'occurrence': x['occurrence'], 'idx': x['context'], 'weight': x['weight'], 'sentiment': x['sentiment'],'subjectivity': x['subjectivity'],'pos': pos}

@@ -741,6 +741,7 @@ class neo4j_network(Sequence):
                          focal_occurrences: Optional[Union[list, str, int]] = None,
                          context_pos: Optional[str] = None, times: Union[list, int] = None,
                          context_mode: Optional[str] = "bidirectional", return_sentiment: Optional[bool] = True,
+                         tfidf: Optional[str] = None,
                          weight_cutoff: Optional[float] = None) -> dict:
         """
         This function returns a dataframe with a list of contextual tokens that appear in the context of another dyad.
@@ -781,6 +782,12 @@ class neo4j_network(Sequence):
         return_sentiment: bool, Optional, Default True
             Return sentiment and subjectivity (Averaged) for the focal tie
 
+        tfidf: str, Optional, Default None
+            total_df["nweight"]=total_df.weight/total_df.weight.sum()
+            total_df["pmi"] = -np.log(total_df.tweight)+np.log(total_df.nweight)
+            total_df["pmi_weight"] = total_df["weight"] * total_df["pmi"]
+            total_df["rel_weight"]
+
         weight_cutoff: float, Optional, Default None
             Ignore any network ties that are less than this value in weight
 
@@ -810,7 +817,7 @@ class neo4j_network(Sequence):
 
         pd_dict = self.db.query_tie_context(occurring=focal_occurrences, replacing=focal_substitutes, times=times,
                                             weight_cutoff=weight_cutoff, pos=context_pos,
-                                            return_sentiment=return_sentiment, context_mode=context_mode)
+                                            return_sentiment=return_sentiment, context_mode=context_mode, tfidf=tfidf)
 
         return {'dyad_context': pd_dict}
 

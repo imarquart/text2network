@@ -16,7 +16,7 @@ from text2network.utils.file_helpers import check_create_folder
 
 
 def contextual_tokens_for_pos(snw: neo4j_network,pos: str,  focal_occurrences: Optional[Union[list,str, int]]=None, focal_substitutes: Optional[Union[list,str, int]]=None, times: Optional[Union[list, int]]=None, context_mode: Optional[str] = "bidirectional",
-                    return_sentiment: Optional[bool] = True, weight_cutoff: Optional[float] = 0) -> pd.DataFrame:
+                    return_sentiment: Optional[bool] = True, tfidf:Optional[str]=None, weight_cutoff: Optional[float] = 0) -> pd.DataFrame:
     """
 
     This function returns a dataframe with a list of contextual tokens that appear in the context of another dyad.
@@ -73,7 +73,7 @@ def contextual_tokens_for_pos(snw: neo4j_network,pos: str,  focal_occurrences: O
     if not isinstance(times, (list, np.ndarray)):
         times = [times]
 
-    df=pd.DataFrame(snw.get_dyad_context(focal_occurrences=focal_occurrences, focal_substitutes=focal_substitutes, times=times, weight_cutoff=weight_cutoff,context_pos=pos, context_mode=context_mode, return_sentiment=return_sentiment)['dyad_context'])
+    df=pd.DataFrame(snw.get_dyad_context(focal_occurrences=focal_occurrences, focal_substitutes=focal_substitutes, times=times,tfidf=tfidf, weight_cutoff=weight_cutoff,context_pos=pos, context_mode=context_mode, return_sentiment=return_sentiment)['dyad_context'])
     df["context_token"] = snw.ensure_tokens(df.idx)
     return df
 
@@ -81,7 +81,7 @@ def contextual_tokens_for_pos(snw: neo4j_network,pos: str,  focal_occurrences: O
 def context_per_pos(snw: neo4j_network,  focal_occurrences: Optional[Union[list,str, int]], focal_substitutes: Optional[Union[list,str, int]],
                                 times: Optional[Union[list, int]] = None, pos_list: Optional[list] = None,
                                 keep_top_k: Optional[int] = None,
-                                filename: Optional[str] = None, moving_average: Optional[tuple] = None,
+                                filename: Optional[str] = None, tfidf: Optional[str] = None,
                                 context_mode: Optional[str] = "bidirectional", return_sentiment: Optional[bool] = True,
                                 weight_cutoff: Optional[float] = 0, seed: Optional[int] = None) -> pd.DataFrame:
     snw.decondition()
@@ -115,7 +115,7 @@ def context_per_pos(snw: neo4j_network,  focal_occurrences: Optional[Union[list,
         logging.info("Now checking {}".format(pos))
         temp_df = contextual_tokens_for_pos(snw=snw, pos=pos, focal_substitutes=focal_substitutes, focal_occurrences=focal_occurrences, times=times,
                                   context_mode=context_mode, return_sentiment=return_sentiment,
-                                  weight_cutoff=weight_cutoff)
+                                  weight_cutoff=weight_cutoff, tfidf=tfidf)
         if temp_df is not None:
             if keep_top_k is not None:
                 # temp_df.sort_values(by="weight", ascending=False)
@@ -211,7 +211,7 @@ def context_cluster_per_pos(snw: neo4j_network, focal_substitutes: Union[list, s
                                keep_top_k: Optional[int] = None, weight_cutoff: Optional[float] = None,
                                context_mode: Optional[str] = "bidirectional",
                                add_individual_nodes: Optional[bool] = True,
-                                contextual_relations: Optional[bool] = False,
+                                contextual_relations: Optional[bool] = False, tfidf:Optional[str] = None,
                                max_degree: Optional[int] = None, include_all_levels: Optional[bool] = True,
                                sym: Optional[bool] = False, depth: Optional[int] = 1, algorithm: Optional[Callable] = None,
                                export_network: Optional[bool] = True, filename: Optional[str] = None):
@@ -220,14 +220,16 @@ def context_cluster_per_pos(snw: neo4j_network, focal_substitutes: Union[list, s
         algorithm = consensus_louvain
     # Get role profile
     df = context_per_pos(snw=snw, focal_substitutes=focal_substitutes, focal_occurrences=focal_occurrences, times=times,
-                                     keep_top_k=keep_top_k, context_mode=context_mode, pos_list=pos_list)
+                                     keep_top_k=keep_top_k, context_mode=context_mode, pos_list=pos_list, tfidf=tfidf)
 
     pos_list = np.unique(df.pos).tolist()
+    logging.info("Found {} contextual tokens in total.".format(len(df.idx.to_list())))
     cluster_dict = {}
     cluster_dataframe = []
     for pos in pos_list:
         logging.info("Extracting clusters information for pos: {}".format(pos))
         df_subset = df[df.pos == pos]
+        logging.info("Found {} contextual tokens for POS {}".format(len(df_subset.idx.to_list()), pos))
         interest_list = np.unique(df_subset.context_token).tolist()
         proxim = df_subset[["idx", "context_token", "pos", "weight"]]
         proxim = proxim.set_index(proxim.context_token)
@@ -319,21 +321,24 @@ def context_cluster_all_pos(snw: neo4j_network, focal_substitutes: Union[list, s
                                add_individual_nodes: Optional[bool] = True,
                                 contextual_relations: Optional[bool] = False,
                                max_degree: Optional[int] = None, include_all_levels: Optional[bool] = True,
+                                tfidf: Optional[str] = None,
                                sym: Optional[bool] = False, depth: Optional[int] = 1, algorithm: Optional[Callable] = None,
                                export_network: Optional[bool] = True, filename: Optional[str] = None):
 
     if algorithm is None:
         algorithm = consensus_louvain
     if pos_list is not None:
-        logging.warning("Extracting context clusters for part of speech {}".format(pos_list))
+        logging.warning("Extracting context clusters for part of speech {}, set a maximum of {} to keep.".format(pos_list, keep_top_k))
     # Get role profiles
 
     df = context_per_pos(snw=snw, focal_substitutes=focal_substitutes, focal_occurrences=focal_occurrences, times=times,
-                                     keep_top_k=keep_top_k, context_mode=context_mode, pos_list=pos_list)
+                                     keep_top_k=keep_top_k, context_mode=context_mode, pos_list=pos_list, tfidf=tfidf)
     cluster_dict = {}
     cluster_dataframe = []
 
     interest_list = np.unique(df.context_token).tolist()
+    logging.info("Found {} contextual tokens in total.".format(len(df.idx.to_list())))
+
 
     # If a word appears in several distinct POS, change context token description for one instance
     df=df.set_index(df.context_token)
