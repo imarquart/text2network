@@ -52,7 +52,7 @@ contextual_relations_list=[True,False]
 pos_list_list=[["NOUN","VERB"]]
 param_list=product(rs_list,cutoff_list, level_list, depth_list, context_mode_list, max_degree_list, sym_list, keep_top_k_list, ma_list, algo_list, contextual_relations_list,keep_only_tokens_list,pos_list_list)
 
-times = list(range(1982))
+times = list(range(1980,1982))
 focal_token="leader"
 sym_list=[False]
 keep_top_k_list = [30]
@@ -68,7 +68,7 @@ ma_list=[(2,2)]
 keep_only_tokens_list=[True]
 contextual_relations_list=[True]
 pos_list_list=[["NOUN","VERB"]]
-tfidf_list=["pmi","nweight", "rel_weight", "pmi_weight", None]
+tfidf_list = [["pmi", "nweight", "rel_weight", "pmi_weight",None, "cond_entropy" ]]
 param_list=product(rs_list,cutoff_list, level_list, depth_list, context_mode_list, max_degree_list, sym_list, keep_top_k_list, ma_list, algo_list, contextual_relations_list,keep_only_tokens_list,pos_list_list,tfidf_list)
 
 
@@ -78,7 +78,7 @@ for rs, cutoff, level, depth, context_mode, max_degree, sym, keep_top_k, ma, alg
     filename = "".join(
         [config['Paths']['csv_outputs'], "/OvrlCluster", str(focal_token), "_", "-".join(pos_list),"_max_degree", str(max_degree),  "_algo", str(algo.__name__), "_depth", str(depth), "_conRel", str(contextual_relations),
           "_depth", str(depth), "_keeptopk", str(keep_top_k), "_cm", str(context_mode),"_keeponlyt_", str(depth==0),
-         str(cutoff),"_lev", str(level), "_tfidf", str(tfidf),"_rs", str(rs)])
+         str(cutoff),"_lev", str(level), "_tfidf", str(tfidf is not None),"_rs", str(rs)])
     logging.info("Overall Profiles  ALL POS: {}".format(filename))
     df, clusters = context_cluster_all_pos(semantic_network,focal_substitutes=focal_token, times=times, keep_top_k=keep_top_k, max_degree=max_degree, sym=sym, weight_cutoff=cutoff, level=level,
                                       depth=depth, context_mode=context_mode, algorithm=algo,contextual_relations=contextual_relations, pos_list=pos_list,tfidf=tfidf,  filename=filename)
