@@ -731,7 +731,7 @@ class neo4j_database():
         pos_with = " WITH a,r,b,q,seq_length,s "
 
         pos_match = "MATCH (f: word) -[: onto]-(q) - [: seq]-(s) - [: seq]-(t:edge) - [: onto]-(e:word) "
-        pos_where = " WHERE f.token_id <> e.token_id and f.token_id in $idx "
+        pos_where = " WHERE f.token_id <> e.token_id and f.token_id in $idx and not f.token_id  in [a.token_id, b.token_id] and not e.token_id  in [a.token_id, b.token_id] "
 
         ### FINAL MATCH
         match = " ".join([match_query, where_query, sqlength_match, c_match, c_where, pos_with, pos_match, pos_where])
