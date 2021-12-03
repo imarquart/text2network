@@ -741,7 +741,7 @@ class neo4j_network(Sequence):
                          focal_occurrences: Optional[Union[list, str, int]] = None,
                          context_pos: Optional[str] = None, times: Union[list, int] = None,
                          context_mode: Optional[str] = "bidirectional", return_sentiment: Optional[bool] = True,
-                         tfidf: Optional[str] = None,
+                         tfidf: Optional[list] = None,
                          weight_cutoff: Optional[float] = None) -> dict:
         """
         This function returns a dataframe with a list of contextual tokens that appear in the context of another dyad.
@@ -783,15 +783,21 @@ class neo4j_network(Sequence):
             Return sentiment and subjectivity (Averaged) for the focal tie
 
         tfidf: str, Optional, Default None
-            total_df["nweight"]=total_df.weight/total_df.weight.sum()
-            total_df["pmi"] = -np.log(total_df.tweight)+np.log(total_df.nweight)
+            total_df["nweight"] = total_df.weight / total_df.weight.sum()
+            total_df["pmi"] = -np.log(total_df.tweight) + np.log(total_df.nweight)
+            total_df["cond_entropy"] = np.log(total_df.nweight/total_df.tweight)
             total_df["pmi_weight"] = total_df["weight"] * total_df["pmi"]
-            total_df["rel_weight"]
+            total_df["rel_weight"] = total_df.nweight / total_df.tweight
 
         weight_cutoff: float, Optional, Default None
             Ignore any network ties that are less than this value in weight
 
         """
+
+        if tfidf is not None or tfidf is not False:
+            tf_sel=True
+        else:
+            tf_sel=False
 
         if focal_substitutes is None and focal_occurrences is None:
             msg = "Please provide either focal_substitutes and/or focal_occurrences from dyads!"
@@ -817,7 +823,7 @@ class neo4j_network(Sequence):
 
         pd_dict = self.db.query_tie_context(occurring=focal_occurrences, replacing=focal_substitutes, times=times,
                                             weight_cutoff=weight_cutoff, pos=context_pos,
-                                            return_sentiment=return_sentiment, context_mode=context_mode, tfidf=tfidf)
+                                            return_sentiment=return_sentiment, context_mode=context_mode, tfidf=tf_sel)
 
         return {'dyad_context': pd_dict}
 
@@ -1651,15 +1657,26 @@ class neo4j_network(Sequence):
 
     def __add_edges(self, edges: dict, max_degree: Optional[int] = None):
 
-        if max_degree is not None:
-            # Create dataframe which is easier to group and sort
-            edge_df = pd.DataFrame(
-                [{'ego': int(edge[0]), 'alter': int(edge[1]), 'weight': edge[2]['weight'], 'dicto': edge[2]} for edge in
-                 edges])
-            edge_df = edge_df.set_index(['ego', 'alter'])
-            sel_df = edge_df.loc[
-                edge_df.groupby('ego')['weight'].nlargest(max_degree).index.droplevel(0).to_list()].reset_index()
-            edges = [(row['ego'], row['alter'], row['dicto']) for index, row in sel_df.iterrows()]
+        try:
+            if max_degree is not None:
+                # Create dataframe which is easier to group and sort
+                edge_df = pd.DataFrame(
+                    [{'ego': int(edge[0]), 'alter': int(edge[1]), 'weight': edge[2]['weight'], 'dicto': edge[2]} for edge in
+                     edges])
+
+                sel_df= edge_df.sort_values(["ego", "weight"]).groupby("ego").tail(max_degree)
+
+                egozero=edge_df.ego[0]
+                test_df=edge_df[edge_df.ego == egozero].sort_values(by="weight", ascending=False)[0:50]
+                test_df=test_df[test_df.weight != test_df.weight.min()].sort_index()
+                test_df2=sel_df[sel_df.ego==egozero].sort_values(by="weight", ascending=False).sort_index()
+                test_df2 = test_df2[test_df2.weight != test_df2.weight.min()].sort_index()
+                assert len(np.intersect1d(test_df.alter, test_df2.alter)) == len(test_df2.alter)
+                assert len(np.intersect1d(test_df.alter, test_df2.alter)) == len(test_df.alter)
+                edges = [(row['ego'], row['alter'], row['dicto']) for index, row in sel_df.iterrows()]
+        except:
+            logging.error("Could not cut edges. Edge df shape: {}, may_degree".format(edge_df.shape, max_degree))
+            raise
         try:
             self.graph.add_edges_from(edges)
         except:

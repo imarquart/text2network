@@ -274,17 +274,18 @@ def context_cluster_per_pos(snw: neo4j_network, focal_substitutes: Union[list, s
                                                    'Nr_ProxNodes': len(proxim_in_cluster),
                                                    'NrNodes': len(nodes), 'Ma': 0, 'Node_Weight': node_prox,
                                                    'Node_Sentiment': node_sent, 'Node_Subjectivity': node_sub,
-                                                   'Type': "Cluster"}
+                                                   'Type': "Node"}
                                         df_dict.update(cluster_measures)
                                         df_dict.update(sent_measures)
                                         df_dict.update(sub_measures)
                                         cluster_dataframe.append(df_dict.copy())
 
+            if filename is not None:
+                if export_network:
+                    snw.export_gefx(filename=check_create_folder(filename + "_POS" + str(pos) + "_tfidf" + str(tf) + ".gexf"))
         df = pd.DataFrame(cluster_dataframe)
 
         if filename is not None:
-            if export_network:
-                snw.export_gefx(filename=check_create_folder(filename + "_tfidf" + str(tf) + ".gexf"))
             df.to_excel(check_create_folder(filename  + "_tfidf" + str(tf) + ".xlsx"))
 
     return context_dict
@@ -299,7 +300,7 @@ def context_cluster_all_pos(snw: neo4j_network, focal_substitutes: Union[list, s
                             add_individual_nodes: Optional[bool] = True,
                             contextual_relations: Optional[bool] = False,
                             max_degree: Optional[int] = None, include_all_levels: Optional[bool] = True,
-                            tfidf: Optional[str] = None,
+                            tfidf: Optional[list] = None,
                             sym: Optional[bool] = False, depth: Optional[int] = 1, algorithm: Optional[Callable] = None,
                             export_network: Optional[bool] = True, filename: Optional[str] = None):
     if algorithm is None:
@@ -369,7 +370,7 @@ def context_cluster_all_pos(snw: neo4j_network, focal_substitutes: Union[list, s
                                  max_degree=max_degree)
         logging.info("Finished conditioning")
         clusters = snw.cluster(levels=level, interest_list=interest_list, algorithm=algorithm)
-        cluster_dict[tf]=clusters
+
         logging.info("Finished clustering, found {} clusters".format(len(clusters)))
         logging.info("Extracting relevant clusters at level {} across all years {}".format(level, times))
         for cl in tqdm(clusters, desc="Extracting all clusters"):
@@ -416,12 +417,13 @@ def context_cluster_all_pos(snw: neo4j_network, focal_substitutes: Union[list, s
                                                'Nr_ProxNodes': len(proxim_in_cluster),
                                                'NrNodes': len(nodes), 'Ma': 0, 'Node_Weight': node_prox,
                                                'Node_Sentiment': node_sent, 'Node_Subjectivity': node_sub,
-                                               'Type': "Cluster"}
+                                               'Type': "Node"}
                                     df_dict.update(cluster_measures)
                                     df_dict.update(sent_measures)
                                     df_dict.update(sub_measures)
                                     cluster_dataframe.append(df_dict.copy())
 
+        cluster_dict[tf] = clusters
         df = pd.DataFrame(cluster_dataframe)
 
         if filename is not None:

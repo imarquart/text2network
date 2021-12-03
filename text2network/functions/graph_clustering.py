@@ -48,6 +48,10 @@ def get_cluster_dict(clusterlist:List[GraphDict], level:int, subset_name_list:Op
     all_nodes = list(set(all_nodes))
     return clusterdict, all_nodes
 
+def distance_to_cluster():
+    pass
+
+
 def cluster_distances(graph:nx.Graph, clusterdict:dict)->nx.Graph:
 
     cl_names = list(clusterdict.keys())
@@ -97,10 +101,6 @@ def cluster_distances_from_clusterlist(clusterlist:List[GraphDict], level:int, s
     clusterdict, all_nodes=get_cluster_dict(clusterlist, level, subset_name_list)
 
     return cluster_distances(zerograph, clusterdict) # Use nx.convert_matrix.to_pandas_edgelist(clustergraph)
-
-
-
-
 
 def infomap_cluster(graph, num_trials=100, seed=42, prefer_modular_solution =True, markov_time=1, accepted_min=3):
     if Infomap is None:
