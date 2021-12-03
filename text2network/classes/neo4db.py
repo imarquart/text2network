@@ -301,7 +301,7 @@ class neo4j_database():
             c_match = "".join([
                                   " WITH count(DISTINCT([q.pos,q.run_index])) as seq_length, a,r,b MATCH (r)-[:seq]-(s:sequence)-[:seq]-(q:edge) - [:onto]->(e:word) "])
 
-        c_where = " WHERE q.pos<>r.pos "
+        c_where = " WHERE q.pos<>r.pos  and not e.token_id  in [a.token_id, b.token_id] "
         if weight_cutoff is not None:
             c_where = ''.join([c_where, " AND q.weight >=", str(weight_cutoff), " "])
 
