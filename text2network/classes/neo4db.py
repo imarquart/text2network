@@ -588,7 +588,7 @@ class neo4j_database():
             c_where = ''.join([c_where, " AND q.weight >=", str(weight_cutoff), " "])
 
         ### MATCH QUERY 3: Replacing ties
-        pos_match = " WITH a,r,b,q,seq_length MATCH (e:word) -[:onto]->(q)-[:onto]->(f:word) WHERE f.token_id in $idx and e.token_id <> f.token_id "
+        pos_match = " WITH a,r,b,q,seq_length MATCH (e:word) -[:onto]->(q)-[:onto]->(f:word) WHERE f.token_id in $idx and e.token_id <> f.token_id  and not f.token_id  in [a.token_id, b.token_id] and not e.token_id  in [a.token_id, b.token_id] "
 
         ### FINAL MATCH
         match = " ".join([match_query, where_query, sqlength_match, c_match, c_where, pos_match])
