@@ -31,18 +31,34 @@ class GraphDict(TypedDict):
     metadata: Union[Dict, defaultdict]
 
 
-def get_cluster_dict(clusterlist:List[GraphDict], level:int, subset_name_list:Optional[list]=None):
+def get_cluster_dict(clusterlist:List[GraphDict], level:int, subset_name_list:Optional[list]=None, name_field:Optional[str]="name")-> (dict, list):
+    """
+    Takes a list of clusters and outputs a dictionary where
+    {cluster_name: [list of tokens]}
+    as well as a list of all nodes
+
+    Parameters
+    ----------
+    clusterlist: list of GraphDicts
+    level: level which to extract
+    subset_name_list: If given, extract only clusters with this name
+    name_field: Which field from GRaphDict to use as name
+
+    Returns
+    -------
+    Clusterdict and list of all nodes
+    """
     all_nodes = []
     clusterdict = {}
     # Get clusters and tokens
     for cl in clusterlist:
         if cl["level"] == level:
             if subset_name_list is not None:
-                if cl["name"] in subset_name_list:
-                    clusterdict[cl["name"]] = list(cl["graph"].nodes)
+                if cl[name_field] in subset_name_list:
+                    clusterdict[cl[name_field]] = list(cl["graph"].nodes)
                     all_nodes.extend(list(cl["graph"].nodes))
             else:
-                clusterdict[cl["name"]] = list(cl["graph"].nodes)
+                clusterdict[cl[name_field]] = list(cl["graph"].nodes)
                 all_nodes.extend(list(cl["graph"].nodes))
 
     all_nodes = list(set(all_nodes))
@@ -77,7 +93,7 @@ def cluster_distances(graph:nx.Graph, clusterdict:dict)->nx.Graph:
         focal_dict["min"] = focal_mat.min().min()
         focal_dict["max"] = focal_mat.max().max()
         focal_dict["std0"] = focal_mat.std(axis=0).mean()
-        focal_dict["std1"] = focal_mat.std(axis=0).mean()
+        focal_dict["std1"] = focal_mat.std(axis=1).mean()
         focal_dict["min_dyad"] = focal_mat.stack().idxmin()
         focal_dict["max_dyad"] = focal_mat.stack().idxmax()
         alter_dict = {}
@@ -85,7 +101,7 @@ def cluster_distances(graph:nx.Graph, clusterdict:dict)->nx.Graph:
         alter_dict["min"] = alter_mat.min().min()
         alter_dict["max"] = alter_mat.max().max()
         alter_dict["std0"] = alter_mat.std(axis=0).mean()
-        alter_dict["std1"] = alter_mat.std(axis=0).mean()
+        alter_dict["std1"] = alter_mat.std(axis=1).mean()
         alter_dict["min_dyad"] = alter_mat.stack().idxmin()
         alter_dict["max_dyad"] = alter_mat.stack().idxmax()
 
@@ -95,10 +111,10 @@ def cluster_distances(graph:nx.Graph, clusterdict:dict)->nx.Graph:
 
     return clustergraph # Use nx.convert_matrix.to_pandas_edgelist(clustergraph)
 
-def cluster_distances_from_clusterlist(clusterlist:List[GraphDict], level:int, subset_name_list:Optional[list]=None):
+def cluster_distances_from_clusterlist(clusterlist:List[GraphDict], level:int, subset_name_list:Optional[list]=None, name_field:Optional[str]="name"):
 
     zerograph = clusterlist[0]["graph"]
-    clusterdict, all_nodes=get_cluster_dict(clusterlist, level, subset_name_list)
+    clusterdict, all_nodes=get_cluster_dict(clusterlist=clusterlist, level=level, subset_name_list=subset_name_list, name_field=name_field)
 
     return cluster_distances(zerograph, clusterdict) # Use nx.convert_matrix.to_pandas_edgelist(clustergraph)
 
