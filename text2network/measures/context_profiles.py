@@ -2,12 +2,14 @@ import logging
 from typing import Callable
 from typing import Optional, Union
 
+import networkx as nx
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
 from text2network.classes.neo4jnw import neo4j_network
 from text2network.functions.graph_clustering import consensus_louvain
+from text2network.functions.node_measures import proximity, centrality
 from text2network.measures.measures import return_measure_dict
 from text2network.utils.file_helpers import check_create_folder
 
@@ -227,10 +229,12 @@ def context_cluster_per_pos(snw: neo4j_network, focal_substitutes: Union[list, s
                                      contextual_relations=contextual_relations,
                                      max_degree=max_degree)
             logging.info("Finished conditioning")
-            clusters = snw.cluster(levels=level, interest_list=interest_list, algorithm=algorithm)
+            clusters = snw.cluster(levels=level, interest_list=interest_list, algorithm=algorithm, to_measure=[proximity, centrality])
             logging.info("Finished clustering, found {} clusters".format(len(clusters)))
             logging.info("Extracting relevant clusters at level {} across all years {}".format(level, times))
             for cl in tqdm(clusters, desc="Extracting all clusters for POS {}".format(pos)):
+                if cl['level'] == 0:  # Use zero cluster, where all tokens are present, to get proximities
+                    overall_pagerank = snw.pd_format(cl['measures'])[1]['normedPageRank']   
                 if len(cl['graph'].nodes) > 0 and (
                         cl['level'] == level or include_all_levels):  # Consider only the last level
                     # Get List of tokens
@@ -241,24 +245,29 @@ def context_cluster_per_pos(snw: neo4j_network, focal_substitutes: Union[list, s
                         proxim_in_cluster = proxim_in_cluster[proxim_in_cluster.weight > cluster_cutoff]
                         sentiment_in_cluster = sentiment.reindex(proxim_in_cluster.context_token, fill_value=0)
                         subjectivity_in_cluster = subjectivity.reindex(proxim_in_cluster.context_token, fill_value=0)
+                        pagerank_in_cluster =  overall_pagerank.reindex(proxim_in_cluster.context_token, fill_value=0)
                         if len(proxim_in_cluster) > 0:
                             cluster_measures = return_measure_dict(proxim_in_cluster.weight)
+                            pagerank_measures = return_measure_dict(pagerank_in_cluster, prefix="pagerank_")
                             sent_measures = return_measure_dict(sentiment_in_cluster.sentiment, prefix="sentiment_")
                             sub_measures = return_measure_dict(subjectivity_in_cluster.subjectivity, prefix="subjectivity_")
                             # Default cluster entry
                             year = -100
                             name = "-".join(list(proxim_in_cluster.weight.nlargest(5).index))
                             top_node = proxim_in_cluster.weight.idxmax()
+                            pr_name = "-".join(list(pagerank_in_cluster.nlargest(5).index))
+                            pr_top_node = pagerank_in_cluster.idxmax()
                             df_dict = {'Year': year, 'POS': pos, 'Token': name,
-                                       'Prom_Node': top_node, 'Level': cl['level'],
+                                       'Prom_Node': top_node, 'Pr_Token': pr_name, 'Pr_Top': pr_top_node ,'Level': cl['level'],
                                        'Cluster_Id': cl['name'],
                                        'Parent': cl['parent'], 'Nr_ProxNodes': len(proxim_in_cluster),
-                                       'NrNodes': len(nodes), 'Ma': 0, 'Node_Weight': 0,
+                                       'NrNodes': len(nodes), 'Ma': 0, 'Node_Weight': 0, 'Node_PageRank': 0,
                                        'Node_Sentiment': 0, 'Node_Subjectivity': 0, 'Type': "Cluster"}
                             #cluster_dict.update({name: cl})
                             df_dict.update(cluster_measures)
                             df_dict.update(sent_measures)
                             df_dict.update(sub_measures)
+                            df_dict.update(pagerank_measures)
                             cluster_dataframe.append(df_dict.copy())
                             # Add each node
                             if add_individual_nodes:
@@ -267,17 +276,19 @@ def context_cluster_per_pos(snw: neo4j_network, focal_substitutes: Union[list, s
                                         node_prox = proxim.reindex([node], fill_value=0).weight[0]
                                         node_sent = sentiment.reindex([node], fill_value=0).sentiment[0]
                                         node_sub = subjectivity.reindex([node], fill_value=0).subjectivity[0]
+                                        node_pr = pagerank_in_cluster.reindex([node], fill_value=0)[0]
                                         df_dict = {'Year': year, 'POS': pos, 'Token': node,
-                                                   'Prom_Node': top_node, 'Level': cl['level'],
+                                                   'Prom_Node': top_node,  'Pr_Token': pr_name, 'Pr_Top': pr_top_node, 'Level': cl['level'],
                                                    'Cluster_Id': cl['name'],
                                                    'Parent': cl['parent'],
                                                    'Nr_ProxNodes': len(proxim_in_cluster),
-                                                   'NrNodes': len(nodes), 'Ma': 0, 'Node_Weight': node_prox,
+                                                   'NrNodes': len(nodes), 'Ma': 0, 'Node_Weight': node_prox, 'Node_PageRank': node_pr,
                                                    'Node_Sentiment': node_sent, 'Node_Subjectivity': node_sub,
                                                    'Type': "Node"}
                                         df_dict.update(cluster_measures)
                                         df_dict.update(sent_measures)
                                         df_dict.update(sub_measures)
+                                        df_dict.update(pagerank_measures)
                                         cluster_dataframe.append(df_dict.copy())
 
             if filename is not None:
@@ -369,40 +380,57 @@ def context_cluster_all_pos(snw: neo4j_network, focal_substitutes: Union[list, s
                                  contextual_relations=contextual_relations,
                                  max_degree=max_degree)
         logging.info("Finished conditioning")
-        clusters = snw.cluster(levels=level, interest_list=interest_list, algorithm=algorithm)
+        snwarr=nx.to_numpy_array(snw.graph).reshape(-1)
+        logging.info("{} of {} ties are nonzero ({} percent)".format(len(np.where(snwarr > 0)[0]),len(snwarr),100*len(np.where(snwarr > 0)[0])/len(snwarr)))
+        clusters = snw.cluster(levels=level, interest_list=interest_list, algorithm=algorithm, to_measure=[proximity, centrality])
 
         logging.info("Finished clustering, found {} clusters".format(len(clusters)))
         logging.info("Extracting relevant clusters at level {} across all years {}".format(level, times))
-        for cl in tqdm(clusters, desc="Extracting all clusters"):
+        for i,cl in tqdm(enumerate(clusters), desc="Extracting all clusters"):
+            if cl['level'] == 0:  # Use zero cluster, where all tokens are present, to get proximities
+                overall_pagerank = snw.pd_format(cl['measures'])[1]['normedPageRank']
             if len(cl['graph'].nodes) > 0 and (
                     cl['level'] == level or include_all_levels):  # Consider only the last level
                 # Get List of tokens
                 nodes = snw.ensure_tokens(list(cl['graph'].nodes))
                 # Check if this is a cluster of interest
                 if len(np.intersect1d(nodes, interest_list)) > 0:
+
                     proxim_in_cluster = proxim.reindex(nodes, fill_value=0)
                     proxim_in_cluster = proxim_in_cluster[proxim_in_cluster.weight > cluster_cutoff]
                     sentiment_in_cluster = sentiment.reindex(proxim_in_cluster.context_token, fill_value=0)
                     subjectivity_in_cluster = subjectivity.reindex(proxim_in_cluster.context_token, fill_value=0)
+                    pagerank_in_cluster =  overall_pagerank.reindex(proxim_in_cluster.context_token, fill_value=0)
                     if len(proxim_in_cluster) > 0:
                         cluster_measures = return_measure_dict(proxim_in_cluster.weight)
+                        pagerank_measures = return_measure_dict(pagerank_in_cluster, prefix="pagerank_")
                         sent_measures = return_measure_dict(sentiment_in_cluster.sentiment, prefix="sentiment_")
                         sub_measures = return_measure_dict(subjectivity_in_cluster.subjectivity, prefix="subjectivity_")
                         # Default cluster entry
                         year = -100
                         name = "-".join(list(proxim_in_cluster.weight.nlargest(5).index))
+                        pr_name = "-".join(list(pagerank_in_cluster.nlargest(5).index))
                         top_node = proxim_in_cluster.weight.idxmax()
+                        pr_top_node = pagerank_in_cluster.idxmax()
+
                         df_dict = {'Year': year, 'POS': "ALL", 'Token': name,
-                                   'Prom_Node': top_node, 'Level': cl['level'],
+                                   'Prom_Node': top_node, 'Pr_Token': pr_name, 'Pr_Top': pr_top_node ,'Level': cl['level'],
                                    'Cluster_Id': cl['name'],
                                    'Parent': cl['parent'], 'Nr_ProxNodes': len(proxim_in_cluster),
-                                   'NrNodes': len(nodes), 'Ma': 0, 'Node_Weight': 0,
+                                   'NrNodes': len(nodes), 'Ma': 0, 'Node_Weight': 0, 'Node_PageRank': 0,
                                    'Node_Sentiment': 0, 'Node_Subjectivity': 0, 'Type': "Cluster"}
                         #cluster_dict.update({name: cl})
                         df_dict.update(cluster_measures)
                         df_dict.update(sent_measures)
                         df_dict.update(sub_measures)
+                        df_dict.update(pagerank_measures)
                         cluster_dataframe.append(df_dict.copy())
+                        # Update cluster dict with names
+                        cl["tk_top"] = pr_top_node
+                        cl["prx_top"] = top_node
+                        cl["tk_name"] = pr_name
+                        cl["prx_name"] = name
+                        clusters[i]=cl
                         # Add each node
                         if add_individual_nodes:
                             for node in list(proxim_in_cluster.index):
@@ -410,17 +438,19 @@ def context_cluster_all_pos(snw: neo4j_network, focal_substitutes: Union[list, s
                                     node_prox = proxim.reindex([node], fill_value=0).weight[0]
                                     node_sent = sentiment.reindex([node], fill_value=0).sentiment[0]
                                     node_sub = subjectivity.reindex([node], fill_value=0).subjectivity[0]
+                                    node_pr = pagerank_in_cluster.reindex([node], fill_value=0)[0]
                                     df_dict = {'Year': year, 'POS': "ALL", 'Token': node,
-                                               'Prom_Node': top_node, 'Level': cl['level'],
+                                               'Prom_Node': top_node, 'Pr_Token': pr_name, 'Pr_Top': pr_top_node, 'Level': cl['level'],
                                                'Cluster_Id': cl['name'],
                                                'Parent': cl['parent'],
                                                'Nr_ProxNodes': len(proxim_in_cluster),
-                                               'NrNodes': len(nodes), 'Ma': 0, 'Node_Weight': node_prox,
+                                               'NrNodes': len(nodes), 'Ma': 0, 'Node_Weight': node_prox, 'Node_PageRank': node_pr,
                                                'Node_Sentiment': node_sent, 'Node_Subjectivity': node_sub,
                                                'Type': "Node"}
                                     df_dict.update(cluster_measures)
                                     df_dict.update(sent_measures)
                                     df_dict.update(sub_measures)
+                                    df_dict.update(pagerank_measures)
                                     cluster_dataframe.append(df_dict.copy())
 
         cluster_dict[tf] = clusters
@@ -428,9 +458,8 @@ def context_cluster_all_pos(snw: neo4j_network, focal_substitutes: Union[list, s
 
         if filename is not None:
             if export_network:
-                snw.export_gefx(filename=check_create_folder(filename + ".gexf"))
-            filename = check_create_folder(filename + ".xlsx")
-            df.to_excel(filename)
+                snw.export_gefx(filename=check_create_folder(filename   + "_tfidf" + str(tf)+ ".gexf"))
+            df.to_excel(check_create_folder(filename  + "_tfidf" + str(tf) +".xlsx"))
 
     return df_dict, cluster_dict
 
