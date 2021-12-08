@@ -368,16 +368,18 @@ class neo4j_database():
             total_df["cond_entropy_weight"] = total_df.nweight*np.log(total_df.nweight / total_df.tweight)
             total_df["pmi_weight"] = total_df["weight"] * total_df["pmi"]
             total_df["rel_weight"] = total_df.nweight / total_df.tweight
+            total_df["diff"] = np.abs(total_df.nweight - total_df.tweight)
+            total_df["diffw"] = total_df.nweight/np.exp(- np.square(total_df["diff"]))
 
             if return_sentiment:
                 ret = [{'substitute': x['substitute'], 'occurrence': x['occurrence'], 'idx': x['context'],
                         'weight': x['weight'], 'sentiment': x['sentiment'], 'subjectivity': x['subjectivity'],
-                        'pos': pos, 'reg_weight': x['weight'], 'nweight': x['nweight'], 'pmi': x['pmi'],
+                        'pos': pos, 'reg_weight': x['weight'], 'nweight': x['nweight'], 'pmi': x['pmi'], 'diff': x['diff'], 'diffw': x['diffw'],
                         'pmi_weight': x['pmi_weight'], 'rel_weight': x['rel_weight'], 'cond_entropy': x['cond_entropy'], 'cond_entropy_weight': x['cond_entropy_weight']}
                        for index, x in total_df.iterrows()]
             else:
                 ret = [{'substitute': x['substitute'], 'occurrence': x['occurrence'], 'idx': x['context'],
-                        'weight': x['weight'], 'pos': pos, 'reg_weight': x['weight'], 'nweight': x['nweight'],
+                        'weight': x['weight'], 'pos': pos, 'reg_weight': x['weight'], 'nweight': x['nweight'],'diff': x['diff'], 'diffw': x['diffw'],
                         'pmi': x['pmi'], 'pmi_weight': x['pmi_weight'], 'rel_weight': x['rel_weight'], 'cond_entropy': x['cond_entropy'], 'cond_entropy_weight': x['cond_entropy_weight']} for index, x in
                        total_df.iterrows()]
         else:
@@ -633,7 +635,8 @@ class neo4j_database():
         WITH count(DISTINCT([q.pos,q.run_index])) as seq_length, a,r,b
         Match (r)-[:seq]-(s:sequence)-[:seq]-(q:edge) WHERE q.pos<>r.pos
         WITH a,r,b,q,seq_length
-        MATCH (f:word) -[:onto]-(q)-[:seq]-(s:sequence)-[:seq]-(t:edge)-[:onto]-(e:word) WHERE f.token in ["make"] and f.token <> e.token
+        MATCH (f:word) -[:onto]-(q)-[:seq]-(s:sequence)-[:seq]-(t:edge)-[:onto]-(e:word)
+        WHERE f.token in ["make"] and f.token <> e.token and q.pos<>t.pos
         WITH
         r.run_index as ridx, f.token as occ1, e.token as occ2, b.token AS rep_dyad,a.token AS occ_dyad,
         CASE WHEN sum(q.weight)>1.0 THEN 1 else sum(q.weight) END as qweight,
@@ -731,7 +734,7 @@ class neo4j_database():
         pos_with = " WITH a,r,b,q,seq_length,s "
 
         pos_match = "MATCH (f: word) -[: onto]-(q) - [: seq]-(s) - [: seq]-(t:edge) - [: onto]-(e:word) "
-        pos_where = " WHERE f.token_id <> e.token_id and f.token_id in $idx and not f.token_id  in [a.token_id, b.token_id] and not e.token_id  in [a.token_id, b.token_id] "
+        pos_where = " WHERE q.pos<>t.pos and f.token_id <> e.token_id and f.token_id in $idx and not f.token_id  in [a.token_id, b.token_id] and not e.token_id  in [a.token_id, b.token_id] "
 
         ### FINAL MATCH
         match = " ".join([match_query, where_query, sqlength_match, c_match, c_where, pos_with, pos_match, pos_where])
