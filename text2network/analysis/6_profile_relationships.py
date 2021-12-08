@@ -54,7 +54,8 @@ tfidf = ["rel_weight", "pmi_weight","weight","diff", "diffw" ]
 
 
 times = list(range(1980, 2021))
-times=[1980]
+times=[1990]
+
 focal_token = "leader"
 sym_list = [False]
 rs_list = [100]
@@ -68,7 +69,7 @@ pos_list = ["NOUN", "ADJ", "VERB"]
 # TODO CHECK WITH X
 #pos_list = ["X"]
 tfidf_list = [["rel_weight", "pmi_weight","weight","diff", "diffw" ]]
-keep_top_k_list = [50,100,1000]
+keep_top_k_list = [50,100,200,1000]
 max_degree_list = [50,100]
 level_list = [2,3,6,15]
 keep_only_tokens_list = [True,False]
@@ -80,10 +81,6 @@ param_list = product(rs_list,  level_list, depth_list,  max_degree_list, sym_lis
 
 
 
-
-# %% Set up folders
-output_path = check_create_folder(config['Paths']['csv_outputs'])
-output_path = check_create_folder(config['Paths']['csv_outputs']+"/profile_relationships")
 
 
 # %% Sub or Occ
@@ -107,17 +104,18 @@ for cutoff, context_mode, tfidf in paraml1_list:
 
 
     for rs, level, depth, max_degree, sym, keep_top_k, ma, algo, contextual_relations, keep_only_tokens in param_list:
-
+        output_path = check_create_folder(config['Paths']['csv_outputs'])
+        output_path = check_create_folder(config['Paths']['csv_outputs'] + "/profile_relationships")
         output_path = check_create_folder("".join(
             [output_path, "/", str(focal_token), "_conRel", str(contextual_relations), "_cm", str(context_mode), "/"]))
         output_path = check_create_folder("".join(
             [output_path, "/", "keeptopk", str(keep_top_k), "_keeponlyt_", str(depth == 0), "_tfidf",
              str(tfidf is not None), "_cut", str(int(cutoff * 100)), "_lev", str(level), "/"]))
 
-        filename = "".join(
+        filename = check_create_folder("".join(
             [output_path, "/OvrlCluster_", "-".join(pos_list),"_max_degree", str(max_degree), "_algo",
              str(algo.__name__),
-             "_rs", str(rs)])
+             "_rs", str(rs)]))
         logging.info("Overall Profiles  Regression tables: {}".format(filename))
 
         df, clusters_raw = context_cluster_all_pos(semantic_network, focal_substitutes=focal_token, times=times, keep_top_k=keep_top_k,
@@ -128,15 +126,29 @@ for cutoff, context_mode, tfidf in paraml1_list:
 
         for tf in tfidf:
             clusters=clusters_raw[tf].copy()
-            filename = "".join(
+            filename =  check_create_folder("".join(
                 [output_path, "/OvrlCluster_", "-".join(pos_list),"_tf", str(tf), "_max_degree", str(max_degree), "_algo", str(algo.__name__),
-                 "_rs", str(rs)])
+                 "_rs", str(rs)]))
 
 
             # %% Retrieve Cluster-Cluster relationships
             logging.info("Extracted Clusters, now getting relationships")
             clusterdict, all_nodes = get_cluster_dict(clusters, level=level, name_field="tk_top")
             rlgraph = cluster_distances_from_clusterlist(clusters, level=level, name_field="tk_top")
+
+            # Calculate SimRank
+            simRank_dict = nx.simrank_similarity(rlgraph)
+
+            simRank_edges= [(x,y,{"weight":simRank_dict[x][y]}) for x in simRank_dict for y in simRank_dict[x] if simRank_dict[x][y] != 0.0]
+            simGraph = nx.DiGraph()
+            simGraph.add_nodes_from([x for x in simRank_dict])
+            simGraph.add_edges_from(simRank_edges)
+            simRank_edges=nx.convert_matrix.to_pandas_edgelist(simGraph)
+            simRank_edges.to_excel(filename + "_negSimRank" + ".xlsx", merge_cells=False)
+            nx.write_gexf(simGraph, path=filename + "_negSimRank" + ".gexf")
+
+
+
             cl_df = nx.convert_matrix.to_pandas_adjacency(rlgraph)
             cluster_columns=cl_df.columns
             cl_df["type"]="Cluster"
