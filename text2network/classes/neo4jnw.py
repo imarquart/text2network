@@ -1667,13 +1667,14 @@ class neo4j_network(Sequence):
                 sel_df= edge_df.sort_values(["ego", "weight"]).groupby("ego").tail(max_degree)
 
                 egozero=edge_df.ego[0]
-                test_df=edge_df[edge_df.ego == egozero].sort_values(by="weight", ascending=False)[0:max_degree+1]
+                test_df=edge_df[edge_df.ego == egozero].sort_values(by="weight", ascending=False)[0:max_degree]
                 test_df=test_df[test_df.weight != test_df.weight.min()].sort_index()
                 test_df2=sel_df[sel_df.ego==egozero].sort_values(by="weight", ascending=False).sort_index()
                 test_df2 = test_df2[test_df2.weight != test_df2.weight.min()].sort_index()
 
-                assert len(np.intersect1d(test_df.alter, test_df2.alter)) == len(test_df2.alter)
-                assert len(np.intersect1d(test_df.alter, test_df2.alter)) == len(test_df.alter)
+                assert len(np.setdiff1d(test_df.alter,test_df2.alter))==0
+                assert len(np.setdiff1d(test_df2.alter,test_df.alter))==0
+
                 edges = [(row['ego'], row['alter'], row['dicto']) for index, row in sel_df.iterrows()]
         except:
             logging.error("Could not cut edges. Edge df shape: {}, may_degree".format(edge_df.shape, max_degree))
