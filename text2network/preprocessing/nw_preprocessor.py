@@ -341,12 +341,11 @@ class nw_preprocessor():
 
             # Get rid of line-breaks
             text = text.replace('\n', ' ')
-            text = text.replace(" \'", "' ")
+            text = text.replace(" \'", " ' ")
             # Other replacements
-            #text = text.replace("n\'t", " not")
+            text = text.replace('\n', ' ')
             text = text.replace(" .", ". ")
             text = text.replace(" ,", ", ")
-            #text = text.replace("-", " ")
             text = text.replace("...", ". ")
             killchars = ['#', '<p>', '$', '%', '(', ')', '*', '/', '<', '>', '@', '\\', '{', '}', '[', ']', '+', '^',
                          '~',
