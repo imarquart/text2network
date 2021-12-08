@@ -54,8 +54,6 @@ tfidf = ["rel_weight", "pmi_weight","weight","diff", "diffw" ]
 
 
 times = list(range(1980, 2021))
-times=[1990]
-
 focal_token = "leader"
 sym_list = [False]
 rs_list = [100]
@@ -71,7 +69,7 @@ pos_list = ["NOUN", "ADJ", "VERB"]
 tfidf_list = [["rel_weight", "pmi_weight","weight","diff", "diffw" ]]
 keep_top_k_list = [50,100,200,1000]
 max_degree_list = [50,100]
-level_list = [2,3,6,15]
+level_list = [1,2,3,6,15]
 keep_only_tokens_list = [True,False]
 contextual_relations_list = [True,False]
 
