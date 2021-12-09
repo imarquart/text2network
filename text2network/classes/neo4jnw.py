@@ -1671,19 +1671,21 @@ class neo4j_network(Sequence):
                 edge_df = pd.DataFrame(
                     [{'ego': int(edge[0]), 'alter': int(edge[1]), 'weight': edge[2]['weight'], 'dicto': edge[2]} for edge in
                      edges])
+                if len(edge_df)>0:
+                    sel_df= edge_df.sort_values(["ego", "weight"]).groupby("ego").tail(max_degree)
 
-                sel_df= edge_df.sort_values(["ego", "weight"]).groupby("ego").tail(max_degree)
+                    egozero=edge_df.ego[0]
+                    test_df=edge_df[edge_df.ego == egozero].sort_values(by="weight", ascending=False)[0:max_degree]
+                    test_df=test_df[test_df.weight != test_df.weight.min()].sort_index()
+                    test_df2=sel_df[sel_df.ego==egozero].sort_values(by="weight", ascending=False).sort_index()
+                    test_df2 = test_df2[test_df2.weight != test_df2.weight.min()].sort_index()
 
-                egozero=edge_df.ego[0]
-                test_df=edge_df[edge_df.ego == egozero].sort_values(by="weight", ascending=False)[0:max_degree]
-                test_df=test_df[test_df.weight != test_df.weight.min()].sort_index()
-                test_df2=sel_df[sel_df.ego==egozero].sort_values(by="weight", ascending=False).sort_index()
-                test_df2 = test_df2[test_df2.weight != test_df2.weight.min()].sort_index()
+                    assert len(np.setdiff1d(test_df.alter,test_df2.alter))==0
+                    assert len(np.setdiff1d(test_df2.alter,test_df.alter))==0
 
-                assert len(np.setdiff1d(test_df.alter,test_df2.alter))==0
-                assert len(np.setdiff1d(test_df2.alter,test_df.alter))==0
-
-                edges = [(row['ego'], row['alter'], row['dicto']) for index, row in sel_df.iterrows()]
+                    edges = [(row['ego'], row['alter'], row['dicto']) for index, row in sel_df.iterrows()]
+                else:
+                    edges = []
         except:
             logging.error("Could not cut edges. Edge df shape: {}, may_degree".format(edge_df.shape, max_degree))
             raise
