@@ -1159,6 +1159,8 @@ class neo4j_network(Sequence):
             self.graph.add_nodes_from(worklist)
 
             # Loop batched over all tokens to condition
+            if weight_cutoff is not None:
+                logging.warning("Weight cutoff {}".format(weight_cutoff))
             for i in tqdm(range(0, len(worklist), batchsize), leave=False, position=0,
                           desc="Querying {} nodes in batches of {}".format(len(worklist), batchsize)):
                 token_ids = worklist[i:i + batchsize]
@@ -1258,6 +1260,8 @@ class neo4j_network(Sequence):
                 ids_to_check.reverse()
                 # Add starting nodes
                 self.graph.add_nodes_from(ids_to_check)
+                if weight_cutoff is not None:
+                    logging.warning("Weight cutoff {}".format(weight_cutoff))
                 for i in tqdm(range(0, len(ids_to_check), batchsize), leave=False, position=0,
                               desc="Depth {} conditioning: {} new found tokens, where {} already added.".format(depth,
                                                                                                                 len(ids_to_check),
@@ -1345,6 +1349,8 @@ class neo4j_network(Sequence):
             self.graph.add_nodes_from(worklist)
 
             # Loop batched over all tokens to condition
+            if weight_cutoff is not None:
+                logging.warning("Weight cutoff {}".format(weight_cutoff))
             for i in tqdm(range(0, len(worklist), batchsize), leave=False, position=0):
                 token_ids = worklist[i:i + batchsize]
                 logging.debug(
@@ -1421,6 +1427,8 @@ class neo4j_network(Sequence):
                     prev_queried_ids.extend(ids_to_check)
                     # Add starting nodes
                     self.graph.add_nodes_from(ids_to_check)
+                    if weight_cutoff is not None:
+                        logging.warning("Weight cutoff {}".format(weight_cutoff))
                     for i in tqdm(range(0, len(ids_to_check), batchsize), leave=False, position=0):
 
                         id_batch = ids_to_check[i:i + batchsize]
@@ -2010,6 +2018,9 @@ class neo4j_network(Sequence):
                 ids_to_check.reverse()
                 # Add starting nodes
                 self.graph.add_nodes_from(ids_to_check)
+                if weight_cutoff is not None:
+                    logging.warning("Weight cutoff {}".format(weight_cutoff))
+                logging.info("Batch size selected is {}".format(batchsize))
                 for i in tqdm(range(0, len(ids_to_check), batchsize), leave=False, position=0,
                               desc="Depth {} conditioning: {} new found tokens, where {} already added.".format(depth,
                                                                                                                 len(ids_to_check),
