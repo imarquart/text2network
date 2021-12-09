@@ -113,6 +113,8 @@ for cutoff, context_mode, tfidf in paraml1_list:
         pickle.dump(context_dict, open(cdict_filename, "wb"))
 
     for rs, level, depth, max_degree, sym, keep_top_k, ma, algo, contextual_relations, keep_only_tokens,postcut in param_list:
+        if postcut is None:
+            postcut = 0
         output_path = check_create_folder(config['Paths']['csv_outputs'])
         output_path = check_create_folder(config['Paths']['csv_outputs'] + "/profile_relationships/")
         output_path = check_create_folder(
@@ -137,7 +139,7 @@ for cutoff, context_mode, tfidf in paraml1_list:
             logging.info("Cluster dictionary pickle missing, creating!")
             dfx, clusters_raw = context_cluster_all_pos(semantic_network, focal_substitutes=focal_token, times=times, keep_top_k=keep_top_k,
                                     max_degree=max_degree, sym=sym, weight_cutoff=postcut, level=level,
-                                    pos_list=pos_list, context_dict =context_dict, batch_size=1,
+                                    pos_list=pos_list, context_dict =context_dict, batch_size=10,
                                     depth=depth, context_mode=context_mode, algorithm=algo,
                                     contextual_relations=contextual_relations, tfidf=tfidf, filename=filename+"_clustering_output")
             ff=check_create_folder(filename + "_clusters_raw.p")
@@ -198,9 +200,10 @@ for cutoff, context_mode, tfidf in paraml1_list:
             logging.info("Extracting cluster relationships across years")
             df_list = []
             for year in times:
+                logging.info("{} / {}".format(year, times[-1]))
                 semantic_network.decondition()
                 semantic_network.condition_given_dyad(dyad_substitute=focal_substitutes, dyad_occurring=focal_occurrences, times=[year],
-                                                      focal_tokens=all_nodes, weight_cutoff=cutoff, depth=0,
+                                                      focal_tokens=all_nodes, weight_cutoff=postcut, depth=0,
                                                       keep_only_tokens=True,
                                                       contextual_relations=contextual_relations,
                                                       max_degree=max_degree)
@@ -230,7 +233,7 @@ for cutoff, context_mode, tfidf in paraml1_list:
             allyear_list=[]
             for year in tqdm(times, desc="Iterating years", leave=False, colour='green', position=0):
                 # Step 1: get run_index, pos
-                query = "MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word) WHERE b.token_id in $id_occ and a.token_id <> b.token_id and r.time in $times return r.pos as position, r.run_index as ridx, collect(a.token_id) as occ, collect(b.token_id) as subst, r.weight as rweight"
+                query = "MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word) WHERE b.token_id in $id_occ and a.token_id <> b.token_id and r.time in $times and r.weight >= "+ str(postcut) +" return r.pos as position, r.run_index as ridx, collect(a.token_id) as occ, collect(b.token_id) as subst, r.weight as rweight"
                 params={}
                 params["id_occ"]=semantic_network.ensure_ids(focal_substitutes)
                 params["times"]=[year]
