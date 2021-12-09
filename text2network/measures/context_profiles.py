@@ -293,7 +293,7 @@ def context_cluster_per_pos(snw: neo4j_network, focal_substitutes: Union[list, s
 
             if filename is not None:
                 if export_network:
-                    snw.export_gefx(filename=check_create_folder(filename + "_POS" + str(pos) + "_tfidf" + str(tf) + ".gexf"))
+                    snw.export_gefx(filename=check_create_folder(filename + "_POS" + str(pos) + "_tfidf" + str(tf) + ".gefx"))
         df = pd.DataFrame(cluster_dataframe)
 
         if filename is not None:
@@ -311,7 +311,7 @@ def context_cluster_all_pos(snw: neo4j_network, focal_substitutes: Union[list, s
                             add_individual_nodes: Optional[bool] = True,
                             contextual_relations: Optional[bool] = False,
                             max_degree: Optional[int] = None, include_all_levels: Optional[bool] = True,
-                            tfidf: Optional[list] = None,
+                            tfidf: Optional[list] = None, batch_size:Optional[int]=None,
                             sym: Optional[bool] = False, depth: Optional[int] = 1, algorithm: Optional[Callable] = None,
                             export_network: Optional[bool] = True, filename: Optional[str] = None):
     if algorithm is None:
@@ -323,6 +323,7 @@ def context_cluster_all_pos(snw: neo4j_network, focal_substitutes: Union[list, s
 
     if context_dict is not None:
         context_dict_supplied = True
+        logging.info("Context dictionary is given!")
     else:
         context_dict = context_per_pos(snw=snw, focal_substitutes=focal_substitutes,
                                        focal_occurrences=focal_occurrences, times=times,
@@ -374,9 +375,11 @@ def context_cluster_all_pos(snw: neo4j_network, focal_substitutes: Union[list, s
             logging.info("Keeping only contextual tokens in conditioning network!")
         else:
             keep_only_tokens = False
+
+        snw.decondition()
         snw.condition_given_dyad(dyad_substitute=focal_substitutes, dyad_occurring=focal_occurrences, times=times,
                                  focal_tokens=interest_list, weight_cutoff=weight_cutoff, depth=depth,
-                                 keep_only_tokens=keep_only_tokens,
+                                 keep_only_tokens=keep_only_tokens, batchsize=batch_size,
                                  contextual_relations=contextual_relations,
                                  max_degree=max_degree)
         logging.info("Finished conditioning")
@@ -458,8 +461,8 @@ def context_cluster_all_pos(snw: neo4j_network, focal_substitutes: Union[list, s
 
         if filename is not None:
             if export_network:
-                snw.export_gefx(filename=check_create_folder(filename   + "_tfidf" + str(tf)+ ".gexf"))
-            df.to_excel(check_create_folder(filename  + "_tfidf" + str(tf) +".xlsx"))
+                snw.export_gefx(filename=check_create_folder(filename   + "_tfidf" + str(tf)+ ".gefx"))
+            df.to_excel(filename  + "_tfidf" + str(tf) +".xlsx")
 
     return df_dict, cluster_dict
 

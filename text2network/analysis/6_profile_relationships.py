@@ -54,10 +54,12 @@ tfidf = ["rel_weight", "pmi_weight","weight","diff", "diffw" ]
 
 
 times = list(range(1980, 2021))
+#times=[1988]
 focal_token = "leader"
 sym_list = [False]
 rs_list = [100]
 cutoff_list = [0.2,0.1,0.01]
+post_cutoff_list=[0.2,0.01,None]
 depth_list = [0, 1]
 context_mode_list = ["bidirectional", "substitution", "occurring"]
 rev_list = [False]
@@ -65,7 +67,6 @@ algo_list = [consensus_louvain, infomap_cluster]
 ma_list = [(2, 2)]
 pos_list = ["NOUN", "ADJ", "VERB"]
 # TODO CHECK WITH X
-#pos_list = ["X"]
 tfidf_list = [["rel_weight", "pmi_weight","weight","diff", "diffw" ]]
 keep_top_k_list = [50,100,200,1000]
 max_degree_list = [50,100]
@@ -75,7 +76,7 @@ contextual_relations_list = [True,False]
 
 paraml1_list = product(cutoff_list,context_mode_list,tfidf_list)
 param_list = product(rs_list,  level_list, depth_list,  max_degree_list, sym_list,
-                     keep_top_k_list, ma_list, algo_list, contextual_relations_list, keep_only_tokens_list)
+                     keep_top_k_list, ma_list, algo_list, contextual_relations_list, keep_only_tokens_list, post_cutoff_list)
 
 
 
@@ -91,43 +92,63 @@ if not (isinstance(focal_occurrences, list) or focal_occurrences is None):
     focal_occurrences=[focal_occurrences]
 
 # %% Extract context clusters
-
-
 for cutoff, context_mode, tfidf in paraml1_list:
     logging.info("Extracting context tokens for {}, {}, {}".format(cutoff, context_mode, tfidf))
-    context_dict = context_per_pos(snw=semantic_network, focal_substitutes=focal_substitutes,
-                                   times=times,
-                                   weight_cutoff=cutoff,
-                                   keep_top_k=None, context_mode=context_mode, pos_list=pos_list, tfidf=tfidf)
 
+    output_path = check_create_folder(config['Paths']['csv_outputs'])
+    output_path = check_create_folder(config['Paths']['csv_outputs'] + "/profile_relationships/")
+    cdict_filename = check_create_folder("".join([output_path, "/", str(focal_token), "_cut", str(int(cutoff * 100)),"_tfidf",
+             str(tfidf is not None),"_cm", str(context_mode), "/context_dict.p"]))
 
-    for rs, level, depth, max_degree, sym, keep_top_k, ma, algo, contextual_relations, keep_only_tokens in param_list:
+    try:
+        logging.info("Looking for context token pickle")
+        context_dict=pickle.load(open( cdict_filename, "rb" ))
+        logging.info("Contextual tokens loaded from {}".format(cdict_filename))
+    except:
+        logging.info("Context tokens pickle not found. Creating.")
+        context_dict = context_per_pos(snw=semantic_network, focal_substitutes=focal_substitutes,
+                                       times=times,
+                                       weight_cutoff=cutoff,
+                                       keep_top_k=None, context_mode=context_mode, pos_list=pos_list, tfidf=tfidf)
+        pickle.dump(context_dict, open(cdict_filename, "wb"))
+
+    for rs, level, depth, max_degree, sym, keep_top_k, ma, algo, contextual_relations, keep_only_tokens,postcut in param_list:
         output_path = check_create_folder(config['Paths']['csv_outputs'])
-        output_path = check_create_folder(config['Paths']['csv_outputs'] + "/profile_relationships")
+        output_path = check_create_folder(config['Paths']['csv_outputs'] + "/profile_relationships/")
+        output_path = check_create_folder(
+            "".join([output_path, "/", str(focal_token), "_cut", str(int(cutoff * 100)), "_tfidf",
+                     str(tfidf is not None), "_cm", str(context_mode), "/"]))
         output_path = check_create_folder("".join(
-            [output_path, "/", str(focal_token), "_conRel", str(contextual_relations), "_cm", str(context_mode), "/"]))
+            [output_path, "/", "conRel", str(contextual_relations), "_lev", str(level) , "_postcut", str(int(postcut * 100)), "/"]))
         output_path = check_create_folder("".join(
-            [output_path, "/", "keeptopk", str(keep_top_k), "_keeponlyt_", str(depth == 0), "_tfidf",
-             str(tfidf is not None), "_cut", str(int(cutoff * 100)), "_lev", str(level), "/"]))
-
-        filename = check_create_folder("".join(
-            [output_path, "/OvrlCluster_", "-".join(pos_list),"_max_degree", str(max_degree), "_algo",
-             str(algo.__name__),
-             "_rs", str(rs)]))
+            [output_path, "/", "keeptopk", str(keep_top_k), "_keeponlyt_", str(depth == 0),  "/"]))
+        filename = "".join(
+            [output_path, "/OvrlCluster_md", str(max_degree), "_algo", str(algo.__name__),
+             "_rs", str(rs)])
         logging.info("Overall Profiles  Regression tables: {}".format(filename))
 
-        df, clusters_raw = context_cluster_all_pos(semantic_network, focal_substitutes=focal_token, times=times, keep_top_k=keep_top_k,
-                                max_degree=max_degree, sym=sym, weight_cutoff=cutoff, level=level,
-                                pos_list=pos_list, context_dict =context_dict,
-                                depth=depth, context_mode=context_mode, algorithm=algo,
-                                contextual_relations=contextual_relations, tfidf=tfidf, filename=filename)
+        try:
+            logging.info("Looking for Cluster dictionary pickle")
+            ff=check_create_folder(filename + "_clusters_raw.p")
+            clusters_raw = pickle.load(open(ff, "rb"))
+            logging.info("Cluster dictionary loaded from {}".format(ff))
+            dfx=None
+        except:
+            logging.info("Cluster dictionary pickle missing, creating!")
+            dfx, clusters_raw = context_cluster_all_pos(semantic_network, focal_substitutes=focal_token, times=times, keep_top_k=keep_top_k,
+                                    max_degree=max_degree, sym=sym, weight_cutoff=postcut, level=level,
+                                    pos_list=pos_list, context_dict =context_dict, batch_size=1,
+                                    depth=depth, context_mode=context_mode, algorithm=algo,
+                                    contextual_relations=contextual_relations, tfidf=tfidf, filename=filename+"_clustering_output")
+            ff=check_create_folder(filename + "_clusters_raw.p")
+            pickle.dump(clusters_raw, open(ff, "wb"))
 
         for tf in tfidf:
             clusters=clusters_raw[tf].copy()
-            filename =  check_create_folder("".join(
-                [output_path, "/OvrlCluster_", "-".join(pos_list),"_tf", str(tf), "_max_degree", str(max_degree), "_algo", str(algo.__name__),
-                 "_rs", str(rs)]))
-
+            filename = check_create_folder("".join([output_path, "/"+ "tf_", str(tf) + "/"]))
+            filename =  "".join(
+                [filename, "/OvrlCluster_md", str(max_degree), "_algo", str(algo.__name__),
+                 "_rs", str(rs)])
 
             # %% Retrieve Cluster-Cluster relationships
             logging.info("Extracted Clusters, now getting relationships")
@@ -223,29 +244,29 @@ for cutoff, context_mode, tfidf in paraml1_list:
 
                     query="Match (r:edge {pos:"+ str(row.position) +", run_index:"+ str(row.ridx)+ "})-[:seq]-(s:sequence)-[:seq]-(q:edge) WHERE q.pos<>r.pos WITH DISTINCT r,count(DISTINCT([q.pos,q.run_index])) as seq_length Match (r)-[:seq]-(s:sequence)-[:seq]-(q:edge) - [:onto]-(e:word) WHERE q.pos<>r.pos WITH DISTINCT q,r,e,seq_length RETURN q.pos as qpos, r.pos as rpos, r.run_index as ridx,sum(distinct(q.weight)) as cweight, e.token as context, head(collect(r.sentiment)) AS sentiment, head(collect(r.subjectivity)) AS subjectivity, seq_length, r.time as time order by context DESC"
                     res = pd.DataFrame(semantic_network.db.receive_query(query))
-
-                    new_row =  pd.Series(empty_dict)
-                    new_row["year"] = year
-                    new_row["type"] = "Sub"
-                    #new_row["token_id"] = list(cl_df.index)
-                    new_row["occ"] = "-".join(semantic_network.ensure_tokens(row.occ))
-                    new_row["sub"] = "-".join(semantic_network.ensure_tokens(row.subst))
-                    new_row["ridx"] = row.ridx
-                    new_row["pos"] = row.position
-                    new_row["rweight"] = row.rweight
-                    for cl in clusterdict_tk:
-                        tokens=clusterdict_tk[cl]
-                        subdf=res.loc[res.context.isin(tokens)].copy()
-                        if len(subdf)>0:
-                            subdf.loc[:,"cweight_n"]=subdf.loc[:,"cweight"] * 40/subdf.loc[:,"seq_length"] * row.rweight
-                            w=subdf.cweight.mean()
-                            wmin = subdf.cweight.min()
-                            wmax = subdf.cweight.max()
-                            w_n=subdf.cweight_n.mean()
-                            wmin_n = subdf.cweight_n.min()
-                            wmax_n = subdf.cweight_n.max()
-                            new_row[cl] = w_n*100
-                    row_list.append(new_row)
+                    if len(res)>0:
+                        new_row =  pd.Series(empty_dict)
+                        new_row["year"] = year
+                        new_row["type"] = "Sub"
+                        #new_row["token_id"] = list(cl_df.index)
+                        new_row["occ"] = "-".join(semantic_network.ensure_tokens(row.occ))
+                        new_row["sub"] = "-".join(semantic_network.ensure_tokens(row.subst))
+                        new_row["ridx"] = row.ridx
+                        new_row["pos"] = row.position
+                        new_row["rweight"] = row.rweight
+                        for cl in clusterdict_tk:
+                            tokens=clusterdict_tk[cl]
+                            subdf=res.loc[res.context.isin(tokens)].copy()
+                            if len(subdf)>0:
+                                subdf.loc[:,"cweight_n"]=subdf.loc[:,"cweight"] * 40/subdf.loc[:,"seq_length"] * row.rweight
+                                w=subdf.cweight.mean()
+                                wmin = subdf.cweight.min()
+                                wmax = subdf.cweight.max()
+                                w_n=subdf.cweight_n.mean()
+                                wmin_n = subdf.cweight_n.min()
+                                wmax_n = subdf.cweight_n.max()
+                                new_row[cl] = w_n*100
+                        row_list.append(new_row)
                 yeardf=pd.DataFrame(row_list)
                 yeardf.to_excel(filename + "REGDF" + str(year) +".xlsx", merge_cells=False)
                 allyear_list.append(yeardf)
