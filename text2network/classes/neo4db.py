@@ -583,12 +583,12 @@ class neo4j_database():
             sqlength_match = " WITH a,r,b Match (r)-[:seq]-(s:sequence)-[:seq]-(q:edge) WHERE q.pos<>r.pos "
             ### MATCH QUERY 2: OCCURRING TOKEN
             c_match = "".join([
-                                  " WITH count(DISTINCT([q.pos,q.run_index])) as seq_length, a,r,b,s  MATCH  (r)-[:seq]-(s)-[:seq]-(q:edge) "])
+                                  " WITH count(DISTINCT([q.pos,q.run_index])) as seq_length, a,r,b  MATCH  (r)-[:seq]-(s:sequence)-[:seq]-(q:edge) "])
         else:
             sqlength_match = " "
             ### MATCH QUERY 2: OCCURRING TOKEN
             c_match = "".join([
-                " WITH 1 as seq_length, a,r,b,s  MATCH  (r)-[:seq]-(s)-[:seq]-(q:edge) "])
+                " WITH 1 as seq_length, a,r,b  MATCH  (r)-[:seq]-(s:sequence)-[:seq]-(q:edge) "])
 
         ## MATCH QUERY 2: Sequence Length
         #sqlength_match = " WITH a,r,b Match (r)-[:seq]-(s:sequence)-[:seq]-(q:edge) WHERE q.pos<>r.pos "
@@ -739,12 +739,12 @@ class neo4j_database():
             sqlength_match = " WITH a,r,b Match (r)-[:seq]-(s:sequence)-[:seq]-(q:edge) WHERE q.pos<>r.pos "
             ### MATCH QUERY 2: OCCURRING TOKEN
             c_match = "".join([
-                                  " WITH count(DISTINCT([q.pos,q.run_index])) as seq_length, a,r,b,s  MATCH  (r)-[:seq]-(s)-[:seq]-(q:edge) "])
+                                  " WITH count(DISTINCT([q.pos,q.run_index])) as seq_length, a,r,b  MATCH  (r)-[:seq]-(s:sequence)-[:seq]-(q:edge) "])
         else:
             sqlength_match = " "
             ### MATCH QUERY 2: OCCURRING TOKEN
             c_match = "".join([
-                " WITH 1 as seq_length, a,r,b,s  MATCH  (r)-[:seq]-(s)-[:seq]-(q:edge) "])
+                " WITH 1 as seq_length, a,r,b MATCH  (r)-[:seq]-(s)-[:seq]-(q:edge) "])
 
         c_where = " WHERE q.pos<>r.pos "
         if weight_cutoff is not None:
