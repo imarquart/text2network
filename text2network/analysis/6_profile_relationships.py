@@ -4,6 +4,7 @@ from itertools import product
 
 import networkx as nx
 import pandas as pd
+import numpy as np
 from tqdm import tqdm
 
 from text2network.classes.neo4jnw import neo4j_network
@@ -31,23 +32,6 @@ setup_logger(config['Paths']['log'], config['General']['logging_level'], "6_prof
 
 semantic_network = neo4j_network(config)
 
-times = list(range(1980, 1982))
-focal_token = "leader"
-sym = False
-keep_top_k = 100
-max_degree = 100
-rs = 100
-cutoff = 0.2
-level = 1
-depth = 0
-context_mode = "bidirectional"
-rev = False
-algo = consensus_louvain
-ma = (2, 2)
-keep_only_tokens = True
-contextual_relations = True
-pos_list = ["NOUN", "VERB", "ADJ"]
-tfidf = ["rel_weight", "pmi_weight","weight","diff", "diffw" ]
 
 
 # %% Across different options
@@ -67,7 +51,7 @@ algo_list = [consensus_louvain, infomap_cluster]
 ma_list = [(2, 2)]
 pos_list = ["NOUN", "ADJ", "VERB"]
 # TODO CHECK WITH X
-tfidf_list = [["rel_weight", "pmi_weight","weight","diff", "diffw" ]]
+tfidf_list = [["pmi_weight","weight","diff", "diffw" ]]
 keep_top_k_list = [50,100,200,1000]
 max_degree_list = [50,100]
 level_list = [1,2,3,6,15]
@@ -121,35 +105,39 @@ for cutoff, context_mode, tfidf in paraml1_list:
             "".join([output_path, "/", str(focal_token), "_cut", str(int(cutoff * 100)), "_tfidf",
                      str(tfidf is not None), "_cm", str(context_mode), "/"]))
         output_path = check_create_folder("".join(
-            [output_path, "/", "conRel", str(contextual_relations), "_lev", str(level) , "_postcut", str(int(postcut * 100)), "/"]))
+            [output_path, "/", "conRel", str(contextual_relations) , "_postcut", str(int(postcut * 100)), "/"]))
         output_path = check_create_folder("".join(
             [output_path, "/", "keeptopk", str(keep_top_k), "_keeponlyt_", str(depth == 0),  "/"]))
         filename = "".join(
-            [output_path, "/OvrlCluster_md", str(max_degree), "_algo", str(algo.__name__),
+            [output_path, "/md", str(max_degree), "_algo", str(algo.__name__),
              "_rs", str(rs)])
-        logging.info("Overall Profiles  Regression tables: {}".format(filename))
+
 
         try:
-            logging.info("Looking for Cluster dictionary pickle")
-            ff=check_create_folder(filename + "_clusters_raw.p")
+            ff = check_create_folder(filename + "_clusters_raw.p")
+            logging.info("Looking for Cluster dictionary pickle from {}".format(ff))
             clusters_raw = pickle.load(open(ff, "rb"))
-            logging.info("Cluster dictionary loaded from {}".format(ff))
+            logging.info("Cluster dictionary loaded.")
             dfx=None
         except:
             logging.info("Cluster dictionary pickle missing, creating!")
             dfx, clusters_raw = context_cluster_all_pos(semantic_network, focal_substitutes=focal_token, times=times, keep_top_k=keep_top_k,
-                                    max_degree=max_degree, sym=sym, weight_cutoff=postcut, level=level,
+                                    max_degree=max_degree, sym=sym, weight_cutoff=postcut, level=int(np.max(np.array(level_list))),
                                     pos_list=pos_list, context_dict =context_dict, batch_size=10,
-                                    depth=depth, context_mode=context_mode, algorithm=algo,
+                                    depth=depth, context_mode=context_mode, algorithm=algo, include_all_levels=True,
                                     contextual_relations=contextual_relations, tfidf=tfidf, filename=filename+"_clustering_output")
             ff=check_create_folder(filename + "_clusters_raw.p")
             pickle.dump(clusters_raw, open(ff, "wb"))
+
+        output_path = check_create_folder("".join(
+            [output_path, "/",  "lev", str(level), "/"]))
+        logging.info("Overall Profiles  Regression tables: {}".format(filename))
 
         for tf in tfidf:
             clusters=clusters_raw[tf].copy()
             filename = check_create_folder("".join([output_path, "/"+ "tf_", str(tf) + "/"]))
             filename =  "".join(
-                [filename, "/OvrlCluster_md", str(max_degree), "_algo", str(algo.__name__),
+                [filename, "/md", str(max_degree), "_algo", str(algo.__name__),
                  "_rs", str(rs)])
 
             # %% Retrieve Cluster-Cluster relationships
@@ -199,15 +187,17 @@ for cutoff, context_mode, tfidf in paraml1_list:
             # %% Retrieve Cluster-Cluster relationships Year-On-Year
             logging.info("Extracting cluster relationships across years")
             df_list = []
-            for year in times:
-                logging.info("{} / {}".format(year, times[-1]))
+            for year in tqdm(times, desc="YOY distances", total=len(times)):
                 semantic_network.decondition()
+                curlevel=logging.root.getEffectiveLevel()
+                logging.disable(logging.ERROR)
                 semantic_network.condition_given_dyad(dyad_substitute=focal_substitutes, dyad_occurring=focal_occurrences, times=[year],
                                                       focal_tokens=all_nodes, weight_cutoff=postcut, depth=0,
                                                       keep_only_tokens=True,
                                                       contextual_relations=contextual_relations,
                                                       max_degree=max_degree)
                 rlgraph = cluster_distances(semantic_network.graph, clusterdict)
+                logging.disable(curlevel)
                 cl_df = nx.convert_matrix.to_pandas_edgelist(rlgraph)
                 cl_df["year"] = year
                 cl_df["type"] = "Cluster"
@@ -277,9 +267,3 @@ for cutoff, context_mode, tfidf in paraml1_list:
             allyear_df.to_excel(filename + "REGDF_allY_" + ".xlsx", merge_cells=False)
 
 
-#df, clusters = context_cluster_all_pos(semantic_network, focal_substitutes=focal_substitutes, focal_occurrences=focal_occurrences, times=times,
-#                                       keep_top_k=keep_top_k, max_degree=max_degree, sym=sym, weight_cutoff=cutoff,
-#                                       level=level, include_all_levels=False,
-#                                       depth=depth, context_mode=context_mode, algorithm=algo,
-#                                       contextual_relations=contextual_relations, pos_list=pos_list, tfidf=tfidf,
-#                                       filename=None)
