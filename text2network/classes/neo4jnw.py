@@ -222,7 +222,7 @@ class neo4j_network(Sequence):
                              batchsize: Optional[int] = None, weight_cutoff: Optional[float] = None,
                              post_cutoff: Optional[float] = None, post_norm: Optional[bool] = False,
                              compositional: Optional[bool] = False,
-                             reverse: Optional[bool] = False, ):
+                             reverse: Optional[bool] = False,  ):
         """
 
         Derive semantic similarity network by conditioning on tokens that are likely to substitute for each other
