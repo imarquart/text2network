@@ -316,11 +316,11 @@ df_total = df.groupby("token").sum()
 df_total["year"] = df_total["year"] / np.sum(range(1980, 2021))
 
 firms = df_total.index.to_list()
+empty_dict = {x: 0 for x in firms}
 postcut = 0
 allyear_list = []
 
 for year in tqdm(times, desc="Iterating years", leave=False, colour='green', position=0):
-    empty_dict = {x: 0 for x in firms}
     query = "MATCH p=(a:word)-[:onto]-(r:edge)-[:onto]-(b:word) WHERE b.token_id in $firms and a.token_id <> b.token_id and r.time in $times and r.weight >= " + str(
         postcut) + " return r.pos as position, r.run_index as ridx, collect(a.token_id) as alter, b.token_id as firm, sum(r.weight) as rweight, avg(r.sentiment) as sentiment, avg(r.subjectivity) as subjectivity"
     params = {}
@@ -335,20 +335,22 @@ for year in tqdm(times, desc="Iterating years", leave=False, colour='green', pos
     row_list = []
     for i, (ridx,pos) in tqdm(enumerate(occurrences), leave=False, desc="Iterating over occurrences in year {}".format(year),
                        position=1, colour='red', total=len(occurrences)):
-        subdf_rows = rows[(rows.ridx == ridx) & (rows.position == pos)]
+        subdf_rows = rows[(rows.ridx == ridx) & (rows.position == pos)].copy()
 
-        new_row = pd.Series(empty_dict)
-        new_row["times"] = year
-        new_row["ridx"] = ridx
-        new_row["pos"] = pos
-        new_row["f_w_n"] = 0
-        new_row["f_w"] = 0
-        new_row["seq_length"] = 0
+        new_row = pd.Series(empty_dict).copy()
+        new_row.loc["times"] = year
+        new_row.loc["ridx"] = ridx
+        new_row.loc["pos"] = pos
+        new_row.loc["f_w_n"] = 0
+        new_row.loc["f_w"] = 0
+        new_row.loc["seq_length"] = 0
         # Add firm data
         for j,occrow in subdf_rows.iterrows():
-            new_row[occrow.firm_tk] = occrow.rweight
-            new_row["subjectivity"] = occrow.subjectivity
-            new_row["sentiment"] = occrow.sentiment
+            rweight = occrow["rweight"]
+            new_row.loc[occrow.firm_tk] = rweight
+            new_row.loc["subjectivity"] = occrow.subjectivity
+            new_row.loc["sentiment"] = occrow.sentiment
+            assert new_row[occrow.firm_tk] > 0
         # Add Founder data
         query = "Match (r:edge {pos:" + str(pos) + ", run_index:" + \
                 str(ridx) + "})-[:seq]-(s:sequence)-[:seq]-(q:edge) WHERE q.pos<>r.pos " \
@@ -371,9 +373,9 @@ for year in tqdm(times, desc="Iterating years", leave=False, colour='green', pos
             wmin_n = res.cweight_n.min()
             wmax_n = res.cweight_n.max()
             seq_length = res.seq_length.mean()
-            new_row["f_w_n"] = w_n * 100
-            new_row["f_w"] = w
-            new_row["seq_length"] = seq_length
+            new_row.loc["f_w_n"] = w_n * 100
+            new_row.loc["f_w"] = w
+            new_row.loc["seq_length"] = seq_length
 
         row_list.append(new_row)
     yeardf = pd.DataFrame(row_list)

@@ -51,10 +51,10 @@ algo_list = [consensus_louvain, infomap_cluster]
 ma_list = [(2, 2)]
 pos_list = ["NOUN", "ADJ", "VERB"]
 # TODO CHECK WITH X
-tfidf_list = [["pmi_weight","weight","diff", "diffw" ]]
+tfidf_list = [["weight", "diffw", "cond_entropy_weight" ]]
 keep_top_k_list = [50,100,200,1000]
 max_degree_list = [50,100]
-level_list = [1,2,3,6,15]
+level_list = [15,10,8,6,5,3,2]
 keep_only_tokens_list = [True,False]
 contextual_relations_list = [True,False]
 
