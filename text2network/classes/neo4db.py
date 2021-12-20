@@ -613,9 +613,9 @@ class neo4j_database():
         # RETURN QUERY
         return_query = "RETURN sub,occ ,sum(weight) as weight "
         if add_dyad:
-            return_query = return_query + "[collect(distinct(rep_dyad)),collect(distinct(occ_dyad))] as dyad "
+            return_query = return_query + ", [collect(distinct(rep_dyad)),collect(distinct(occ_dyad))] as dyad "
         else:
-            return_query = return_query + "[0,0] as dyad "
+            return_query = return_query + ", [0,0] as dyad "
         if return_sentiment:
             return_query = return_query + ", avg(sentiment) as sentiment, avg(subjectivity) as subjectivity "
         return_query = return_query + " order by occ"
