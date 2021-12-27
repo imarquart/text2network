@@ -132,6 +132,7 @@ def average_cluster_proximities(focal_token: str, nw, levels: int,
 
     # Clustering requires depth>=1
     if depth <= 1:
+        logging.info("Clustering requires depth variable to be set 1 or larger, or None.")
         depth = 1
 
     # First, derive clusters
@@ -205,7 +206,7 @@ def average_cluster_proximities(focal_token: str, nw, levels: int,
                                'Cluster_Id': cl['name'],
                                'Parent': cl['parent'], 'Nr_ProxNodes': len(proximate_nodes),
                                'NrNodes': len(nodes), 'Ma': 0, 'Node_Proximity': 0,
-                               'Node_Rev_Proximity': 0, 'Node_Delta_Proximity': -100, 'Node_Centrality': 0}
+                               'Node_Rev_Proximity': 0, 'Node_Delta_Proximity': -100, 'Node_Centrality': 0,'Type': "Cluster"}
                     cluster_dict.update({name: cl})
                     df_dict.update(cluster_measures)
                     df_dict.update(rev_cluster_measures)
@@ -229,7 +230,7 @@ def average_cluster_proximities(focal_token: str, nw, levels: int,
                                            'Nr_ProxNodes': len(proximate_nodes),
                                            'NrNodes': len(nodes), 'Ma': 0, 'Node_Proximity': node_prox,
                                            'Node_Rev_Proximity': node_rev_prox, 'Node_Delta_Proximity': delta_prox,
-                                           'Node_Centrality': node_cent}
+                                           'Node_Centrality': node_cent,'Type': "Node"}
                                 df_dict.update(cluster_measures)
                                 df_dict.update(rev_cluster_measures)
                                 df_dict.update(pagerank_measures)
@@ -321,7 +322,7 @@ def average_cluster_proximities(focal_token: str, nw, levels: int,
                            'Cluster_Id': cl['name'],
                            'Parent': cl['parent'], 'Nr_ProxNodes': len(proximate_nodes),
                            'NrNodes': len(nodes), 'Ma': len(ma_years), 'Node_Proximity': 0,
-                           'Node_Rev_Proximity': 0, 'Node_Delta_Proximity': -100}
+                           'Node_Rev_Proximity': 0, 'Node_Delta_Proximity': -100,'Type': "Cluster"}
 
                 df_dict.update(cluster_measures)
                 df_dict.update(rev_cluster_measures)

@@ -33,7 +33,7 @@ semantic_network = neo4j_network(config)
 
 level_list = [15]
 weight_list = [None]
-max_degree_list = [50,100,200,1000]
+max_degree_list = [100]
 cl_clutoff_list = [0]
 depth_list = [1]
 rs_list = [100]
