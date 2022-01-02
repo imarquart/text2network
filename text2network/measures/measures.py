@@ -1,4 +1,5 @@
 import logging
+import pickle
 from typing import Optional, Callable, Union
 
 import numpy as np
@@ -207,7 +208,10 @@ def average_cluster_proximities(focal_token: str, nw, levels: int,
                                'Parent': cl['parent'], 'Nr_ProxNodes': len(proximate_nodes),
                                'NrNodes': len(nodes), 'Ma': 0, 'Node_Proximity': 0,
                                'Node_Rev_Proximity': 0, 'Node_Delta_Proximity': -100, 'Node_Centrality': 0,'Type': "Cluster"}
-                    cluster_dict.update({name: cl})
+                    # Append a cluster only if it is at desired level, in which case it will be added to the YOY analysis
+                    if cl['level'] == levels:
+                        cluster_dict.update({name: cl})
+                    # Update dataframe which includes all clusters
                     df_dict.update(cluster_measures)
                     df_dict.update(rev_cluster_measures)
                     df_dict.update(pagerank_measures)
@@ -239,6 +243,8 @@ def average_cluster_proximities(focal_token: str, nw, levels: int,
     if filename is not None:
         if export_network:
             nw.export_gefx(filename=check_create_folder(filename + ".gexf"))
+        # Save a picke of the cluster_dict for easy loading
+        pickle.dump(cluster_dict, open(filename + "_CLdict.p", "wb"))
 
     if year_by_year:
         for year in times:
