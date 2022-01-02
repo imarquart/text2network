@@ -24,7 +24,7 @@ alter_subset = None
 
 
 def get_filename(csv_path, main_folder, focal_token, cutoff, tfidf, context_mode, contextual_relations,
-                 postcut, keep_top_k, depth, max_degree=None, algo=None, level=None, rs=None, tf=None):
+                 postcut, keep_top_k, depth, max_degree=None, algo=None, level=None, rs=None, tf=None, sub_mode=None):
     output_path = check_create_folder(csv_path)
     output_path = check_create_folder(csv_path + "/" + main_folder + "/")
     output_path = check_create_folder(
@@ -37,6 +37,9 @@ def get_filename(csv_path, main_folder, focal_token, cutoff, tfidf, context_mode
     if max_degree is not None and algo is not None:
         output_path = check_create_folder("".join(
             [output_path, "/", "md", str(max_degree), "_algo", str(algo.__name__), "/"]))
+    if sub_mode is not None:
+        output_path = check_create_folder("".join(
+            [output_path, "/", "submode", str(sub_mode), "/"]))
     if level is not None:
         output_path = check_create_folder("".join(
             [output_path, "/", "lev", str(level), "/"]))
@@ -68,9 +71,11 @@ focal_token = "leader"
 sym_list = [False]
 rs_list = [100]
 cutoff_list = [0.2, 0.1, 0.01]
-post_cutoff_list = [0.1,0.01, None]
+post_cutoff_list = [0.1,0.01]
 depth_list = [0, 1]
 context_mode_list = ["bidirectional", "substitution", "occurring"]
+sub_mode_list = ["occurring", "substitution", ]#"bidirectional"
+
 rev_list = [False]
 algo_list = [consensus_louvain, infomap_cluster]
 ma_list = [(2, 2)]
@@ -86,7 +91,7 @@ contextual_relations_list = [True, False]
 paraml1_list = product(cutoff_list, context_mode_list, tfidf_list)
 param_list = product(rs_list, depth_list, max_degree_list, sym_list,
                      keep_top_k_list, ma_list, algo_list, contextual_relations_list, keep_only_tokens_list,
-                     post_cutoff_list)
+                     post_cutoff_list, sub_mode_list)
 
 # %% Sub or Occ
 focal_substitutes = focal_token
@@ -119,7 +124,7 @@ for cutoff, context_mode, tfidf in paraml1_list:
                                        keep_top_k=None, context_mode=context_mode, pos_list=pos_list, tfidf=tfidf)
         pickle.dump(context_dict, open(cdict_filename, "wb"))
 
-    for rs, depth, max_degree, sym, keep_top_k, ma, algo, contextual_relations, keep_only_tokens, postcut in param_list:
+    for rs, depth, max_degree, sym, keep_top_k, ma, algo, contextual_relations, keep_only_tokens, postcut, sub_mode in param_list:
         if postcut is None:
             postcut = 0
 
@@ -132,7 +137,7 @@ for cutoff, context_mode, tfidf in paraml1_list:
                                              focal_token=focal_token, cutoff=cutoff, tfidf=tfidf,
                                              context_mode=context_mode, contextual_relations=contextual_relations,
                                              postcut=postcut, keep_top_k=keep_top_k, depth=depth,
-                                             max_degree=None, algo=None, level=None, rs=None, tf=None)
+                                             max_degree=None, algo=None, level=None, rs=None, tf=None, sub_mode=None)
         filename = "".join(
             [output_path, "/md", str(max_degree), "_algo", str(algo.__name__),
              "_rs", str(rs)])
@@ -164,7 +169,7 @@ for cutoff, context_mode, tfidf in paraml1_list:
                                                      focal_token=focal_token, cutoff=cutoff, tfidf=tfidf,
                                                      context_mode=context_mode, contextual_relations=contextual_relations,
                                                      postcut=postcut, keep_top_k=keep_top_k, depth=depth,
-                                                     max_degree=max_degree, algo=algo, level=level, rs=rs, tf=tf)
+                                                     max_degree=max_degree, algo=algo, level=level, rs=rs, tf=tf, sub_mode=sub_mode)
 
                 clusters = clusters_raw[tf].copy()
                 checkname = filename + "REGDF_allY" + ".xlsx"
@@ -250,10 +255,18 @@ for cutoff, context_mode, tfidf in paraml1_list:
                     # %% Retrieve regression data
 
                     allyear_list = []
+                    logging.info("Substitution mode: Focal token should be {}".format(sub_mode))
                     for year in tqdm(times, desc="Iterating years", leave=False, colour='green', position=0):
                         # Step 1: get run_index, pos
-                        query = "MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word) WHERE b.token_id in $id_occ and a.token_id <> b.token_id and r.time in $times and r.weight >= " + str(
-                            postcut) + " return r.pos as position, r.run_index as ridx, collect(a.token_id) as occ, collect(b.token_id) as subst, r.weight as rweight"
+                        if sub_mode == "bidirectional":
+                            query = "MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word) WHERE b.token_id in $id_occ or a.token_id in $id_occ  and a.token_id <> b.token_id and r.time in $times and r.weight >= " + str(
+                                postcut) + " return r.pos as position, r.run_index as ridx, collect(a.token_id) as occ, collect(b.token_id) as subst, r.weight as rweight"
+                        elif sub_mode == "occuring":
+                            query = "MATCH p=(b:word)-[:onto]->(r:edge)-[:onto]->(a:word) WHERE b.token_id in $id_occ and a.token_id <> b.token_id and r.time in $times and r.weight >= " + str(
+                                postcut) + " return r.pos as position, r.run_index as ridx, collect(b.token_id) as occ, collect(a.token_id) as subst, r.weight as rweight"
+                        else:
+                            query = "MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word) WHERE b.token_id in $id_occ and a.token_id <> b.token_id and r.time in $times and r.weight >= " + str(
+                                postcut) + " return r.pos as position, r.run_index as ridx, collect(a.token_id) as occ, collect(b.token_id) as subst, r.weight as rweight"
                         params = {}
                         params["id_occ"] = semantic_network.ensure_ids(focal_substitutes)
                         params["times"] = [year]
