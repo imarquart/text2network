@@ -592,10 +592,9 @@ class neo4j_database():
 
         ## MATCH QUERY 2: Sequence Length
         #sqlength_match = " WITH a,r,b Match (r)-[:seq]-(s:sequence)-[:seq]-(q:edge) WHERE q.pos<>r.pos "
-
         ### MATCH QUERY 2: OCCURRING TOKEN
-        c_match = "".join([
-                              " WITH count(DISTINCT([q.pos,q.run_index])) as seq_length, a,r,b  MATCH  (r)-[:seq]-(s:sequence)<-[:seq]-(q:edge) "])
+        #c_match = "".join([
+        #                      " WITH count(DISTINCT([q.pos,q.run_index])) as seq_length, a,r,b  MATCH  (r)-[:seq]-(s:sequence)<-[:seq]-(q:edge) "])
         c_where = " WHERE q.pos<>r.pos "
         if weight_cutoff is not None:
             c_where = ''.join([c_where, " AND q.weight >=", str(weight_cutoff), " "])
