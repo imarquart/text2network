@@ -84,7 +84,7 @@ pos_list = ["NOUN", "ADJ", "VERB"]
 tfidf_list = [["weight", "diffw", "pmi_weight"]]
 keep_top_k_list = [100, 200, 1000]
 max_degree_list = [50,100, 200, 1000]
-level_list = [15, 10, 6, 4]
+level_list = [10]
 keep_only_tokens_list = [True]
 contextual_relations_list = [True, False]
 
