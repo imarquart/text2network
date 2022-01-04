@@ -71,22 +71,22 @@ focal_token = "leader"
 sym_list = [False]
 rs_list = [100]
 cutoff_list = [0.2, 0.1, 0.01]
-post_cutoff_list = [0.1,0.01]
+post_cutoff_list = [0.1]
 depth_list = [0, 1]
 context_mode_list = ["bidirectional", "substitution", "occurring"]
-sub_mode_list = ["occurring", "substitution", ]#"bidirectional"
+sub_mode_list = ["bidirectional","occurring", "substitution", ]#"bidirectional"
 
 rev_list = [False]
-algo_list = [consensus_louvain, infomap_cluster]
+algo_list = [consensus_louvain]
 ma_list = [(2, 2)]
 pos_list = ["NOUN", "ADJ", "VERB"]
 # TODO CHECK WITH X
 tfidf_list = [["weight", "diffw", "pmi_weight"]]
 keep_top_k_list = [100, 200, 1000]
 max_degree_list = [50,100, 200, 1000]
-level_list = [10]
+level_list = [4,10]
 keep_only_tokens_list = [True]
-contextual_relations_list = [True, False]
+contextual_relations_list = [True,False]
 
 paraml1_list = product(cutoff_list, context_mode_list, tfidf_list)
 param_list = product(rs_list, depth_list, max_degree_list, sym_list,
@@ -128,9 +128,16 @@ for cutoff, context_mode, tfidf in paraml1_list:
         if postcut is None:
             postcut = 0
 
+        if depth == 0:
+            keep_only_tokens = True
+            logging.info("Keeping only contextual tokens in conditioning network!")
+        else:
+            keep_only_tokens = False
+
         if keep_only_tokens and max_degree>keep_top_k:
             logging.info("Max_degree set to {}, while keep_only_tokens is set to True, and {} context_tokens are to be kept. Setting max degree to {} ".format(max_degree, keep_top_k,keep_top_k))
             max_degree = keep_top_k
+
 
 
         filename, output_path = get_filename(config['Paths']['csv_outputs'], "profile_relationships",
@@ -259,19 +266,43 @@ for cutoff, context_mode, tfidf in paraml1_list:
                     for year in tqdm(times, desc="Iterating years", leave=False, colour='green', position=0):
                         # Step 1: get run_index, pos
                         if sub_mode == "bidirectional":
-                            query = "MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word) WHERE b.token_id in $id_occ or a.token_id in $id_occ  and a.token_id <> b.token_id and r.time in $times and r.weight >= " + str(
-                                postcut) + " return r.pos as position, r.run_index as ridx, collect(a.token_id) as occ, collect(b.token_id) as subst, r.weight as rweight"
-                        elif sub_mode == "occuring":
+                            #query = "MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word) WHERE b.token_id in $id_occ or a.token_id in $id_occ  and a.token_id <> b.token_id and r.time in $times and r.weight >= " + str(
+                            #    postcut) + " return r.pos as position, r.run_index as ridx, collect(a.token_id) as occ, collect(b.token_id) as subst, r.weight as rweight"
+
                             query = "MATCH p=(b:word)-[:onto]->(r:edge)-[:onto]->(a:word) WHERE b.token_id in $id_occ and a.token_id <> b.token_id and r.time in $times and r.weight >= " + str(
                                 postcut) + " return r.pos as position, r.run_index as ridx, collect(b.token_id) as occ, collect(a.token_id) as subst, r.weight as rweight"
+                            params = {}
+                            params["id_occ"] = semantic_network.ensure_ids(focal_substitutes)
+                            params["times"] = [year]
+                            res = semantic_network.db.receive_query(query, params)
+                            occurrences = pd.DataFrame(res)
+
+                            query = "MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word) WHERE b.token_id in $id_occ and a.token_id <> b.token_id and r.time in $times and r.weight >= " + str(
+                                postcut) + " return r.pos as position, r.run_index as ridx, collect(a.token_id) as occ, collect(b.token_id) as subst, r.weight as rweight"
+                            params = {}
+                            params["id_occ"] = semantic_network.ensure_ids(focal_substitutes)
+                            params["times"] = [year]
+                            res = semantic_network.db.receive_query(query, params)
+                            substitutions = pd.DataFrame(res)
+
+                            occurrences = pd.concat([occurrences,substitutions])
+
+                        elif sub_mode == "occurring":
+                            query = "MATCH p=(b:word)-[:onto]->(r:edge)-[:onto]->(a:word) WHERE b.token_id in $id_occ and a.token_id <> b.token_id and r.time in $times and r.weight >= " + str(
+                                postcut) + " return r.pos as position, r.run_index as ridx, collect(b.token_id) as occ, collect(a.token_id) as subst, r.weight as rweight"
+                            params = {}
+                            params["id_occ"] = semantic_network.ensure_ids(focal_substitutes)
+                            params["times"] = [year]
+                            res = semantic_network.db.receive_query(query, params)
+                            occurrences = pd.DataFrame(res)
                         else:
                             query = "MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word) WHERE b.token_id in $id_occ and a.token_id <> b.token_id and r.time in $times and r.weight >= " + str(
                                 postcut) + " return r.pos as position, r.run_index as ridx, collect(a.token_id) as occ, collect(b.token_id) as subst, r.weight as rweight"
-                        params = {}
-                        params["id_occ"] = semantic_network.ensure_ids(focal_substitutes)
-                        params["times"] = [year]
-                        res = semantic_network.db.receive_query(query, params)
-                        occurrences = pd.DataFrame(res)
+                            params = {}
+                            params["id_occ"] = semantic_network.ensure_ids(focal_substitutes)
+                            params["times"] = [year]
+                            res = semantic_network.db.receive_query(query, params)
+                            occurrences = pd.DataFrame(res)
                         #logging.info("{} Occurrences found for year {}".format(len(occurrences), year))
                         empty_dict = {x: 0 for x in cluster_columns}
 

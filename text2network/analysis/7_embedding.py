@@ -73,15 +73,25 @@ semantic_network = neo4j_network(config)
 
 
 #times = list(range(1980, 2021))
-years = None # [1980, 1981]
+# [1980, 1981]
 years=[2020,2019,2018,2017]
-years=list(range(1985,1991))
+#years=list(range(1985,1991))
+#
+#years=list(range(1980,1996))
+#years=list(range(1995,2021))
+#years = None
+#years=list(range(1990,1996))
+#years = list(range(1995, 2001))
+#years=list(range(1980,2021))
 years=list(range(1980,1986))
-years=list(range(1980,1996))
-
-#years=list(range(2015,2021))
-#years=list(range(2000,2006))
-
+years=list(range(1985,1991))
+years=list(range(1990,1996))
+years = list(range(1995, 2001))
+years=list(range(2000,2006))
+years=list(range(2005,2011))
+years=list(range(2010,2016))
+years=list(range(2015,2021))
+#years=list(range(1980,2021))
 
 focal_token = "leader"
 sym = False
@@ -91,7 +101,7 @@ cutoff = [0.2, 0.1, 0.01][0]
 postcut = [0.1,0.01, None][0]
 depth = [0, 1][0]
 context_mode = ["bidirectional", "substitution", "occurring"][0]
-sub_mode = ["occurring", "substitution", ][0]#"bidirectional"
+sub_mode = ["occurring", "substitution", ][1]#"bidirectional"
 algo = consensus_louvain
 pos_list = ["NOUN", "ADJ", "VERB"]
 tf = ["weight", "diffw", "pmi_weight"][-2]
@@ -106,17 +116,17 @@ focal_substitutes = focal_token
 focal_occurrences = None
 
 imagemethod="imshow"
-imagemethod="contour"
+#imagemethod="contour"
 
 sel_alter="boss"
-use_diff=False
+use_diff=True
 im_int_method="gaussian"
 grid_method="linear"
 npts = 200
 int_level=8
 ngridx = 12
 ngridy = ngridx
-top_n=60
+top_n=3
 nr_tokens=500000000
 #nr_tokens=50
 #nr_tokens=5
@@ -228,11 +238,6 @@ Y2["alter"] = X2["alter"]
 Y.columns=["x","y","color"]
 Y2.columns=["x","y","color", "alter"]
 t1 = time()
-print("%s: %.2g sec" % (label, t1 - t0))
-
-
-
-
 
 import seaborn as sns
 # Create figure
@@ -243,7 +248,6 @@ fig.suptitle(
 lim_max=np.max(np.max(Y.loc[:,["x","y"]]))
 lim_min=np.min(np.min(Y.loc[:,["x","y"]]))
 ax = fig.add_subplot(xlim=(lim_min,lim_max), ylim=(lim_min,lim_max))
-
 
 if sel_alter is not None:
     print("Orig Nr of Observations: {}".format(len(Y2)))
@@ -256,33 +260,19 @@ if sel_alter is not None:
 
 xi = np.linspace(lim_min, lim_max, ngridx)
 yi = np.linspace(lim_min, lim_max, ngridx)
-
-def get_zi(Y2, xi, yi):
-    Y2=Y2[~Y2[["x","y"]].duplicated()]
-    x=Y2["x"]
-    y=Y2["y"]
-    z=Y2.color
-    xy=Y2[["x","y"]]
-
-    # Linearly interpolate the data (x, y) on a grid defined by (xi, yi).
-    triang = tri.Triangulation(x, y)
-    interpolator = tri.LinearTriInterpolator(triang, z)
-    #Xi, Yi = np.meshgrid(xi, yi)
-    #zi = interpolator(Xi, Yi)
-
-    zi = griddata((x, y), z, (xi[None, :], yi[:, None]), method=grid_method)
-    zi[np.isnan(zi)] = 0
-    #zi = (zi - np.min(zi)) / (np.max(zi) - np.min(zi))
-    return zi
-
-zi = get_zi(Y2, xi, yi)
-if use_diff and sel_alter:
-    zi2 = get_zi(Y3, xi, yi)
-    zi = zi-zi2
-
 hist_range=((min(Y["x"]), max(Y["x"])), (min(Y["y"]), max(Y["y"])))
-zi,xi,yi = np.histogram2d(x=Y2["x"], y=Y2["y"], weights=Y2.color,range=hist_range,bins=(xi,yi))
+zi,xi,yi = np.histogram2d(x=Y2["x"], y=Y2["y"], weights=Y2.color,range=hist_range,bins=(xi,yi), density=False)
 zi=zi.T
+zi=zi/np.sum(zi)
+
+if use_diff:
+    zi2, xi2, yi2 = np.histogram2d(x=Y3["x"], y=Y3["y"], weights=Y3.color, range=hist_range, bins=(xi, yi), density=False)
+    zi2 = zi2.T
+    zi2 = zi2 / np.sum(zi2)
+    zi=zi-zi2
+    zi=(zi-np.min(zi))/(np.max(zi)-np.min(zi))*2-1
+else:
+    zi = (zi - np.min(zi)) / (np.max(zi) - np.min(zi))
 
 if imagemethod=="contour":
     extent = [lim_min, lim_max, lim_min, lim_max].copy()
@@ -302,20 +292,11 @@ if imagemethod=="contour":
     ax.contour(xi,yi,newz, levels=int_level, linewidths=0.5)
     cntr1 = ax.contourf(xi,yi,newz, levels=int_level, cmap="RdBu_r")
 else:
-    #im = NonUniformImage(ax, interpolation='bilinear')
-    xcenters = (xi[:-1] + xi[1:]) / 2
-    ycenters = (yi[:-1] + yi[1:]) / 2
-    #im.set_data(xcenters, ycenters, zi)
-    #ax.images.append(im)
     cntr1=ax.imshow(zi, extent=[xi[0], xi[-1], yi[0], yi[-1]], cmap="RdBu_r", origin="lower", interpolation=im_int_method)
-    #cntr1 = NonUniformImage(ax, interpolation='bilinear',extent=(min(Y["x"]), max(Y["x"]), min(Y["y"]), max(Y["y"])))
-    #cntr1.set_data(xcenters, ycenters, zi)
-    #ax.images.append(cntr1)
-    #cntr1=ax.imshow(zz[0], extent=(min(Y["x"]), max(Y["x"]), min(Y["y"]), max(Y["y"])), cmap="RdBu_r", origin="lower", interpolation=im_int_method)
-
-ax.scatter(Y2["x"],Y2["y"], alpha=0.2, s=10)
-
 fig.colorbar(cntr1, ax=ax)
+
+
+ax.scatter(Y2["x"],Y2["y"], alpha=0.3, s=10)
 ax.scatter(Y["x"], Y["y"], s=100, c=Y.color,  cmap="Pastel1")
 
 
@@ -344,7 +325,7 @@ for idx, row in enumerate(extremal_points):
 
 
 for idx, row in Y.iterrows():
-    ax.annotate(row.name, (row[0], row[1]), xytext=(-10, 0), textcoords='offset points', alpha=0.6)
+    ax.annotate(row.name, (row[0], row[1]), xytext=(6, 0), textcoords='offset points', alpha=0.6)
 
 
 #for idx, row in Y2.iloc[0:50,:].iterrows():
