@@ -440,6 +440,7 @@ class neo4j_network(Sequence):
                   max_degree: Optional[int] = None, prune_min_frequency: Optional[int] = None,
                   keep_only_tokens: Optional[bool] = False,
                   batchsize: Optional[int] = None, cond_type: Optional[str] = None,
+                  return_sentiment: Optional[bool]=True,
                   post_cutoff: Optional[float] = None, post_norm: Optional[bool] = False):
         """
 
@@ -479,6 +480,9 @@ class neo4j_network(Sequence):
 
         keep_only_tokens : bool, optional
             If True, the network will only include tokens provided in "tokens" and their ties (according to depth).
+
+        return_sentiment: bool, optional
+            Query sentiment and subjectivity for ties
 
         Technical Parameters
         ----------
@@ -536,7 +540,7 @@ class neo4j_network(Sequence):
         if tokens is None:
             logging.debug("Conditioning dispatch: Yearly")
             self.__year_condition(years=times, weight_cutoff=weight_cutoff, context=context, batchsize=batchsize,
-                                  max_degree=max_degree)
+                                  max_degree=max_degree, return_sentiment=return_sentiment)
         else:
             logging.debug("Conditioning dispatch: Ego")
             if depth is None:
@@ -554,12 +558,12 @@ class neo4j_network(Sequence):
                 logging.debug("Conditioning dispatch: Ego, subset, depth {}".format(depth))
                 self.__ego_condition_subset(years=times, token_ids=tokens, weight_cutoff=weight_cutoff, depth=depth,
                                             context=context, batchsize=batchsize,
-                                            max_degree=max_degree)
+                                            max_degree=max_degree, return_sentiment=return_sentiment)
             elif cond_type == "search":
                 logging.debug("Conditioning dispatch: Ego, search, depth {}".format(depth))
                 self.__ego_condition_search(years=times, token_ids=tokens, weight_cutoff=weight_cutoff, depth=depth,
                                             context=context, batchsize=batchsize,
-                                            max_degree=max_degree)
+                                            max_degree=max_degree, return_sentiment=return_sentiment)
             else:
                 msg = "Conditioning type {} requested. Please use either search or subset.".format(cond_type)
                 logging.debug(msg)
@@ -1141,7 +1145,7 @@ class neo4j_network(Sequence):
     # %% Conditioning sub-functions
 
     def __year_condition(self, years, weight_cutoff=None, context=None, batchsize=None,
-                         max_degree: Optional[int] = None):
+                         max_degree: Optional[int] = None, return_sentiment:Optional[bool] = True):
         """ Condition the entire network over all years """
 
         # Same for batchsize
@@ -1168,7 +1172,7 @@ class neo4j_network(Sequence):
                     "Conditioning by query batch {} of {} tokens.".format(i, len(token_ids)))
                 # Query Neo4j
                 self.__add_edges(
-                    self.query_nodes(token_ids, context=context, times=years, weight_cutoff=weight_cutoff),
+                    self.query_nodes(token_ids, context=context, times=years, weight_cutoff=weight_cutoff, return_sentiment=return_sentiment),
                     max_degree=max_degree)
             try:
                 all_ids = list(self.graph.nodes)
@@ -1187,10 +1191,10 @@ class neo4j_network(Sequence):
         else:  # Remove conditioning and recondition
             self.decondition()
             self.__year_condition(years=years, weight_cutoff=weight_cutoff, context=context,
-                                  max_degree=max_degree)
+                                  max_degree=max_degree, return_sentiment=return_sentiment)
 
     def __ego_condition_subset(self, years, token_ids, weight_cutoff=None, depth=None, context=None,
-                               batchsize=None, max_degree: Optional[int] = None):
+                               batchsize=None, max_degree: Optional[int] = None, return_sentiment:Optional[bool] = True):
 
         # Same for batchsize
         if batchsize is None:
@@ -1199,7 +1203,7 @@ class neo4j_network(Sequence):
         # First, do a year conditioning
         logging.debug("Full year conditioning before ego subsetting.")
         self.__year_condition(years=years, weight_cutoff=weight_cutoff, context=context, batchsize=batchsize,
-                              max_degree=max_degree)
+                              max_degree=max_degree, return_sentiment=return_sentiment)
 
         if depth is not None:
             if depth > 0:
@@ -1218,7 +1222,7 @@ class neo4j_network(Sequence):
                                                              center=True, undirected=False)
 
     def __ego_condition_search(self, years, token_ids, weight_cutoff=None, depth=None, context=None,
-                               batchsize=None, max_degree: Optional[int] = None):
+                               batchsize=None, max_degree: Optional[int] = None,return_sentiment:Optional[bool] = True):
 
         # Same for batchsize
         if batchsize is None:
@@ -1275,7 +1279,7 @@ class neo4j_network(Sequence):
                     # Query Neo4j
                     try:
                         self.__add_edges(
-                            self.query_nodes(id_batch, context=context, times=years, weight_cutoff=weight_cutoff),
+                            self.query_nodes(id_batch, context=context, times=years, weight_cutoff=weight_cutoff, return_sentiment=return_sentiment),
                             max_degree=max_degree)
                     except:
                         logging.error("Could not condition graph by query method.")
@@ -1549,8 +1553,7 @@ class neo4j_network(Sequence):
 
         return cond_dict
 
-    @staticmethod
-    def __create_filename(cond_dict):
+    def __create_filename(self,cond_dict):
 
         if cond_dict['type'] is not False:
             fn = str(cond_dict['type']) + "-"
@@ -1561,14 +1564,24 @@ class neo4j_network(Sequence):
             if not isinstance(cond_dict['tokens'], list):
                 cond_dict['tokens'] = [cond_dict['tokens']]
             fn = fn + "EGO-"
-            fn = fn + '-'.join([str(x) for x in cond_dict['tokens']]) + '-'
+            tokens = [str(self.ensure_tokens(x)) for x in cond_dict['tokens']][0:5]
+            if len(tokens) > 3:
+                years = [tokens[0], tokens[-1]]
+                fn = fn + '_to_'.join(tokens)
+            else:
+                fn = fn + '-'.join(tokens)
 
         if cond_dict['years'] != "ALL":
             if not isinstance(cond_dict['years'], list):
                 cond_dict['years'] = [cond_dict['years']]
-            fn = fn + 'Y-' + '-'.join([str(x) for x in cond_dict['years']])
+            years=[str(x) for x in cond_dict['years']]
+            if len(years)>3:
+                years=[years[0],years[-1]]
+                fn = fn + '-Y-' + '_to_'.join(years)
+            else:
+                fn = fn + '-Y-' + '-'.join(years)
         else:
-            fn = fn + 'Y-' + "ALL"
+            fn = fn + '-Y-' + "ALL"
 
         for key in cond_dict.keys():
             if cond_dict[key] is not None and cond_dict[key] is not False:
@@ -1579,7 +1592,12 @@ class neo4j_network(Sequence):
             if not isinstance(cond_dict['context'], list):
                 cond_dict['context'] = [cond_dict['context']]
             fn = "context-"
-            fn = fn + '-'.join([str(x) for x in cond_dict['context']])
+            tokens = [str(self.ensure_tokens(x)) for x in cond_dict['context']][0:5]
+            if len(tokens) > 3:
+                years = [tokens[0], tokens[-1]]
+                fn = fn + '_to_'.join(tokens)
+            else:
+                fn = fn + '-'.join(tokens)
 
         return fn
 
@@ -1908,7 +1926,7 @@ class neo4j_network(Sequence):
         return self.db.query_context_of_node(ids=ids, times=times, weight_cutoff=weight_cutoff, occurrence=occurrence)
 
     def query_nodes(self, ids, context=None, times=None, weight_cutoff=None, pos=None, return_sentiment=True,
-                    context_mode="bidirectional", context_weight=True):
+                    context_mode="bidirectional", context_weight=True ):
         """
         Query multiple nodes by ID and over a set of time intervals, return distinct occurrences
         If provided with context, return under the condition that elements of context are present in the context element distribution of
