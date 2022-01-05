@@ -829,8 +829,13 @@ class neo4j_database():
         """
         logging.debug("Querying {} nodes in Neo4j database.".format(len(ids)))
 
-        # Get rid of integer time to make query easier
-        if isinstance(times, int):
+        # Simplification if there is one time period and no context
+        if isinstance(times, (np.ndarray, list, tuple)):
+            if len(times) == 1 and context is None:
+                times=int(times[0])
+
+        # Parameterize if context is given
+        if isinstance(times, int):# and context is not None:
             times = [times]
 
         if isinstance(pos, str):
@@ -848,7 +853,7 @@ class neo4j_database():
             nw_time = {"s": 0, "e": 0, "m": 0}
 
         # Create params with or without time
-        if isinstance(times, (dict, int, list)):
+        if isinstance(times, (dict, list)):
             params = {"ids": ids, "times": times}
         else:
             params = {"ids": ids}
@@ -859,7 +864,10 @@ class neo4j_database():
         # QUERY CREATION
 
         ### MATCH QUERIES
-        match_query = "MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word) "
+        if isinstance(times, int):
+            match_query = "MATCH p=(a:word)-[:onto]->(r:edge {time:"+str(times)+"})-[:onto]->(b:word) "
+        else:
+            match_query = "MATCH p=(a:word)-[:onto]->(r:edge)-[:onto]->(b:word) "
 
         if pos is not None:
             pos_match = " WTIH a,r,b MATCH (r)-[:pos]-(pos:part_of_speech) WHERE pos.part_of_speech in "
@@ -881,15 +889,23 @@ class neo4j_database():
 
         if context is not None:
             with_query = "WITH a,r,b "
-            c_with = " WITH r.pos as rpos, r.run_index as ridx, b.token_id AS sender,a.token_id AS receiver, CASE WHEN sum(q.weight)>1.0 THEN 1 else sum(q.weight) END as cweight, head(collect(r.weight)) AS rweight,  head(collect(r.sentiment)) as sentiment,  head(collect(r.subjectivity)) as subjectivity WITH sender, receiver, sentiment, subjectivity,  rweight,cweight*rweight as weight "
+            c_with = " WITH r.pos as rpos, r.run_index as ridx, b.token_id AS sender,a.token_id AS receiver, CASE WHEN sum(q.weight)>1.0 THEN 1 else sum(q.weight) END as cweight, head(collect(r.weight)) AS rweight "
+            if return_sentiment:
+                c_with = c_with + " , head(collect(r.sentiment)) as sentiment,  head(collect(r.subjectivity)) as subjectivity "
+            c_with = c_with + " WITH sender, receiver, rweight,cweight*rweight as weight "
+            if return_sentiment:
+                c_with = c_with + ", sentiment, subjectivity "
         else:
             with_query = " "
-            c_with = " WITH b.token_id AS sender,a.token_id AS receiver, r.weight AS rweight, r.subjectivity as subjectivity, r.sentiment as sentiment "
+            if return_sentiment:
+                c_with = " WITH b.token_id AS sender,a.token_id AS receiver, r.weight AS rweight, r.subjectivity as subjectivity, r.sentiment as sentiment "
+            else:
+                c_with = " WITH b.token_id AS sender,a.token_id AS receiver, r.weight AS rweight "
 
         ### WHERE QUERIES
         # Change 5.11.2021: Added " and b.token_id <> a.token_id "
         where_query = " WHERE b.token_id in $ids and b.token_id <> a.token_id "
-
+        where_query = " WHERE b.token_id in $ids "
         # Context if desired
         if context is not None:
             c_where_query = " WHERE e.token_id IN $contexts AND q.pos<>r.pos "
@@ -931,7 +947,13 @@ class neo4j_database():
             return_query = return_query + ", avg(sentiment) as sentiment, avg(subjectivity) as subjectivity "
         return_query = return_query + " order by receiver"
 
-        query = "".join([match_query, where_query, with_query, c_match, c_where_query, c_with, return_query])
+
+        # Simplify
+        if not return_sentiment and context is None:
+            logging.debug("Simplified query")
+            query = " ".join([match_query, where_query," RETURN b.token_id AS sender,a.token_id AS receiver, SUM(r.weight) AS agg_weight order by receiver"])
+        else:
+            query = "".join([match_query, where_query, with_query, c_match, c_where_query, c_with, return_query])
         logging.debug("Tie Query: {}".format(query))
         res = self.receive_query(query, params)
 
