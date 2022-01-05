@@ -17,9 +17,19 @@ def centralities(snw, focal_tokens=None, types=None) -> Dict:
     focal_tokens : list, str, optional
         List of tokens of interest. If not provided, centralities for all tokens will be returned.
     types : list, optional
-        Types of centrality to calculate. The default is ["PageRank", "normedPageRank"].
-        Other options are "local_clustering" for unweighted local clustering
-        and "weighted_local_clustering" for weighted local clustering
+        Types of centrality to calculate.
+        "PageRank", "normedPageRank"
+            PageRank
+        "local_clustering"
+            for unweighted local clustering
+        "weighted_local_clustering"
+            for weighted local clustering
+        "frequency"
+            Nr. of occurrences of each token
+        "flow_betweenness"
+            Flow betweenness
+        "rev_flow_betweenness
+            Flow betweeness with weights = 1/weight
 
 
     Returns
@@ -29,7 +39,7 @@ def centralities(snw, focal_tokens=None, types=None) -> Dict:
 
     """
     if types is None:
-        types = ["PageRank", "normedPageRank"]
+        types = ["frequency","PageRank", "normedPageRank", "flow_betweenness", "rev_flow_betweenness", "local_clustering", "weighted_local_clustering"]
 
     input_check(tokens=focal_tokens)
     if focal_tokens is not None:
@@ -69,7 +79,19 @@ def yearly_centralities(snw, year_list: list, focal_tokens: Optional[Union[list,
         List of tokens of interest. If not provided, centralities for all tokens will be returned.
 
     types : list, optional
-        types of centrality to calculate. The default is ("PageRank", "normedPageRank").
+        Types of centrality to calculate.
+        "PageRank", "normedPageRank"
+            PageRank
+        "local_clustering"
+            for unweighted local clustering
+        "weighted_local_clustering"
+            for weighted local clustering
+        "frequency"
+            Nr. of occurrences of each token
+        "flow_betweenness"
+            Flow betweenness
+        "rev_flow_betweenness
+            Flow betweeness with weights = 1/weight
 
     depth : TYPE, optional - used when conditioning
         Maximal path length for ego network starting from focal token. The default is None.
@@ -112,7 +134,7 @@ def yearly_centralities(snw, year_list: list, focal_tokens: Optional[Union[list,
 
 
     if types is None:
-        types = ["PageRank", "normedPageRank"]
+        types = ["frequency","PageRank", "normedPageRank", "flow_betweenness", "rev_flow_betweenness", "local_clustering", "weighted_local_clustering"]
 
     cent_year = {}
     if not isinstance(year_list, list):

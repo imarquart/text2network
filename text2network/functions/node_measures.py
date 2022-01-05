@@ -2,6 +2,8 @@ import networkx as nx
 import logging
 import numpy as np
 
+from text2network.functions.network_tools import inverse_weights
+
 
 def proximity(nw_graph, focal_tokens=None, alter_subset=None):
     """
@@ -150,6 +152,11 @@ def compute_centrality(nw_graph, measure, focal_nodes=None):
         centralities = nx.clustering(nw_graph, nodes=focal_nodes, weight="weight")
     elif (measure=="frequency" or measure=="freq" or measure=="frequencies"):
         centralities = nx.get_node_attributes(nw_graph, "freq")
+    elif measure=="flow_betweenness":
+        centralities = nx.current_flow_betweenness_centrality(nw_graph, normalized=True, weight="weight")
+    elif measure=="rev_flow_betweenness":
+        nw_graph = inverse_weights(nw_graph)
+        centralities = nx.current_flow_betweenness_centrality(nw_graph, normalized=True, weight="weight")
     else:
         raise AttributeError(
             "Centrality measure {} not found in list".format(measure))
