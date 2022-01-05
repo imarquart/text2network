@@ -1,7 +1,8 @@
 import logging
 from typing import Optional, Dict, Union
-
+from timeit import default_timer as timer
 from text2network.functions.node_measures import centrality
+from text2network.utils.file_helpers import check_create_folder
 from text2network.utils.input_check import input_check
 
 
@@ -58,10 +59,12 @@ def yearly_centralities(snw, year_list: list, focal_tokens: Optional[Union[list,
                         types: Optional[list] = ("PageRank", "normedPageRank"),
                         depth: Optional[int] = None, context: Optional[list] = None,
                         weight_cutoff: Optional[float] = None,
-                        max_degree: Optional[int] = 100,
+                        max_degree: Optional[int] = None,
                         symmetric: Optional[bool] = False, symmetric_method:Optional[str]=None,
-                        compositional: Optional[bool] = False,
-                        reverse: Optional[bool] = False, normalization: Optional[str] = None, prune_min_frequency: Optional[int] = None) -> Dict:
+                        compositional: Optional[bool] = False, batch_size: Optional[int] = 10000,
+                        reverse: Optional[bool] = False, normalization: Optional[str] = None,
+                        prune_min_frequency: Optional[int] = None,
+                        path: Optional[bool] = None, return_sentiment: Optional[bool]=True,) -> Dict:
     """
     Compute directly year-by-year centralities for provided list.
 
@@ -124,6 +127,15 @@ def yearly_centralities(snw, year_list: list, focal_tokens: Optional[Union[list,
     reverse: bool, optional
         Reverse ties. See semantic_network.to_reverse()
 
+    batch_size: int, optional
+        Batch size of query
+
+    path: str, optional
+        Save the yearly graphs used in calculations as this file
+
+    return_sentiment: bool, optional
+        Query sentiment and subjectivity for ties
+
     Returns
     -------
 
@@ -142,10 +154,14 @@ def yearly_centralities(snw, year_list: list, focal_tokens: Optional[Union[list,
 
     for year in year_list:
         snw.decondition()
-        logging.debug(
+        logging.info(
             "Conditioning network on year {} with {} focal tokens and depth {}".format(year, len(focal_tokens), depth))
+        starttime=timer()
         snw.condition(tokens=focal_tokens, times=[
-            year], depth=depth, context=context, weight_cutoff=weight_cutoff, max_degree=max_degree,prune_min_frequency=prune_min_frequency)
+            year], depth=depth, context=context, weight_cutoff=weight_cutoff, max_degree=max_degree,prune_min_frequency=prune_min_frequency,
+                      batchsize=batch_size, return_sentiment=return_sentiment)
+        end = timer()
+        logging.info("Conditioning finishined after {} seconds".format(end - starttime))
         if normalization == "sequences":
             snw.norm_by_total_nr_sequences(times=year)
         elif normalization == "occurrences":
@@ -165,5 +181,12 @@ def yearly_centralities(snw, year_list: list, focal_tokens: Optional[Union[list,
         logging.debug("Computing centralities for year {}".format(year))
         cent_measures = snw.centralities(focal_tokens=focal_tokens, types=types)
         cent_year.update({year: cent_measures})
+
+        try:
+            if path is not None:
+                logging.info("Saving graph for year {} to {}".format(year, path))
+                snw.export_gefx(path=path)
+        except:
+            logging.error("Failed to save graph for year {} \n as  {] \n Continuing analysis...".format(year, filename))
 
     return {'yearly_centrality': cent_year}
