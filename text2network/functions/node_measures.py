@@ -2,7 +2,7 @@ import networkx as nx
 import logging
 import numpy as np
 
-from text2network.functions.network_tools import inverse_weights
+from text2network.functions.network_tools import inverse_weights, make_symmetric
 
 
 def proximity(nw_graph, focal_tokens=None, alter_subset=None):
@@ -153,8 +153,14 @@ def compute_centrality(nw_graph, measure, focal_nodes=None):
     elif (measure=="frequency" or measure=="freq" or measure=="frequencies"):
         centralities = nx.get_node_attributes(nw_graph, "freq")
     elif measure=="flow_betweenness":
+        if nx.is_directed(nw_graph):
+            logging.warning("Graph is directed, flow betweenness needs to be undirected. Normalizing using standard method (average weights)")
+            nw_graph=make_symmetric(nw_graph)
         centralities = nx.current_flow_betweenness_centrality(nw_graph, normalized=True, weight="weight")
     elif measure=="rev_flow_betweenness":
+        if nx.is_directed(nw_graph):
+            logging.warning("Graph is directed, flow betweenness needs to be undirected. Normalizing using standard method (average weights)")
+            nw_graph=make_symmetric(nw_graph)
         nw_graph = inverse_weights(nw_graph)
         centralities = nx.current_flow_betweenness_centrality(nw_graph, normalized=True, weight="weight")
     else:
