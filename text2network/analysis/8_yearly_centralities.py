@@ -29,7 +29,7 @@ types = ["frequency", "PageRank", "normedPageRank", "flow_betweenness", "rev_flo
          "weighted_local_clustering"]
 
 path = config['Paths']['csv_outputs']+"/yearly_centralities/gephi/"
-cent=yearly_centralities(semantic_network, batch_size=10000, depth=None, return_sentiment=False, weight_cutoff=0.1, year_list=years,focal_tokens=focal_tokens, max_degree=None, types=types, normalization="sequences", path=path)
+cent=yearly_centralities(semantic_network, batch_size=100, depth=None, return_sentiment=False, weight_cutoff=None, year_list=years,focal_tokens=focal_tokens, max_degree=None, types=types, normalization="sequences", path=path)
 cent=semantic_network.pd_format(cent)[0]
 
 filename="/yearly_centralities/centrality_leader_YOY.xlsx"
