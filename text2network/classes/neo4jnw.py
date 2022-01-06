@@ -1567,7 +1567,7 @@ class neo4j_network(Sequence):
             fn = fn + "EGO-"
             tokens = [str(self.ensure_tokens(x)) for x in cond_dict['tokens']][0:5]
             if len(tokens) > 3:
-                years = [tokens[0], tokens[-1]]
+                tokens = [tokens[0], tokens[-1]]
                 fn = fn + '_to_'.join(tokens)
             else:
                 fn = fn + '-'.join(tokens)
@@ -1595,7 +1595,7 @@ class neo4j_network(Sequence):
             fn = "context-"
             tokens = [str(self.ensure_tokens(x)) for x in cond_dict['context']][0:5]
             if len(tokens) > 3:
-                years = [tokens[0], tokens[-1]]
+                tokens = [tokens[0], tokens[-1]]
                 fn = fn + '_to_'.join(tokens)
             else:
                 fn = fn + '-'.join(tokens)
@@ -2056,7 +2056,7 @@ class neo4j_network(Sequence):
                     try:
                         if contextual_relations:
                             self.__add_edges(
-                                self.db.query_context_in_dyadic_context(ids=id_batch, occurring=dyad_occurring,
+                                self.db.query_context_in_dyadic_context(ids=id_batch, occurring=dyad_occurring,context_mode=context_mode,
                                                                         replacing=dyad_substitute, times=times,
                                                                         weight_cutoff=weight_cutoff),
                                 max_degree=max_degree)

@@ -639,7 +639,7 @@ class neo4j_database():
 
         return ties
 
-    def query_context_in_dyadic_context(self, ids, occurring=None, replacing=None, times=None, scale=40,
+    def query_context_in_dyadic_context(self, ids, occurring=None, replacing=None, times=None, scale=40, context_mode="bidirectional",
                                         weight_cutoff=None, return_sentiment=True, add_dyad=False,normalize_seq_length=False):
         """
         // PY: query_context_in_dyadic_context
@@ -749,10 +749,14 @@ class neo4j_database():
         if weight_cutoff is not None:
             c_where = ''.join([c_where, " AND q.weight >=", str(weight_cutoff), " "])
 
-        ### MATCH QUERY 3: Replacing ties
+        ### MATCH QUERY 3: context ties
         pos_with = " WITH a,r,b,q,seq_length,s "
-
-        pos_match = "MATCH (f: word) -[: onto]-(q) - [: seq]-(s) - [: seq]-(t:edge) - [: onto]-(e:word) "
+        if context_mode=="bidirectional":
+            pos_match = "MATCH (f: word) -[: onto]-(q) - [: seq]-(s) - [: seq]-(t:edge) - [: onto]-(e:word) "
+        elif context_mode == "occurring":
+            pos_match = "MATCH (f: word) -[: onto]->(q) - [: seq]-(s) - [: seq]-(t:edge) - [: onto]-(e:word) "
+        else:
+            pos_match = "MATCH (f: word) <-[: onto]-(q) - [: seq]-(s) - [: seq]-(t:edge) - [: onto]-(e:word) "
         pos_where = " WHERE q.pos<>t.pos and f.token_id <> e.token_id and f.token_id in $idx and not f.token_id  in [a.token_id, b.token_id] and not e.token_id  in [a.token_id, b.token_id] "
 
         ### FINAL MATCH
