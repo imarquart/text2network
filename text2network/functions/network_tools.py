@@ -4,6 +4,7 @@ from typing import Union
 import networkx as nx
 import numpy as np
 import scipy as sp
+from tqdm import tqdm
 
 from text2network.functions.rowvec_tools import cutoff_percentage
 
@@ -107,7 +108,7 @@ def make_symmetric(graph, technique="avg-sym"):
     elif technique == "avg-sym":
         new_graph = graph.to_undirected()
         nodepairs = itertools.combinations(list(graph.nodes), r=2)
-        for u, v in nodepairs:
+        for u, v in tqdm(nodepairs, desc="Iterating node-pairs to symmetrize edges"):
             if graph.has_edge(u, v) or graph.has_edge(v, u):
                 wt = 0
 
