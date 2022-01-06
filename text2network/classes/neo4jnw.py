@@ -548,7 +548,7 @@ class neo4j_network(Sequence):
             else:
                 checkdepth = depth
             if cond_type is None:
-                if checkdepth <= 2 and nr_tokens <= 5:
+                if checkdepth <= 5 and nr_tokens <= 5:
                     cond_type = "search"
                 elif checkdepth == 0:  # just need proximities
                     cond_type = "search"
@@ -1244,6 +1244,8 @@ class neo4j_network(Sequence):
             ids_to_check = token_ids
             logging.debug(
                 "Start of Depth {} conditioning".format(or_depth))
+            if weight_cutoff is not None:
+                logging.warning("Weight cutoff {}".format(weight_cutoff))
             while depth > 0:
                 if not isinstance(ids_to_check, (list, np.ndarray)):
                     ids_to_check = [ids_to_check]
@@ -1264,8 +1266,7 @@ class neo4j_network(Sequence):
                 ids_to_check.reverse()
                 # Add starting nodes
                 self.graph.add_nodes_from(ids_to_check)
-                if weight_cutoff is not None:
-                    logging.warning("Weight cutoff {}".format(weight_cutoff))
+
                 for i in tqdm(range(0, len(ids_to_check), batchsize), leave=False, position=0,
                               desc="Depth {} conditioning: {} new found tokens, where {} already added.".format(depth,
                                                                                                                 len(ids_to_check),
