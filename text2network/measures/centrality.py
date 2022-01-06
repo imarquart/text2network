@@ -187,6 +187,6 @@ def yearly_centralities(snw, year_list: list, focal_tokens: Optional[Union[list,
                 logging.info("Saving graph for year {} to {}".format(year, path))
                 snw.export_gefx(path=path)
         except:
-            logging.error("Failed to save graph for year {} \n as  {] \n Continuing analysis...".format(year, filename))
+            logging.error("Failed to save graph for year {} \n as  {] \n Continuing analysis...".format(year, path))
 
     return {'yearly_centrality': cent_year}
