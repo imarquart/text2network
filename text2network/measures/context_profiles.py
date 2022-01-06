@@ -384,7 +384,7 @@ def context_cluster_all_pos(snw: neo4j_network, focal_substitutes: Union[list, s
         snw.condition_given_dyad(dyad_substitute=focal_substitutes, dyad_occurring=focal_occurrences, times=times,
                                  focal_tokens=interest_list, weight_cutoff=weight_cutoff, depth=depth,
                                  keep_only_tokens=keep_only_tokens, batchsize=batch_size,
-                                 contextual_relations=contextual_relations,
+                                 contextual_relations=contextual_relations, context_mode=context_mode,
                                  max_degree=max_degree)
         logging.info("Finished conditioning")
         snwarr=nx.to_numpy_array(snw.graph).reshape(-1)
