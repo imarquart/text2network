@@ -156,13 +156,16 @@ def compute_centrality(nw_graph, measure, focal_nodes=None):
         if nx.is_directed(nw_graph):
             logging.warning("Graph is directed, flow betweenness needs to be undirected. Normalizing using standard method (average weights)")
             nw_graph=make_symmetric(nw_graph)
-        centralities = nx.current_flow_betweenness_centrality(nw_graph, normalized=True, weight="weight")
+            logging.warning("Graph is now symmetric.")
+        centralities = nx.approximate_current_flow_betweenness_centrality(nw_graph, normalized=True, weight="weight", kmax=50000000)
     elif measure=="rev_flow_betweenness":
         if nx.is_directed(nw_graph):
             logging.warning("Graph is directed, flow betweenness needs to be undirected. Normalizing using standard method (average weights)")
             nw_graph=make_symmetric(nw_graph)
+            logging.warning("Graph is now symmetric.")
+
         nw_graph = inverse_weights(nw_graph)
-        centralities = nx.current_flow_betweenness_centrality(nw_graph, normalized=True, weight="weight")
+        centralities = nx.approximate_current_flow_betweenness_centrality(nw_graph, normalized=True, weight="weight", kmax=50000000)
     else:
         raise AttributeError(
             "Centrality measure {} not found in list".format(measure))
