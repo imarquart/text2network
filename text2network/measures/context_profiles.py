@@ -95,10 +95,12 @@ def context_per_pos(snw: neo4j_network, focal_occurrences: Optional[Union[list, 
     if seed is not None:
         snw.set_random_seed(seed)
 
-    if not isinstance(focal_occurrences, (list, np.ndarray)):
-        role_cluster = [focal_occurrences]
-    if not isinstance(focal_substitutes, (list, np.ndarray)):
-        role_cluster = [focal_substitutes]
+    if focal_occurrences is not None:
+        if not isinstance(focal_occurrences, (list, np.ndarray)):
+            focal_occurrences = [focal_occurrences]
+    if focal_substitutes is not None:
+        if not isinstance(focal_substitutes, (list, np.ndarray)):
+            focal_substitutes = [focal_substitutes]
     if not isinstance(times, (list, np.ndarray)):
         times = [times]
 
