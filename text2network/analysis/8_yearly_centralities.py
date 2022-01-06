@@ -28,12 +28,14 @@ focal_tokens=["leader"]
 types = ["frequency", "PageRank", "normedPageRank", "flow_betweenness", "rev_flow_betweenness", "local_clustering",
          "weighted_local_clustering"]
 
-path = config['Paths']['csv_outputs']+"/yearly_centralities/gephi/"
-cent=yearly_centralities(semantic_network, batch_size=100, depth=None, return_sentiment=False, weight_cutoff=None, year_list=years,focal_tokens=focal_tokens, max_degree=None, types=types, normalization="sequences", path=path)
-cent=semantic_network.pd_format(cent)[0]
-
-filename="/yearly_centralities/centrality_leader_YOY.xlsx"
+filename="/yearly_centralitiesCMR/centrality_leader_YOY.xlsx"
 path = config['Paths']['csv_outputs']+filename
 path = check_create_folder(path)
+path = config['Paths']['csv_outputs']+"/yearly_centralitiesCMR/gephi/"
+cent=yearly_centralities(semantic_network, batch_size=5000, depth=5, return_sentiment=False, weight_cutoff=0.01, year_list=years,focal_tokens=focal_tokens, max_degree=None, types=types, normalization="sequences", path=path)
+cent=semantic_network.pd_format(cent)[0]
 
+filename="/yearly_centralitiesCMR/centrality_leader_YOY.xlsx"
+path = config['Paths']['csv_outputs']+filename
+path = check_create_folder(path)
 cent.to_excel(path,merge_cells=False)
