@@ -2,6 +2,7 @@ import logging
 import pickle
 from typing import Optional, Callable, Union
 
+import networkx as nx
 import numpy as np
 import pandas as pd
 
@@ -170,6 +171,8 @@ def average_cluster_proximities(focal_token: str, nw, levels: int,
     logging.info("Extracting relevant clusters at level {} across all years {}".format(levels, times))
     for cl in clusters:
         if cl['level'] == 0:  # Use zero cluster, where all tokens are present, to get proximities
+            all_nodes = list(cl['graph'].nodes)
+            all_tokens = nw.ensure_tokens(list(cl['graph'].nodes))
             rev_proxim = nw.pd_format(cl['measures'])[0].loc[:, focal_token]
             proxim = nw.pd_format(cl['measures'])[0].loc[focal_token, :]
             overall_pagerank = nw.pd_format(cl['measures'])[1]['normedPageRank']
@@ -269,9 +272,19 @@ def average_cluster_proximities(focal_token: str, nw, levels: int,
                                      occurrence=occurrence, max_degree=max_degree)
 
             else:
-                nw.condition(tokens=focal_token, depth=depth, times=ma_years, weight_cutoff=weight_cutoff,
-                             context=context, compositional=compositional, max_degree=max_degree, batchsize=batchsize)
 
+
+                # Previously: Just find tokens
+                #nw.condition(tokens=focal_token, depth=depth, times=ma_years, weight_cutoff=weight_cutoff,
+                #             context=context, compositional=compositional, max_degree=max_degree, batchsize=batchsize)
+                # Fix: Try to condition specifically on tokens under consideration
+                check_tokens = all_tokens
+                if not isinstance(focal_token, list):
+                    check_tokens.append(focal_token)
+                else:
+                    check_tokens = check_tokens + focal_token
+                nw.condition(tokens=check_tokens, keep_only_tokens=True, depth=depth, times=ma_years, weight_cutoff=weight_cutoff,
+                             context=context, compositional=compositional, max_degree=None, batchsize=batchsize)
             if to_back_out:
                 nw.to_backout()
             if symmetric:
@@ -335,6 +348,17 @@ def average_cluster_proximities(focal_token: str, nw, levels: int,
                 df_dict.update(pagerank_measures)
                 df_dict.update(overall_pagerank_measures)
                 cluster_dataframe.append(df_dict.copy())
+
+                if export_network:
+                    # Need to add cluster dictionaries to current yearly network to export
+                    # Add assignment (level) to graph of snw
+                    ids=nw.ensure_ids(list(cl['graph'].nodes))
+                    change_dict={x: cl['name'] for x in ids}
+                    nx.set_node_attributes(nw.graph, change_dict, 'clusterID' + str(cl['level']))
+
+            if filename is not None:
+                if export_network:
+                    nw.export_gefx(filename=check_create_folder(filename + "YOY/"+str(year)+".gexf"))
 
     df = pd.DataFrame(cluster_dataframe)
 
