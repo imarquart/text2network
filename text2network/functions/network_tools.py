@@ -108,7 +108,7 @@ def make_symmetric(graph, technique="avg-sym"):
     elif technique == "avg-sym":
         new_graph = graph.to_undirected()
         nodepairs = itertools.combinations(list(graph.nodes), r=2)
-        for u, v in tqdm(nodepairs, desc="Iterating node-pairs to symmetrize edges"):
+        for u, v in nodepairs:
             if graph.has_edge(u, v) or graph.has_edge(v, u):
                 wt = 0
 
