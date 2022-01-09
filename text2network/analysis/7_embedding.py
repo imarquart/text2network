@@ -22,7 +22,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.ticker import NullFormatter
 from sklearn.decomposition import PCA, KernelPCA
 import matplotlib.tri as tri
-
+import networkx as nx
 
 def get_filename(csv_path, main_folder, focal_token, cutoff, tfidf, context_mode, contextual_relations,
                  postcut, keep_top_k, depth, max_degree=None, algo=None, level=None, rs=None, tf=None, sub_mode=None):
@@ -72,42 +72,24 @@ setup_logger(config['Paths']['log'], config['General']['logging_level'], "7_embe
 semantic_network = neo4j_network(config)
 
 
-#times = list(range(1980, 2021))
-# [1980, 1981]
-years=[2020,2019,2018,2017]
-#years=list(range(1985,1991))
-#
-#years=list(range(1980,1996))
-#years=list(range(1995,2021))
-#years = None
-#years=list(range(1990,1996))
-#years = list(range(1995, 2001))
-#years=list(range(1980,2021))
-years=list(range(1980,1986))
-years=list(range(1985,1991))
-years=list(range(1990,1996))
-years = list(range(1995, 2001))
-years=list(range(2000,2006))
-years=list(range(2005,2011))
-years=list(range(2010,2016))
-years=list(range(2015,2021))
-#years=list(range(1980,2021))
+
+years=list(range(1980,2021))
 
 focal_token = "leader"
 sym = False
 rev = False
 rs = [100][0]
 cutoff = [0.2, 0.1, 0.01][0]
-postcut = [0.1,0.01, None][0]
+postcut = [0.2,0.1,0.01, None][0]
 depth = [0, 1][0]
-context_mode = ["bidirectional", "substitution", "occurring"][0]
-sub_mode = ["occurring", "substitution", ][1]#"bidirectional"
+context_mode = ["bidirectional", "substitution", "occurring"][1]
+sub_mode = ["bidirectional","occurring", "substitution", ][2]#"bidirectional"
 algo = consensus_louvain
 pos_list = ["NOUN", "ADJ", "VERB"]
-tf = ["weight", "diffw", "pmi_weight"][-2]
+tf = ["weight", "diffw", "pmi_weight"][2]
 keep_top_k = [50, 100, 200, 1000][1]
 max_degree = [50, 100][0]
-level = [15, 10, 8, 6, 4, 2][0]
+level = 3#[15, 10, 8, 6, 4, 2][1]
 keep_only_tokens = [True, False][0]
 contextual_relations = [True, False][0]
 
@@ -118,22 +100,29 @@ focal_occurrences = None
 imagemethod="imshow"
 #imagemethod="contour"
 
-sel_alter="boss"
-use_diff=True
+sel_alter=["manager","executive","pioneer","follower","champion"]
+sel_alter=["boss","supervisor","father","subordinate","superior"]
+
+use_diff=False
 im_int_method="gaussian"
 grid_method="linear"
 npts = 200
 int_level=8
 ngridx = 12
 ngridy = ngridx
-top_n=3
+top_n=500
 nr_tokens=500000000
 #nr_tokens=50
 #nr_tokens=5
 
+#years=list(range(1980,2021))
 
-
-filename, load_output_path = get_filename(config['Paths']['csv_outputs'], "profile_relationships",
+#years=list(range(2015,2021))
+#years=list(range(2008,2021))
+years=list(range(1992,2005))
+#years=list(range(2005,2021))
+#years=list(range(1980,1993))
+filename, load_output_path = get_filename(config['Paths']['csv_outputs'], "profile_relationships_sub",
                                      focal_token=focal_token, cutoff=cutoff, tfidf=tf,
                                      context_mode=context_mode, contextual_relations=contextual_relations,
                                      postcut=postcut, keep_top_k=keep_top_k, depth=depth,
@@ -150,11 +139,20 @@ checkname = filename + "_CLdf" + ".xlsx"
 pname = filename + "_CLdict_tk.p"
 df_clusters=pd.read_excel(checkname)
 cldict=pickle.load(open(pname, "rb"))
+#df_clusters=df_clusters.drop(columns="type")
 X=df_clusters.iloc[:,1:-7]
 X=X.div(X.sum(axis=1), axis=0)
+xx=X.to_numpy()
+sorted_row_idx = np.argsort(xx, axis=1)[:,0:-top_n]
+col_idx = np.arange(xx.shape[0])[:,None]
+xx[col_idx,sorted_row_idx]=0
+X.iloc[:,:]=(X.to_numpy()+X.to_numpy().T)/2
+#X=X/np.max(X.max())
 color=X.index.to_list()
 cl_name=df_clusters.iloc[:,0].to_list()
 X.index=cl_name
+
+Xcols=list(X.columns)
 
 if years is None:
     # Get all datapoints
@@ -168,6 +166,7 @@ else:
         ylist.append(df.copy())
     df= pd.concat(ylist)
 X2=df.iloc[:,1:-7]
+X2=X2[Xcols]
 #X2=X2.div(X2.sum(axis=1), axis=0)
 X2["color"] = df.rweight/np.max(df.rweight)
 X2["alter"] = semantic_network.ensure_tokens(df.occ)
@@ -176,50 +175,25 @@ X2["alter"] = semantic_network.ensure_tokens(df.occ)
 #X2=summedX2
 X2=X2.replace([np.inf, -np.inf], np.nan).dropna( how="any")
 X2=X2.sort_values(by="color", ascending=False).iloc[0:nr_tokens,:]
-X2cols=np.setdiff1d(X2.columns,["alter","color"]).tolist()
 # Drop rows with no connections
-X2=X2.iloc[np.where(X2[X2cols].sum(axis=1)>0)[0],:]
+X2=X2.iloc[np.where(X2[Xcols].sum(axis=1)>0)[0],:]
 
 
 n_neighbors = len(X)-1
 n_components = 2
-# Set-up manifold methods
-LLE = partial(
-    manifold.LocallyLinearEmbedding,
-    n_neighbors=n_neighbors,
-    n_components=n_components,
-    eigen_solver="auto",
-)
-
-methods = OrderedDict()
-methods["LLE"] = LLE(method="standard", n_jobs=-1)
-methods["LTSA"] = LLE(method="ltsa", n_jobs=-1)
-methods["Hessian LLE"] = LLE(method="hessian", eigen_solver='dense', n_jobs=-1)
-methods["Modified LLE"] = LLE(method="modified", n_jobs=-1)
-methods["Isomap"] = manifold.Isomap(n_neighbors=n_neighbors, n_components=n_components, metric="precomputed")
-methods["MDS"] = manifold.MDS(n_components, max_iter=100, n_init=1)
-methods["SE"] = manifold.SpectralEmbedding(affinity="precomputed",
-    n_components=n_components, n_neighbors=n_neighbors
-)
-methods["t-SNE"] = manifold.TSNE(n_components=n_components, init="pca", random_state=0)
 kernel_pca = KernelPCA(
-    n_components=2, kernel="precomputed")
-
-
+    n_components=2, kernel="precomputed",random_state=100)
 # Plot results
 label="SE"
 i=1
-method=methods[label]
 t0 = time()
-#Y = method.fit_transform(X[X2cols])
-#Y = spectral_embedding(X[X2cols].to_numpy(), n_components=n_components, )
-Y = kernel_pca.fit_transform(X[X2cols])
+
+
+Y = kernel_pca.fit_transform(X)
 
 
 
-xx=X2[X2cols].to_numpy()
-xsums=np.sum(xx, axis=1,  keepdims=True)
-xx=xx/xsums
+xx=X2[Xcols].to_numpy()
 sorted_row_idx = np.argsort(xx, axis=1)[:,0:-top_n]
 col_idx = np.arange(xx.shape[0])[:,None]
 xx[col_idx,sorted_row_idx]=0
@@ -255,11 +229,14 @@ if sel_alter is not None:
         Y3=Y2.copy()
     else:
         Y3=None
-    Y2=Y2[Y2.alter == sel_alter]
+    Y2=Y2[Y2.alter.isin(sel_alter)]
     print("Selected of Observations: {}".format(len(Y2)))
 
 xi = np.linspace(lim_min, lim_max, ngridx)
 yi = np.linspace(lim_min, lim_max, ngridx)
+
+xi = np.linspace(min(Y["x"])-0.01, max(Y["x"])+0.01, ngridx)
+yi = np.linspace(min(Y["y"])-0.01, max(Y["y"])+0.01, ngridx)
 hist_range=((min(Y["x"]), max(Y["x"])), (min(Y["y"]), max(Y["y"])))
 zi,xi,yi = np.histogram2d(x=Y2["x"], y=Y2["y"], weights=Y2.color,range=hist_range,bins=(xi,yi), density=False)
 zi=zi.T

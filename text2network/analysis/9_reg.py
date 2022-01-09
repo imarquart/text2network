@@ -67,14 +67,13 @@ config = configparser.ConfigParser()
 print(check_folder(configuration_path))
 config.read(check_folder(configuration_path))
 # Setup logging
-setup_logger(config['Paths']['log'], config['General']['logging_level'], "7_embedding.py")
+setup_logger(config['Paths']['log'], config['General']['logging_level'], "9_reg.py")
 
 semantic_network = neo4j_network(config)
 
 
 
 years=list(range(1980,2021))
-
 focal_token = "leader"
 sym = False
 rev = False
@@ -89,7 +88,7 @@ pos_list = ["NOUN", "ADJ", "VERB"]
 tf = ["weight", "diffw", "pmi_weight"][2]
 keep_top_k = [50, 100, 200, 1000][2]
 max_degree = [50, 100][0]
-level = 3#[15, 10, 8, 6, 4, 2][1]
+level = 2#[15, 10, 8, 6, 4, 2][1]
 keep_only_tokens = [True, False][0]
 contextual_relations = [True, False][0]
 
@@ -97,28 +96,28 @@ contextual_relations = [True, False][0]
 focal_substitutes = focal_token
 focal_occurrences = None
 
-imagemethod="imshow"
-#imagemethod="contour"
-
 sel_alter=["boss","supervisor","father","subordinate","superior"]
-use_diff=True
-im_int_method="gaussian"
-grid_method="linear"
-npts = 200
-int_level=8
-ngridx = 12
-ngridy = ngridx
+#sel_alter=["manager","executive","pioneer","follower","champion"]
+
 top_n=50000
 nr_tokens=500000000
-#nr_tokens=50
-#nr_tokens=5
 
-years=list(range(1980,1993))
+
 
 years=list(range(2015,2021))
-years=list(range(2008,2021))
+
+#
+
+#
 #years=list(range(1992,2005))
-years=list(range(1980,1993))
+
+#years=list(range(1992,2005))
+#years=list(range(1980,2021))
+years=list(range(1992,2005))
+#years=list(range(1980,2007))
+years=list(range(2005,2021))
+#years=list(range(1980,1993))
+years=list(range(1980,2021))
 filename, load_output_path = get_filename(config['Paths']['csv_outputs'], "profile_relationships_sub",
                                      focal_token=focal_token, cutoff=cutoff, tfidf=tf,
                                      context_mode=context_mode, contextual_relations=contextual_relations,
@@ -148,7 +147,6 @@ X.iloc[:,:]=(X.to_numpy()+X.to_numpy().T)/2
 color=X.index.to_list()
 cl_name=df_clusters.iloc[:,0].to_list()
 X.index=cl_name
-
 Xcols=list(X.columns)
 
 if years is None:
@@ -165,149 +163,54 @@ else:
 X2=df.iloc[:,1:-7]
 X2=X2[Xcols]
 #X2=X2.div(X2.sum(axis=1), axis=0)
-X2["color"] = df.rweight/np.max(df.rweight)
+X2["prob"] = df.rweight#/np.max(df.rweight)
 X2["alter"] = semantic_network.ensure_tokens(df.occ)
+X2["year"] = df.year
 #summedX2=X2.groupby("alter", as_index=False).sum().sort_values(by="color", ascending=False)
 #summedX2.iloc[:,1:-1]=summedX2.iloc[:,1:-1].div(summedX2.iloc[:,1:-1].sum(axis=1), axis=0)
 #X2=summedX2
 X2=X2.replace([np.inf, -np.inf], np.nan).dropna( how="any")
-X2=X2.sort_values(by="color", ascending=False).iloc[0:nr_tokens,:]
+X2=X2.sort_values(by="prob", ascending=False).iloc[0:nr_tokens,:]
 # Drop rows with no connections
 X2=X2.iloc[np.where(X2[Xcols].sum(axis=1)>0)[0],:]
-
-
-n_neighbors = len(X)-1
-n_components = 2
-kernel_pca = KernelPCA(
-    n_components=2, kernel="precomputed",random_state=100)
-# Plot results
-label="SE"
-i=1
-t0 = time()
-
-
-Y = kernel_pca.fit_transform(X)
-
-
 
 xx=X2[Xcols].to_numpy()
 sorted_row_idx = np.argsort(xx, axis=1)[:,0:-top_n]
 col_idx = np.arange(xx.shape[0])[:,None]
 xx[col_idx,sorted_row_idx]=0
-xx=xx/np.sum(xx, axis=1,  keepdims=True)
-Y2 = np.matmul(xx, Y)
-print(np.max(Y2, axis=0))
-print(np.min(Y2, axis=0))
+#xx=xx/np.sum(xx, axis=1,  keepdims=True)
 
-Y = pd.DataFrame(Y)
-Y2 = pd.DataFrame(Y2)
-Y.index=X.index
-Y["color"] = [item/np.max(color)for item in color]
-Y2.index=X2.index
-Y2["color"]= X2.loc[:,"color"]
-Y2["alter"] = X2["alter"]
-Y.columns=["x","y","color"]
-Y2.columns=["x","y","color", "alter"]
-t1 = time()
+X2.loc[:,Xcols]=xx
+import statsmodels.api as sm
+from statsmodels.formula.api import ols
 
-import seaborn as sns
-# Create figure
-fig = plt.figure(figsize=(12, 8))
-fig.suptitle(
-    "{}-{}: Contextual clusters leader vs {}, lvl {}, selected with {}, normed {}, imagefilter: {}".format(years[0],years[-1],sel_alter,level, tf, use_diff,im_int_method), fontsize=14
-)
-lim_max=np.max(np.max(Y.loc[:,["x","y"]]))
-lim_min=np.min(np.min(Y.loc[:,["x","y"]]))
-ax = fig.add_subplot(xlim=(lim_min,lim_max), ylim=(lim_min,lim_max))
-
-if sel_alter is not None:
-    print("Orig Nr of Observations: {}".format(len(Y2)))
-    if use_diff:
-        Y3=Y2.copy()
-    else:
-        Y3=None
-    Y2=Y2[Y2.alter.isin(sel_alter)]
-    print("Selected of Observations: {}".format(len(Y2)))
-
-xi = np.linspace(lim_min, lim_max, ngridx)
-yi = np.linspace(lim_min, lim_max, ngridx)
-hist_range=((min(Y["x"]), max(Y["x"])), (min(Y["y"]), max(Y["y"])))
-zi,xi,yi = np.histogram2d(x=Y2["x"], y=Y2["y"], weights=Y2.color,range=hist_range,bins=(xi,yi), density=False)
-zi=zi.T
-zi=zi/np.sum(zi)
-
-if use_diff:
-    zi2, xi2, yi2 = np.histogram2d(x=Y3["x"], y=Y3["y"], weights=Y3.color, range=hist_range, bins=(xi, yi), density=False)
-    zi2 = zi2.T
-    zi2 = zi2 / np.sum(zi2)
-    zi=zi-zi2
-    zi=(zi-np.min(zi))/(np.max(zi)-np.min(zi))*2-1
-else:
-    zi = (zi - np.min(zi)) / (np.max(zi) - np.min(zi))
-
-if imagemethod=="contour":
-    extent = [lim_min, lim_max, lim_min, lim_max].copy()
-    xi = (xi[:-1] + xi[1:]) / 2
-    yi = (yi[:-1] + yi[1:]) / 2
-    xi=xi.tolist()
-    yi=yi.tolist()
-    xi.insert(0, lim_min)
-    yi.insert(0, lim_min)
-    xi.append(lim_max)
-    yi.append(lim_max)
-    xi=np.array(xi)
-    yi=np.array(yi)
-    newz=np.zeros((zi.shape[0]+2,zi.shape[1]+2))
-    newz[1:-1,1:-1]=zi.copy()
-
-    ax.contour(xi,yi,newz, levels=int_level, linewidths=0.5)
-    cntr1 = ax.contourf(xi,yi,newz, levels=int_level, cmap="RdBu_r")
-else:
-    cntr1=ax.imshow(zi, extent=[xi[0], xi[-1], yi[0], yi[-1]], cmap="RdBu_r", origin="lower", interpolation=im_int_method)
-fig.colorbar(cntr1, ax=ax)
+#X2.loc[~X2.alter.isin(sel_alter),"prob"]=0
+#X2=X2[X2.alter.isin(sel_alter)]
 
 
-ax.scatter(Y2["x"],Y2["y"], alpha=0.3, s=10)
-ax.scatter(Y["x"], Y["y"], s=100, c=Y.color,  cmap="Pastel1")
+Y=X2.prob
+X=X2.iloc[:,0:-3]
+X=X/40
+X=X/100
+X.div(Y, axis=0)
+#X=X.div(X.sum(axis=1), axis=0)
+Y[~X2.alter.isin(sel_alter)]=0
+#X=(X-X.mean())/X.std()
+#Y=(Y-Y.mean())/Y.std()
+#X=sm.add_constant(X)
+X["P2"]=np.int64((X2.year>2007).to_numpy())
+X["P1"]=np.int64((X2.year<1993).to_numpy())
+X["year"]=X2.year
+X["y"]=Y
+f1="y~"+"+".join([x for x in Xcols])+"+C(year)"+"+C(P1)"+"+C(P2)+"+"*C(P1)+".join([x for x in Xcols])+"+"+"*C(P2)+".join([x for x in Xcols])
+f1="y~"+"+".join([x for x in Xcols])+"+C(P1)"+"+C(P2)+"+"*C(P1)+".join([x for x in Xcols])+"+"+"*C(P2)+".join([x for x in Xcols])
 
+model = ols(formula=f1, data=X)
+results = model.fit()
+print(results.summary())
+results_summary = results.summary()
+tab=results_summary.tables[1]
 
-# Identify extremal points
-extremal_points=[]
-extremal_points.append(Y.iloc[np.argmax(Y.x),:])
-extremal_points.append(Y.iloc[np.argmax(Y.y),:])
-extremal_points.append(Y.iloc[np.argmin(Y.x),:])
-extremal_points.append(Y.iloc[np.argmin(Y.y),:])
-
-for idx, row in enumerate(extremal_points):
-    names=cldict[row.name]
-    names.remove(row.name)
-    names.insert(0, row.name)
-    names=names#[0:4]
-    n = len(names)
-    d= 8
-    dist= n*d
-    start=dist//2
-    for i,name in enumerate(names):
-        if i>0:
-            alpha=0.5
-        else:
-            alpha=1
-        #ax.annotate(name, (row[0], row[1]), xytext=(5, start-i*d), textcoords='offset points', alpha=alpha)
-
-
-for idx, row in Y.iterrows():
-    ax.annotate(row.name, (row[0], row[1]), xytext=(6, 0), textcoords='offset points', alpha=0.6)
-
-
-#for idx, row in Y2.iloc[0:50,:].iterrows():
-#    ax.annotate(row.name, (row[0], row[1]), xytext=(-10, 0), textcoords='offset points', alpha=0.6)
-
-
-
-# force matplotlib to draw the graph
-ax.set_title("%s (%.2g sec)" % (label, t1 - t0))
-#ax.xaxis.set_major_formatter(NullFormatter())
-#ax.yaxis.set_major_formatter(NullFormatter())
-ax.axis("tight")
-
-plt.show()
+LRresult = (results.summary2().tables[1])
+sigres=LRresult[LRresult.loc[:,"P>|t|"]<0.05]
+print(sigres)

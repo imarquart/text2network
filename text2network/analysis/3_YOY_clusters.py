@@ -32,10 +32,10 @@ setup_logger(config['Paths']['log'], config['General']['logging_level'], "3_YOY_
 semantic_network = neo4j_network(config)
 
 #### Cluster yearly proximities
-ma_list = [None,(2, 2),(1, 0),(1, 1)]
-level_list = [4,5,6,8,10]
-weight_list = [None, 0.01]
-max_degree_list = [100, 200,500]
+ma_list = [(2, 2),None]
+level_list = [4,5,6,3]
+weight_list = [0.1,0.01,None]
+max_degree_list = [200, 100, 50]
 cl_clutoff_list = [0]
 depth_list = [1]
 rs_list = [100]
@@ -56,9 +56,9 @@ for depth, levels, moving_average, weight_cutoff, rev, sym, comp, rs, cluster_cu
     semantic_network = neo4j_network(config)
     # weight_cutoff=0
     filename = "".join(
-        [config['Paths']['csv_outputs'], "/EgoClusterYOY_",])
+        [config['Paths']['csv_outputs'], "/EgoClusterYOY",])
     filename = check_create_folder(filename)
-    filename = "".join([filename, str(focal_token)])
+    filename = "".join([filename, "/",str(focal_token)])
     filename = "".join([filename, "_max_degree", str(max_degree)])
     filename = "".join([filename, "_rev", str(rev),"_sym", str(sym),])
     filename = "".join([filename, "_lev",  str(levels), ])

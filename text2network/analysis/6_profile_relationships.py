@@ -70,23 +70,31 @@ times = list(range(1980, 2021))
 focal_token = "leader"
 sym_list = [False]
 rs_list = [100]
-cutoff_list = [0.2, 0.1, 0.01]
-post_cutoff_list = [0.1]
-depth_list = [0, 1]
-context_mode_list = ["bidirectional", "substitution", "occurring"]
-sub_mode_list = ["bidirectional","occurring", "substitution", ]#"bidirectional"
-
+cutoff_list = [0.2,0.1]
+post_cutoff_list = [0.1,0.01]
+depth_list = [0]
+context_mode_list = ["occurring"]
+sub_mode_list = ["occurring"]#,"substitution"]#"bidirectional"
+context_mode_list = ["substitution"]
+sub_mode_list = ["substitution"]#,"substitution"]#"bidirectional"
 rev_list = [False]
 algo_list = [consensus_louvain]
 ma_list = [(2, 2)]
-pos_list = ["NOUN", "ADJ", "VERB"]
+pos_list = ["ADJ","VERB"]
+pos_list = ["VERB"]
+pos_list = ["NOUN"]
+
 # TODO CHECK WITH X
-tfidf_list = [["weight", "diffw", "pmi_weight"]]
-keep_top_k_list = [100, 200, 1000]
-max_degree_list = [50,100, 200, 1000]
-level_list = [4,10]
+tfidf_list = [["weight", "diffw", "pmi-weight", "rel_weight"]]
+keep_top_k_list = [100, 200]
+max_degree_list = [100]
+level_list = [1,2,3,4,5,10]
 keep_only_tokens_list = [True]
-contextual_relations_list = [True,False]
+contextual_relations_list = [True]
+
+#main_folder="profile_relationships_occ"
+main_folder="profile_relationships_sub_"+"_".join(pos_list)
+
 
 paraml1_list = product(cutoff_list, context_mode_list, tfidf_list)
 param_list = product(rs_list, depth_list, max_degree_list, sym_list,
@@ -94,6 +102,8 @@ param_list = product(rs_list, depth_list, max_degree_list, sym_list,
                      post_cutoff_list, sub_mode_list)
 
 # %% Sub or Occ
+#focal_substitutes = None
+#focal_occurrences = focal_token
 focal_substitutes = focal_token
 focal_occurrences = None
 
@@ -107,7 +117,7 @@ for cutoff, context_mode, tfidf in paraml1_list:
     logging.info("Extracting context tokens for {}, {}, {}".format(cutoff, context_mode, tfidf))
 
     output_path = check_create_folder(config['Paths']['csv_outputs'])
-    output_path = check_create_folder(config['Paths']['csv_outputs'] + "/profile_relationships/")
+    output_path = check_create_folder(config['Paths']['csv_outputs'] + "/"+main_folder)
     cdict_filename = check_create_folder(
         "".join([output_path, "/", str(focal_token), "_cut", str(int(cutoff * 100)), "_tfidf",
                  str(tfidf is not None), "_cm", str(context_mode), "/context_dict.p"]))
@@ -118,7 +128,7 @@ for cutoff, context_mode, tfidf in paraml1_list:
         logging.info("Contextual tokens loaded from {}".format(cdict_filename))
     except:
         logging.info("Context tokens pickle not found. Creating.")
-        context_dict = context_per_pos(snw=semantic_network, focal_substitutes=focal_substitutes,
+        context_dict = context_per_pos(snw=semantic_network, focal_substitutes=focal_substitutes, focal_occurrences=focal_occurrences,
                                        times=times,
                                        weight_cutoff=cutoff,
                                        keep_top_k=None, context_mode=context_mode, pos_list=pos_list, tfidf=tfidf)
@@ -140,7 +150,7 @@ for cutoff, context_mode, tfidf in paraml1_list:
 
 
 
-        filename, output_path = get_filename(config['Paths']['csv_outputs'], "profile_relationships",
+        filename, output_path = get_filename(config['Paths']['csv_outputs'], main_folder,
                                              focal_token=focal_token, cutoff=cutoff, tfidf=tfidf,
                                              context_mode=context_mode, contextual_relations=contextual_relations,
                                              postcut=postcut, keep_top_k=keep_top_k, depth=depth,
@@ -156,11 +166,11 @@ for cutoff, context_mode, tfidf in paraml1_list:
             dfx = None
         except:
             logging.info("Cluster dictionary pickle missing, creating!")
-            dfx, clusters_raw = context_cluster_all_pos(semantic_network, focal_substitutes=focal_token, times=times,
+            dfx, clusters_raw = context_cluster_all_pos(semantic_network, focal_substitutes=focal_substitutes, focal_occurrences=focal_occurrences, times=times,
                                                         keep_top_k=keep_top_k,
                                                         max_degree=max_degree, sym=sym, weight_cutoff=postcut,
                                                         level=int(np.max(np.array(level_list))),
-                                                        pos_list=pos_list, context_dict=context_dict, batch_size=10,
+                                                        pos_list=pos_list, context_dict=context_dict, batch_size=1000,
                                                         depth=depth, context_mode=context_mode, algorithm=algo,
                                                         include_all_levels=True,
                                                         contextual_relations=contextual_relations, tfidf=tfidf,
@@ -172,7 +182,7 @@ for cutoff, context_mode, tfidf in paraml1_list:
             logging.info("Getting level: {}".format(level))
             for tf in tfidf:
                 logging.info("Getting tf-idf: {}".format(tf))
-                filename, output_path = get_filename(config['Paths']['csv_outputs'], "profile_relationships",
+                filename, output_path = get_filename(config['Paths']['csv_outputs'], main_folder,
                                                      focal_token=focal_token, cutoff=cutoff, tfidf=tfidf,
                                                      context_mode=context_mode, contextual_relations=contextual_relations,
                                                      postcut=postcut, keep_top_k=keep_top_k, depth=depth,
