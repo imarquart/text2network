@@ -70,8 +70,7 @@ times = list(range(1980, 2021))
 focal_token = "leader"
 sym_list = [False]
 rs_list = [100]
-cutoff_list = [0.2,0.1]
-post_cutoff_list = [0.1,0.01]
+
 depth_list = [0]
 context_mode_list = ["occurring"]
 sub_mode_list = ["occurring"]#,"substitution"]#"bidirectional"
@@ -81,19 +80,21 @@ rev_list = [False]
 algo_list = [consensus_louvain]
 ma_list = [(2, 2)]
 pos_list = ["ADJ","VERB"]
-pos_list = ["VERB"]
-pos_list = ["NOUN"]
-
+#pos_list = ["VERB"]
+#pos_list = ["NOUN"]
 # TODO CHECK WITH X
-tfidf_list = [["weight", "diffw", "pmi-weight", "rel_weight"]]
-keep_top_k_list = [100, 200]
-max_degree_list = [100]
-level_list = [1,2,3,4,5,10]
+tfidf_list = [["weight"]]
+level_list = [1,2,3,4,5,10,15]
 keep_only_tokens_list = [True]
 contextual_relations_list = [True]
 
+keep_top_k_list = [500,1000]
+max_degree_list = [500]
+cutoff_list = [0.01]
+post_cutoff_list = [0.01]
+
 #main_folder="profile_relationships_occ"
-main_folder="profile_relationships_sub_"+"_".join(pos_list)
+main_folder="profile_relationships_subsubH_"+"_".join(pos_list)
 
 
 paraml1_list = product(cutoff_list, context_mode_list, tfidf_list)

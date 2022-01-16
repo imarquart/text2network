@@ -98,16 +98,16 @@ focal_substitutes = focal_token
 focal_occurrences = None
 
 imagemethod="imshow"
-#imagemethod="contour"
+imagemethod="contour"
 
 sel_alter=["manager","executive","pioneer","follower","champion"]
 sel_alter=["boss","supervisor","father","subordinate","superior"]
 
-use_diff=False
+use_diff=True
 im_int_method="gaussian"
 grid_method="linear"
 npts = 200
-int_level=8
+int_level=9
 ngridx = 12
 ngridy = ngridx
 top_n=500

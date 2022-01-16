@@ -85,10 +85,10 @@ depth = [0, 1][0]
 context_mode = ["bidirectional", "substitution", "occurring"][1]
 sub_mode = ["bidirectional","occurring", "substitution", ][2]#"bidirectional"
 algo = consensus_louvain
-pos_list = ["NOUN", "ADJ", "VERB"]
-tf = ["weight", "diffw", "pmi_weight"][2]
+pos_list = ["NOUN", "ADJ", "VERB"][0]
+tf = ["weight", "diffw", "pmi_weight"][0]
 keep_top_k = [50, 100, 200, 1000][1]
-max_degree = [50, 100][0]
+max_degree = [50, 100][1]
 level = 2#[15, 10, 8, 6, 4, 2][1]
 keep_only_tokens = [True, False][0]
 contextual_relations = [True, False][0]
@@ -115,7 +115,7 @@ nr_tokens=500000000
 
 
 
-filename, load_output_path = get_filename(config['Paths']['csv_outputs'], "profile_relationships_sub",
+filename, load_output_path = get_filename(config['Paths']['csv_outputs'], "profile_relationships_sub_NOUN",
                                      focal_token=focal_token, cutoff=cutoff, tfidf=tf,
                                      context_mode=context_mode, contextual_relations=contextual_relations,
                                      postcut=postcut, keep_top_k=keep_top_k, depth=depth,

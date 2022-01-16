@@ -97,7 +97,7 @@ focal_substitutes = focal_token
 focal_occurrences = None
 
 sel_alter=["boss","supervisor","father","subordinate","superior"]
-#sel_alter=["manager","executive","pioneer","follower","champion"]
+sel_alter=["manager","executive","pioneer","follower","champion"]
 
 top_n=50000
 nr_tokens=500000000
