@@ -802,6 +802,9 @@ class neo4j_network(Sequence):
             tf_sel=True
         else:
             tf_sel=False
+        if tfidf == ["weight"]:
+            logging.warning("TFIDF set, but only weight requested. Setting TFIDF to False!")
+            tf_sel=False
 
         if focal_substitutes is None and focal_occurrences is None:
             msg = "Please provide either focal_substitutes and/or focal_occurrences from dyads!"
