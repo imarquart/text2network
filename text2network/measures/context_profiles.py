@@ -404,6 +404,9 @@ def context_cluster_all_pos(snw: neo4j_network, focal_substitutes: Union[list, s
         for i,cl in tqdm(enumerate(clusters), desc="Extracting all clusters"):
             if cl['level'] == 0:  # Use zero cluster, where all tokens are present, to get proximities
                 overall_pagerank = snw.pd_format(cl['measures'])[1]['normedPageRank']
+                overall_between = snw.pd_format(cl['measures'])[1]['flow_betweenness']
+                overall_eff_size = snw.pd_format(cl['measures'])[1]['constraint']
+                overall_constraint = snw.pd_format(cl['measures'])[1]['effective_size']
             if len(cl['graph'].nodes) > 0 and (
                     cl['level'] == level or include_all_levels):  # Consider only the last level
                 # Get List of tokens
@@ -418,12 +421,22 @@ def context_cluster_all_pos(snw: neo4j_network, focal_substitutes: Union[list, s
                     sentiment_in_cluster = sentiment.reindex(proxim_in_cluster.context_token, fill_value=0)
                     subjectivity_in_cluster = subjectivity.reindex(proxim_in_cluster.context_token, fill_value=0)
                     pagerank_in_cluster =  overall_pagerank.reindex(proxim_in_cluster.context_token, fill_value=0)
+                    between_in_cluster =  overall_between.reindex(proxim_in_cluster.context_token, fill_value=0)
+                    effsize_in_cluster = overall_eff_size.reindex(proxim_in_cluster.context_token, fill_value=0)
+                    constraint_in_cluster = overall_constraint.reindex(proxim_in_cluster.context_token, fill_value=0)
+
+
                     if len(proxim_in_cluster) > 0:
                         cluster_measures = return_measure_dict(proxim_in_cluster.weight)
                         pagerank_measures = return_measure_dict(pagerank_in_cluster, prefix="pagerank_")
                         sent_measures = return_measure_dict(sentiment_in_cluster.sentiment, prefix="sentiment_")
                         sub_measures = return_measure_dict(subjectivity_in_cluster.subjectivity, prefix="subjectivity_")
                         freq_measures = return_measure_dict(freq_in_cluster.freq, prefix="freq_")
+                        bet_measures = return_measure_dict(between_in_cluster, prefix="bet_")
+                        eff_measures = return_measure_dict(effsize_in_cluster, prefix="effs_")
+                        constraint_measures = return_measure_dict(constraint_in_cluster, prefix="constr_")
+
+
                         # Default cluster entry
                         year = -100
                         name = "-".join(list(proxim_in_cluster.weight.nlargest(5).index))
@@ -443,6 +456,11 @@ def context_cluster_all_pos(snw: neo4j_network, focal_substitutes: Union[list, s
                         df_dict.update(sent_measures)
                         df_dict.update(sub_measures)
                         df_dict.update(pagerank_measures)
+                        df_dict.update(bet_measures)
+                        df_dict.update(eff_measures)
+                        df_dict.update(constraint_measures)
+
+
 
                         cluster_dataframe.append(df_dict.copy())
                         # Update cluster dict with names
@@ -473,6 +491,9 @@ def context_cluster_all_pos(snw: neo4j_network, focal_substitutes: Union[list, s
                                     df_dict.update(sent_measures)
                                     df_dict.update(sub_measures)
                                     df_dict.update(pagerank_measures)
+                                    df_dict.update(bet_measures)
+                                    df_dict.update(eff_measures)
+                                    df_dict.update(constraint_measures)
                                     cluster_dataframe.append(df_dict.copy())
 
         cluster_dict[tf] = clusters
