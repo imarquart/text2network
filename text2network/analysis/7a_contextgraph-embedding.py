@@ -74,31 +74,34 @@ semantic_network = neo4j_network(config)
 
 
 years=list(range(1980,2021))
-
+main_folder="profile_relationships_substitution_ADJ_VERB_NOUN_ADV_ADP_done"
 focal_token = "leader"
 sym = False
 rev = False
 rs = [100][0]
-cutoff = [0.2, 0.1, 0.01][0]
-postcut = [0.2,0.1,0.01, None][0]
+cutoff = [0.2, 0.1, 0.01][1]
+postcut = [0.2,0.1,0.01][-1]
 depth = [0, 1][0]
 context_mode = ["bidirectional", "substitution", "occurring"][1]
 sub_mode = ["bidirectional","occurring", "substitution", ][2]#"bidirectional"
 algo = consensus_louvain
 pos_list = ["NOUN", "ADJ", "VERB"][0]
 tf = ["weight", "diffw", "pmi_weight"][0]
-keep_top_k = [50, 100, 200, 1000][1]
-max_degree = [50, 100][1]
-level = 2#[15, 10, 8, 6, 4, 2][1]
+keep_top_k = [50, 100, 200, 1000][-1]
+max_degree = [50, 100,500][-1]
+level = 5#[15, 10, 8, 6, 4, 2][1]
 keep_only_tokens = [True, False][0]
 contextual_relations = [True, False][0]
 
 # %% Sub or Occ
 focal_substitutes = focal_token
 focal_occurrences = None
+#cluster_subset=["team", "instance", "good", "organization", "company", "power", "making", "make", "leaders", "management", "people", "business", "need", "see", "project", "ask", "executive", "level", "different", "leadership",]
+#cluster_subset=["team", "instance", "good", "organization", "company", "power", "making", "make", "leaders", "management", "people"]
+#cluster_subset=["team", "good", "organization", "management", "people", "need", "leaders", "company", "business", "making", "project", "ask", "executive", "leadership", "make", "see", "know", "must", "role", "employees", "success", "ceo", "process", "global", "kind", "effective", "power", "might", "best", "board",]
+cluster_subset=None
+cluster_subset=["team", "management", "company", "business", "people", "process", "leadership", "leaders", "organization", "support", "project", "executive", "customers", "good", "ceo",]
 
-imagemethod="imshow"
-#imagemethod="contour"
 
 sel_alter="boss"
 use_diff=True
@@ -108,14 +111,14 @@ npts = 200
 int_level=8
 ngridx = 12
 ngridy = ngridx
-top_n=2
+top_n=5
 nr_tokens=500000000
 #nr_tokens=50
 #nr_tokens=5
 
 
 
-filename, load_output_path = get_filename(config['Paths']['csv_outputs'], "profile_relationships_sub_NOUN",
+filename, load_output_path = get_filename(config['Paths']['csv_outputs'], main_folder,
                                      focal_token=focal_token, cutoff=cutoff, tfidf=tf,
                                      context_mode=context_mode, contextual_relations=contextual_relations,
                                      postcut=postcut, keep_top_k=keep_top_k, depth=depth,
@@ -134,32 +137,39 @@ df_clusters=pd.read_excel(checkname)
 cldict=pickle.load(open(pname, "rb"))
 #df_clusters=df_clusters.drop(columns="type")
 X=df_clusters.iloc[:,1:-7]
-X=X.div(X.sum(axis=1), axis=0)
+cl_name=df_clusters.iloc[:,0].to_list()
+X.index=cl_name
+if cluster_subset is not None:
+    X=X[X.index.isin(cluster_subset)]
+    X=X.loc[:,X.columns.isin(cluster_subset)]
+cl_name=X.index
+#X=X.div(X.sum(axis=1), axis=0)
+#X.iloc[:,:]=(X.to_numpy()+X.to_numpy().T)/2
 xx=X.to_numpy()
 sorted_row_idx = np.argsort(xx, axis=1)[:,0:-top_n]
 col_idx = np.arange(xx.shape[0])[:,None]
 xx[col_idx,sorted_row_idx]=0
-X.iloc[:,:]=(X.to_numpy()+X.to_numpy().T)/2
+X=pd.DataFrame(xx)
 #X=X/np.max(X.max())
-color=X.index.to_list()
-cl_name=df_clusters.iloc[:,0].to_list()
+color=list(range(0,len(X.index)))
 X.index=cl_name
 
+
+
 from karateclub.node_embedding.neighbourhood.geometriclaplacianeigenmaps import GLEE
+from karateclub.node_embedding.neighbourhood import GraRep
 nodes=list(X.index)
 ids = list(range(0,len(X.index)))
 index_dict=dict(zip(ids,nodes))
 node_dict=dict(zip(nodes,ids))
 X.index=ids
 X.columns=ids
-
-
 G = nx.from_pandas_adjacency(X)
-
-kernel_pca = KernelPCA(
+kernel_pca = KernelPCA(remove_zero_eig=False,
     n_components=2, kernel="precomputed",random_state=100)
+#model = GraRep(dimensions=2,seed=100, order=1)
+#model = GLEE(dimensions=1,seed=100)
 
-model = GLEE(dimensions=1,seed=100)
 #model.fit(G)
 #Y=model.get_embedding()
 Y = kernel_pca.fit_transform(X)
@@ -196,7 +206,7 @@ for idx, row in enumerate(extremal_points):
     names=cldict[row.name]
     names.remove(row.name)
     names.insert(0, row.name)
-    names=names#[0:4]
+    names=names[0:6]
     n = len(names)
     d= 8
     dist= n*d
@@ -214,7 +224,7 @@ for idx, row in Y.iterrows():
     names=cldict[row.name]
     names.remove(row.name)
     names.insert(0, row.name)
-    names=names#[0:4]
+    names=names[0:6]
     n = len(names)
     d= 8
     dist= n*d

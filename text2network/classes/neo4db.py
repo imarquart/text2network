@@ -585,6 +585,7 @@ class neo4j_database():
             c_match = "".join([
                                   " WITH count(DISTINCT([q.pos,q.run_index])) as seq_length, a,r,b  MATCH  (r)-[:seq]-(s:sequence)-[:seq]-(q:edge) "])
         else:
+            scale=1
             sqlength_match = " "
             ### MATCH QUERY 2: OCCURRING TOKEN
             c_match = "".join([
@@ -740,6 +741,7 @@ class neo4j_database():
             c_match = "".join([
                                   " WITH count(DISTINCT([q.pos,q.run_index])) as seq_length, a,r,b  MATCH  (r)-[:seq]-(s:sequence)-[:seq]-(q:edge) "])
         else:
+            scale=1
             sqlength_match = " "
             ### MATCH QUERY 2: OCCURRING TOKEN
             c_match = "".join([

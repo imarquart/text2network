@@ -67,58 +67,75 @@ config = configparser.ConfigParser()
 print(check_folder(configuration_path))
 config.read(check_folder(configuration_path))
 # Setup logging
-setup_logger(config['Paths']['log'], config['General']['logging_level'], "9_reg.py")
+setup_logger(config['Paths']['log'], config['General']['logging_level'], "7_embedding.py")
 
 semantic_network = neo4j_network(config)
 
 
 
 years=list(range(1980,2021))
+cluster_subset=["team", "instance", "good", "organization", "company", "power", "making", "make", "leaders", "management", "people", "business", "need", "see", "project", "ask", "executive", "level", "different", "leadership",]
+cluster_subset=["team", "people", "good", "organization", "company", "power"]
+cluster_subset=["team", "good", "organization", "management", "people", "need", "leaders", "company", "business", "making", "project", "ask", "executive", "leadership", "make", "see", "know", "must", "role", "employees", "success", "ceo", "process", "global", "kind", "effective", "power", "might", "best", "board",]
+cluster_subset=["team", "good", "organization", "management", "people", "need", "leaders", "company", ]
+cluster_subset=["team", "management", "company", "business", "people", "process", "leadership", "leaders", "organization", "support", "project", "executive", "customers", "good", "ceo",]
+
+#cluster_subset = None
+years=list(range(1980,2021))
+main_folder="profile_relationships_substitution_ADJ_VERB_NOUN_ADV_ADP_done"
 focal_token = "leader"
 sym = False
 rev = False
 rs = [100][0]
-cutoff = [0.2, 0.1, 0.01][0]
-postcut = [0.2,0.1,0.01, None][0]
+cutoff = [0.2, 0.1, 0.01][1]
+postcut = [0.2,0.1,0.01][-1]
 depth = [0, 1][0]
 context_mode = ["bidirectional", "substitution", "occurring"][1]
 sub_mode = ["bidirectional","occurring", "substitution", ][2]#"bidirectional"
 algo = consensus_louvain
-pos_list = ["NOUN", "ADJ", "VERB"]
-tf = ["weight", "diffw", "pmi_weight"][2]
-keep_top_k = [50, 100, 200, 1000][2]
-max_degree = [50, 100][0]
-level = 2#[15, 10, 8, 6, 4, 2][1]
+pos_list = ["NOUN", "ADJ", "VERB"][0]
+tf = ["weight", "diffw", "pmi_weight"][0]
+keep_top_k = [50, 100, 200, 1000][-1]
+max_degree = [50, 100,500][-1]
+level = 5#[15, 10, 8, 6, 4, 2][1]
 keep_only_tokens = [True, False][0]
 contextual_relations = [True, False][0]
+
 
 # %% Sub or Occ
 focal_substitutes = focal_token
 focal_occurrences = None
 
-sel_alter=["boss","supervisor","father","subordinate","superior"]
+imagemethod="imshow"
+imagemethod="contour"
+sel_alter2=None
 sel_alter=["manager","executive","pioneer","follower","champion"]
-
-top_n=50000
+#sel_alter=["boss","supervisor","father","subordinate","superior"]
+sel_alter=["ceo","president","founder","successor","chairman"]
+#sel_alter=None
+use_diff=True
+im_int_method="gaussian"
+grid_method="linear"
+npts = 200
+int_level=16
+ngridx = 12
+ngridy = ngridx
+top_n=300
+top_n_emb=5
 nr_tokens=500000000
+max_zi=0.1
 
-
-
-years=list(range(2015,2021))
-
-#
-
-#
-#years=list(range(1992,2005))
+if use_diff:
+    min_zi=-max_zi
+else:
+    min_zi=0
 
 #years=list(range(1992,2005))
-#years=list(range(1980,2021))
-years=list(range(1992,2005))
-#years=list(range(1980,2007))
-years=list(range(2005,2021))
-#years=list(range(1980,1993))
+#years=list(range(2005,2021))
+years=list(range(1980,1990))
 years=list(range(1980,2021))
-filename, load_output_path = get_filename(config['Paths']['csv_outputs'], "profile_relationships_sub",
+
+filename, load_output_path = get_filename(config['Paths']['csv_outputs'], main_folder,
                                      focal_token=focal_token, cutoff=cutoff, tfidf=tf,
                                      context_mode=context_mode, contextual_relations=contextual_relations,
                                      postcut=postcut, keep_top_k=keep_top_k, depth=depth,
@@ -137,16 +154,23 @@ df_clusters=pd.read_excel(checkname)
 cldict=pickle.load(open(pname, "rb"))
 #df_clusters=df_clusters.drop(columns="type")
 X=df_clusters.iloc[:,1:-7]
-X=X.div(X.sum(axis=1), axis=0)
-xx=X.to_numpy()
-sorted_row_idx = np.argsort(xx, axis=1)[:,0:-top_n]
-col_idx = np.arange(xx.shape[0])[:,None]
-xx[col_idx,sorted_row_idx]=0
-X.iloc[:,:]=(X.to_numpy()+X.to_numpy().T)/2
-#X=X/np.max(X.max())
-color=X.index.to_list()
 cl_name=df_clusters.iloc[:,0].to_list()
 X.index=cl_name
+if cluster_subset is not None:
+    X=X[X.index.isin(cluster_subset)]
+    X=X.loc[:,X.columns.isin(cluster_subset)]
+cl_name=X.index
+#X=X.div(X.sum(axis=1), axis=0)
+#X.iloc[:,:]=(X.to_numpy()+X.to_numpy().T)/2
+xx=X.to_numpy()
+sorted_row_idx = np.argsort(xx, axis=1)[:,0:-top_n_emb]
+col_idx = np.arange(xx.shape[0])[:,None]
+xx[col_idx,sorted_row_idx]=0
+X=pd.DataFrame(xx)
+#X=X/np.max(X.max())
+color=X.index.to_list()
+X.index=cl_name
+X.columns=X.index
 Xcols=list(X.columns)
 
 if years is None:
@@ -158,19 +182,15 @@ else:
     for year in years:
         checkname = filename + "REGDF" + str(year) + ".xlsx"
         df = pd.read_excel(checkname)
+        df["tYear"]=year
         ylist.append(df.copy())
     df= pd.concat(ylist)
 X2=df.iloc[:,1:-7]
 X2=X2[Xcols]
-#X2=X2.div(X2.sum(axis=1), axis=0)
-X2["prob"] = df.rweight#/np.max(df.rweight)
+X2["prob"] = df.rweight
 X2["alter"] = semantic_network.ensure_tokens(df.occ)
-X2["year"] = df.year
-#summedX2=X2.groupby("alter", as_index=False).sum().sort_values(by="color", ascending=False)
-#summedX2.iloc[:,1:-1]=summedX2.iloc[:,1:-1].div(summedX2.iloc[:,1:-1].sum(axis=1), axis=0)
-#X2=summedX2
+X2["year"] = df.tYear
 X2=X2.replace([np.inf, -np.inf], np.nan).dropna( how="any")
-X2=X2.sort_values(by="prob", ascending=False).iloc[0:nr_tokens,:]
 # Drop rows with no connections
 X2=X2.iloc[np.where(X2[Xcols].sum(axis=1)>0)[0],:]
 
@@ -178,14 +198,16 @@ xx=X2[Xcols].to_numpy()
 sorted_row_idx = np.argsort(xx, axis=1)[:,0:-top_n]
 col_idx = np.arange(xx.shape[0])[:,None]
 xx[col_idx,sorted_row_idx]=0
-#xx=xx/np.sum(xx, axis=1,  keepdims=True)
-
+xx=xx/np.sum(xx, axis=1,  keepdims=True)
 X2.loc[:,Xcols]=xx
+
 import statsmodels.api as sm
 from statsmodels.formula.api import ols
 
-#X2.loc[~X2.alter.isin(sel_alter),"prob"]=0
+X2.loc[~X2.alter.isin(sel_alter),"prob"]=0
 #X2=X2[X2.alter.isin(sel_alter)]
+
+
 
 
 Y=X2.prob
@@ -194,23 +216,45 @@ X=X/40
 X=X/100
 X.div(Y, axis=0)
 #X=X.div(X.sum(axis=1), axis=0)
-Y[~X2.alter.isin(sel_alter)]=0
 #X=(X-X.mean())/X.std()
 #Y=(Y-Y.mean())/Y.std()
-#X=sm.add_constant(X)
-X["P2"]=np.int64((X2.year>2007).to_numpy())
+X=sm.add_constant(X)
+X["P2"]=np.int64((X2.year>2006).to_numpy())
 X["P1"]=np.int64((X2.year<1993).to_numpy())
 X["year"]=X2.year
 X["y"]=Y
 f1="y~"+"+".join([x for x in Xcols])+"+C(year)"+"+C(P1)"+"+C(P2)+"+"*C(P1)+".join([x for x in Xcols])+"+"+"*C(P2)+".join([x for x in Xcols])
+f1="y~"+"+".join([x for x in Xcols])+"+year+"+"*year+".join([x for x in Xcols])
+f1="y~"+"+".join([x for x in Xcols])+"+C(P1)"+"+C(P2)+"+"*C(P1)+".join([x for x in Xcols])+"+"+"*C(P2)+".join([x for x in Xcols])
+f1="y~"+"+".join([x for x in Xcols])+"+C(year)"+"+C(P1)"+"+C(P2)+"+"*C(P1)+".join([x for x in Xcols])+"+"+"*C(P2)+".join([x for x in Xcols])
+f1="y~"+"+".join([x for x in Xcols])+"+year+"+"*year+".join([x for x in Xcols])+"+C(P1)"+"+C(P2)+"+"*C(P1)+".join([x for x in Xcols])+"+"+"*C(P2)+".join([x for x in Xcols])
+
 f1="y~"+"+".join([x for x in Xcols])+"+C(P1)"+"+C(P2)+"+"*C(P1)+".join([x for x in Xcols])+"+"+"*C(P2)+".join([x for x in Xcols])
 
+f1="y~"+"+".join([x for x in Xcols])+"+year+"+"*year+".join([x for x in Xcols])
+f1="y~"+"+".join([x for x in Xcols])+"+C(year)"+"+C(P1)"+"+C(P2)+"+"*C(P1)+".join([x for x in Xcols])+"+"+"*C(P2)+".join([x for x in Xcols])
+f1="y~"+"+".join([x for x in Xcols])+"+year+"+"*year+".join([x for x in Xcols])+"+C(P1)"+"+C(P2)+"+"*C(P1)+".join([x for x in Xcols])+"+"+"*C(P2)+".join([x for x in Xcols])
+
+
 model = ols(formula=f1, data=X)
-results = model.fit()
+results = model.fit(cov_type='HC1',)
 print(results.summary())
 results_summary = results.summary()
 tab=results_summary.tables[1]
 
 LRresult = (results.summary2().tables[1])
-sigres=LRresult[LRresult.loc[:,"P>|t|"]<0.05]
+sigres=LRresult[LRresult.loc[:,"P>|z|"]<0.05]
 print(sigres)
+
+
+cclusterl=["business","organization","leaders","process","support","good","company","leadership"]
+for ccluster in cclusterl:
+    F=X2.copy()
+    F["joint"]=F["prob"]*F[ccluster]
+    FF=F.groupby("year").sum()
+    FFf=F.groupby("year").sum()
+
+    FF=FF["joint"]/FFf["prob"]
+    plt.plot(FF)
+    plt.title("Joint probability of authoritarian cluster and  {} context cluster".format(ccluster))
+    #plt.show()

@@ -74,12 +74,14 @@ rs_list = [100]
 depth_list = [0]
 context_mode_list = ["occurring"]
 sub_mode_list = ["occurring"]#,"substitution"]#"bidirectional"
+context_mode_list = ["bidirectional"]
+sub_mode_list = ["bidirectional"]#,"substitution"]#"bidirectional"
 context_mode_list = ["substitution"]
 sub_mode_list = ["substitution"]#,"substitution"]#"bidirectional"
 rev_list = [False]
 algo_list = [consensus_louvain]
 ma_list = [(2, 2)]
-pos_list = ["ADJ","VERB"]
+pos_list = ["ADJ","VERB","NOUN","ADV","ADP"]
 #pos_list = ["VERB"]
 #pos_list = ["NOUN"]
 # TODO CHECK WITH X
@@ -88,13 +90,13 @@ level_list = [1,2,3,4,5,10,15]
 keep_only_tokens_list = [True]
 contextual_relations_list = [True]
 
-keep_top_k_list = [500,1000]
-max_degree_list = [500]
-cutoff_list = [0.01]
+keep_top_k_list = [100,200,1000]
+max_degree_list = [1000]
+cutoff_list = [0.1]
 post_cutoff_list = [0.01]
 
 #main_folder="profile_relationships_occ"
-main_folder="profile_relationships_subsubH_"+"_".join(pos_list)
+main_folder="profile_relationships_"+"_".join(sub_mode_list)+"_"+"_".join(pos_list)
 
 
 paraml1_list = product(cutoff_list, context_mode_list, tfidf_list)
@@ -171,7 +173,7 @@ for cutoff, context_mode, tfidf in paraml1_list:
                                                         keep_top_k=keep_top_k,
                                                         max_degree=max_degree, sym=sym, weight_cutoff=postcut,
                                                         level=int(np.max(np.array(level_list))),
-                                                        pos_list=pos_list, context_dict=context_dict, batch_size=1000,
+                                                        pos_list=pos_list, context_dict=context_dict, batch_size=10,
                                                         depth=depth, context_mode=context_mode, algorithm=algo,
                                                         include_all_levels=True,
                                                         contextual_relations=contextual_relations, tfidf=tfidf,
@@ -326,7 +328,7 @@ for cutoff, context_mode, tfidf in paraml1_list:
                             res = pd.DataFrame(semantic_network.db.receive_query(query))
                             if len(res) > 0:
                                 new_row = pd.Series(empty_dict)
-                                new_row["year"] = year
+                                new_row["Tyear"] = year
                                 new_row["type"] = "Sub"
                                 # new_row["token_id"] = list(cl_df.index)
                                 new_row["occ"] = "-".join(semantic_network.ensure_tokens(row.occ))
@@ -346,6 +348,8 @@ for cutoff, context_mode, tfidf in paraml1_list:
                                         wmin_n = subdf.cweight_n.min()
                                         wmax_n = subdf.cweight_n.max()
                                         new_row[cl] = w_n * 100
+                                        new_row["Tsent"] = subdf.sentiment.mean()
+                                        new_row["Tsub"] = subdf.subjectivity.mean()
                                 row_list.append(new_row)
                         yeardf = pd.DataFrame(row_list)
                         yeardf.to_excel(filename + "REGDF" + str(year) + ".xlsx", merge_cells=False)
