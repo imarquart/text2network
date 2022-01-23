@@ -389,7 +389,7 @@ def extract_all_clusters(level: int, cutoff: float, focal_token: str,
                                        algorithm=algorithm, seed=seed)
 
 
-def return_measure_dict(vec: Union[list, np.array], prefix=""):
+def return_measure_dict(vec: Union[list, np.array], prefix="", return_disp=False):
     """
     Helper function to create cluster measures
 
@@ -416,5 +416,7 @@ def return_measure_dict(vec: Union[list, np.array], prefix=""):
         sd = np.std(vec)
     else:
         sd = 0
-
-    return {prefix + "Avg": avg, prefix + "w_Avg": w_avg, prefix + "Std": sd, prefix + "Sum": sum_vec}
+    if return_disp:
+        return {prefix + "Avg": avg, prefix + "w_Avg": w_avg, prefix + "Std": sd, prefix + "Sum": sum_vec}
+    else:
+        return {prefix + "Avg": avg, prefix + "w_Avg": w_avg}
