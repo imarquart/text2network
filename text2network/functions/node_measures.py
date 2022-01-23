@@ -78,7 +78,7 @@ def centrality(nw_graph, focal_tokens=None,  types=None):
 
     """
     if types is None:
-        types = ["PageRank", "normedPageRank"]
+        types = ["PageRank", "normedPageRank", "flow_betweenness", "weighted_local_clustering","constraint", "effective_size"]
     # Input checks
     if isinstance(types, str):
         types = [types]
@@ -157,7 +157,15 @@ def compute_centrality(nw_graph, measure, focal_nodes=None):
             logging.warning("Graph is directed, flow betweenness needs to be undirected. Normalizing using standard method (average weights)")
             nw_graph=make_symmetric(nw_graph)
             logging.warning("Graph is now symmetric.")
-        centralities = nx.approximate_current_flow_betweenness_centrality(nw_graph, normalized=True, weight="weight", kmax=50000000, epsilon=0.25)
+        try:
+            centralities = nx.approximate_current_flow_betweenness_centrality(nw_graph, normalized=True, weight="weight", kmax=50000000, epsilon=0.25)
+        except:
+            logging.error("Failed to calculate flow centrality \n Graph specifics \n Nodes: \n Ties: \n Components: \n Min_degree: \n".format(len(nw_graph.nodes),len(nw_graph.edges), nx.number_connected_components(nw_graph), np.min([x[1] for x in list(nw_graph.degree)])))
+            centralities = dict(zip(list(nw_graph.nodes),np.zeros_like(np.array(list(nw_graph.nodes)))))
+    elif measure=="effective_size":
+        centralities = nx.effective_size(nw_graph,weight="weight")
+    elif measure=="constraint":
+        centralities = nx.constraint(nw_graph,weight="weight")
     elif measure=="rev_flow_betweenness":
         if nx.is_directed(nw_graph):
             logging.warning("Graph is directed, flow betweenness needs to be undirected. Normalizing using standard method (average weights)")
