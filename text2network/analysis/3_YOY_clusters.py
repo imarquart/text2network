@@ -6,7 +6,7 @@ from text2network.measures.measures import average_cluster_proximities
 from text2network.utils.logging_helpers import setup_logger
 import logging
 import numpy as np
-from text2network.functions.graph_clustering import consensus_louvain
+from text2network.functions.graph_clustering import consensus_louvain, infomap_cluster
 from text2network.classes.neo4jnw import neo4j_network
 
 
@@ -32,10 +32,10 @@ setup_logger(config['Paths']['log'], config['General']['logging_level'], "3_YOY_
 semantic_network = neo4j_network(config)
 
 #### Cluster yearly proximities
-ma_list = [(2, 2),(1, 0),(1, 1)]
-level_list = [10]
-weight_list = [0.002]
-max_degree_list = [200]
+ma_list = [(2, 2),None]
+level_list = [4,5,6,3]
+weight_list = [0.1,0.01,None]
+max_degree_list = [200, 100, 50]
 cl_clutoff_list = [0]
 depth_list = [1]
 rs_list = [100]
@@ -45,7 +45,7 @@ alter_set=[None]
 focaladdlist=[False]
 comp_ties_list = [False]
 back_out_list= [False]
-symmetry_list=[True, False]
+symmetry_list=[True]
 param_list = product(depth_list, level_list, ma_list, weight_list, rev_ties_list,symmetry_list, comp_ties_list, rs_list,
                      cl_clutoff_list,back_out_list,focaladdlist,alter_set,max_degree_list,algolist)
 logging.info("------------------------------------------------")
@@ -56,9 +56,9 @@ for depth, levels, moving_average, weight_cutoff, rev, sym, comp, rs, cluster_cu
     semantic_network = neo4j_network(config)
     # weight_cutoff=0
     filename = "".join(
-        [config['Paths']['csv_outputs'], "/EgoClusterYOY_",])
+        [config['Paths']['csv_outputs'], "/EgoClusterYOY",])
     filename = check_create_folder(filename)
-    filename = "".join([filename, str(focal_token)])
+    filename = "".join([filename, "/",str(focal_token)])
     filename = "".join([filename, "_max_degree", str(max_degree)])
     filename = "".join([filename, "_rev", str(rev),"_sym", str(sym),])
     filename = "".join([filename, "_lev",  str(levels), ])
@@ -68,5 +68,5 @@ for depth, levels, moving_average, weight_cutoff, rev, sym, comp, rs, cluster_cu
     logging.info("YOY Network clustering: {}".format(filename))
     df = average_cluster_proximities(focal_token=focal_token, nw=semantic_network, levels=levels, interest_list=alters, times=years,do_reverse=True,
                                      depth=depth, weight_cutoff=weight_cutoff, cluster_cutoff=cluster_cutoff, year_by_year=True, add_focal_to_clusters=fadd,  include_all_levels=False, add_individual_nodes=False,
-                                     moving_average=moving_average, filename=filename, compositional=comp, to_back_out=backout, symmetric=sym,
+                                     moving_average=moving_average, filename=filename, compositional=comp, to_back_out=backout, symmetric=sym, batchsize=100,
                                      reverse_ties=rev, seed=rs,export_network=True,max_degree=max_degree)

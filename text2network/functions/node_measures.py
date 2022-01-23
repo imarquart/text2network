@@ -2,6 +2,8 @@ import networkx as nx
 import logging
 import numpy as np
 
+from text2network.functions.network_tools import inverse_weights, make_symmetric
+
 
 def proximity(nw_graph, focal_tokens=None, alter_subset=None):
     """
@@ -76,7 +78,7 @@ def centrality(nw_graph, focal_tokens=None,  types=None):
 
     """
     if types is None:
-        types = ["PageRank", "normedPageRank"]
+        types = ["PageRank", "normedPageRank", "flow_betweenness", "weighted_local_clustering","constraint", "effective_size"]
     # Input checks
     if isinstance(types, str):
         types = [types]
@@ -150,6 +152,29 @@ def compute_centrality(nw_graph, measure, focal_nodes=None):
         centralities = nx.clustering(nw_graph, nodes=focal_nodes, weight="weight")
     elif (measure=="frequency" or measure=="freq" or measure=="frequencies"):
         centralities = nx.get_node_attributes(nw_graph, "freq")
+    elif measure=="flow_betweenness":
+        if nx.is_directed(nw_graph):
+            logging.warning("Graph is directed, flow betweenness needs to be undirected. Normalizing using standard method (average weights)")
+            nw_graph=make_symmetric(nw_graph)
+            logging.warning("Graph is now symmetric.")
+        try:
+            centralities = nx.approximate_current_flow_betweenness_centrality(nw_graph, normalized=True, weight="weight", kmax=50000000, epsilon=0.25)
+        except:
+            logging.error("Failed to calculate flow centrality \n Graph specifics \n Nodes: \n Ties: \n Components: \n Min_degree: \n".format(len(nw_graph.nodes),len(nw_graph.edges), nx.number_connected_components(nw_graph), np.min([x[1] for x in list(nw_graph.degree)])))
+            centralities = dict(zip(list(nw_graph.nodes),np.zeros_like(np.array(list(nw_graph.nodes)))))
+    elif measure=="effective_size":
+        centralities = nx.effective_size(nw_graph,weight="weight")
+    elif measure=="constraint":
+        centralities = nx.constraint(nw_graph,weight="weight")
+    elif measure=="rev_flow_betweenness":
+        if nx.is_directed(nw_graph):
+            logging.warning("Graph is directed, flow betweenness needs to be undirected. Normalizing using standard method (average weights)")
+            nw_graph=make_symmetric(nw_graph)
+            logging.warning("Graph is now symmetric.")
+
+        nw_graph = inverse_weights(nw_graph)
+        k=int(np.log(len(list(nw_graph.nodes))))
+        centralities = nx.betweenness_centrality(nw_graph, normalized=True, weight="weight", k=k)
     else:
         raise AttributeError(
             "Centrality measure {} not found in list".format(measure))

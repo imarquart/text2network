@@ -16,7 +16,6 @@ from text2network.functions.graph_clustering import consensus_louvain
 from text2network.measures.measures import return_measure_dict
 from text2network.utils.file_helpers import check_create_folder
 
-
 def get_pos_profile(snw: neo4j_network, focal_token: Union[str, int], role_cluster: Union[str, int, list],
                     times: Union[list, int], pos: str, context_mode: Optional[str] = "bidirectional",
                     return_sentiment: Optional[bool] = True, weight_cutoff: Optional[float] = 0) -> pd.DataFrame:
@@ -29,8 +28,8 @@ def get_pos_profile(snw: neo4j_network, focal_token: Union[str, int], role_clust
     pd_list = []
     for alter in role_cluster:
         pd_list.append(
-            snw.get_dyad_context(occurrence=alter, replacement=focal_token, times=times, weight_cutoff=weight_cutoff,
-                                 part_of_speech=pos, context_mode=context_mode, return_sentiment=return_sentiment)[
+            snw.get_dyad_context(focal_occurrences=alter, focal_substitutes=focal_token, times=times, weight_cutoff=weight_cutoff,
+                                 context_pos=pos, context_mode=context_mode, return_sentiment=return_sentiment)[
                 'dyad_context'])
 
     df = pd.concat([pd.DataFrame(x) for x in pd_list])
@@ -122,62 +121,6 @@ def create_YOY_role_profile(snw: neo4j_network, focal_token: Union[str, int], ro
 
     return df
 
-
-def create_overall_role_profile(snw: neo4j_network, focal_token: Union[str, int], role_cluster: Union[str, int, list],
-                                times: Union[list, int], pos_list: Optional[list] = None,
-                                keep_top_k: Optional[int] = None,
-                                filename: Optional[str] = None, moving_average: Optional[tuple] = None,
-                                context_mode: Optional[str] = "bidirectional", return_sentiment: Optional[bool] = True,
-                                weight_cutoff: Optional[float] = 0, seed: Optional[int] = None) -> pd.DataFrame:
-    snw.decondition()
-
-    if seed is not None:
-        snw.set_random_seed(seed)
-
-    if not isinstance(role_cluster, (list, tuple, np.ndarray)):
-        role_cluster = [role_cluster]
-
-    if times is None:
-        logging.info("Getting years.")
-        times = np.array(snw.get_times_list())
-        times = np.sort(times)
-        query_times = None
-    else:
-        query_times = times
-
-    cluster_name = "-".join(list(role_cluster[:5]))
-    logging.info("YOY Role cluster for {}".format(cluster_name))
-
-    if pos_list is None:
-        logging.info("Getting POS in Database")
-        res = snw.db.receive_query("MATCH (n:part_of_speech) RETURN DISTINCT n.part_of_speech as pos")
-        pos_list = [x['pos'] for x in res if x['pos'] != '.']
-
-    df_list = []
-    for pos in pos_list:
-        logging.info("Now checking {}".format(pos))
-        temp_df = get_pos_profile(snw=snw, focal_token=focal_token, role_cluster=role_cluster, times=times,
-                                  pos=pos, context_mode=context_mode, return_sentiment=return_sentiment,
-                                  weight_cutoff=weight_cutoff)
-        if temp_df is not None:
-            if keep_top_k is not None:
-                # temp_df.sort_values(by="weight", ascending=False)
-                # temp_df=temp_df.iloc[0:keep_top_k, :]
-                temp_df = temp_df.nlargest(keep_top_k, columns=["weight"])
-            temp_df["time"] = str(times)
-            temp_df["ma_time"] = str(times)
-            df_list.append(temp_df)
-
-    if len(df_list) > 0:
-        df = pd.concat(df_list)
-
-        if filename is not None:
-            df.to_excel(filename + ".xlsx")
-
-    else:
-        df = None
-
-    return df
 
 
 def extract_yoy_role_profiles(semantic_network, df_cluster_ids, df_clusters, df_nodes, times, focal_token, keep_top_k,

@@ -4,6 +4,7 @@ from typing import Union
 import networkx as nx
 import numpy as np
 import scipy as sp
+from tqdm import tqdm
 
 from text2network.functions.rowvec_tools import cutoff_percentage
 
@@ -171,6 +172,27 @@ def merge_nodes(graph, u, v, method="sum"):
             graph[x][y]['weight'] = wt / 2
 
     return new_graph
+
+def inverse_weights(graph: Union[nx.DiGraph, nx.Graph], min: Union[float, int] = 0.00001):
+    """
+
+    Returns w = 1/(w+min) for all ties
+
+    Parameters
+    ----------
+    graph
+    norm
+
+    Returns
+    -------
+    normed graph
+    """
+
+    for u, v, a in graph.edges(data=True):
+
+        graph[u][v]['weight'] = 1 / (a['weight'] + min)
+
+    return graph
 
 
 def renorm_graph(graph: Union[nx.DiGraph, nx.Graph], norm: Union[float, int] = 1):

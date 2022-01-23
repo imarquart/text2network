@@ -1,7 +1,11 @@
 import logging
 from typing import Optional, Dict, Union
+from timeit import default_timer as timer
+
+import numpy as np
 
 from text2network.functions.node_measures import centrality
+from text2network.utils.file_helpers import check_create_folder
 from text2network.utils.input_check import input_check
 
 
@@ -17,9 +21,19 @@ def centralities(snw, focal_tokens=None, types=None) -> Dict:
     focal_tokens : list, str, optional
         List of tokens of interest. If not provided, centralities for all tokens will be returned.
     types : list, optional
-        Types of centrality to calculate. The default is ["PageRank", "normedPageRank"].
-        Other options are "local_clustering" for unweighted local clustering
-        and "weighted_local_clustering" for weighted local clustering
+        Types of centrality to calculate.
+        "PageRank", "normedPageRank"
+            PageRank
+        "local_clustering"
+            for unweighted local clustering
+        "weighted_local_clustering"
+            for weighted local clustering
+        "frequency"
+            Nr. of occurrences of each token
+        "flow_betweenness"
+            Flow betweenness
+        "rev_flow_betweenness
+            Flow betweeness with weights = 1/weight
 
 
     Returns
@@ -29,7 +43,7 @@ def centralities(snw, focal_tokens=None, types=None) -> Dict:
 
     """
     if types is None:
-        types = ["PageRank", "normedPageRank"]
+        types = ["frequency","PageRank", "normedPageRank", "flow_betweenness", "rev_flow_betweenness", "local_clustering", "weighted_local_clustering"]
 
     input_check(tokens=focal_tokens)
     if focal_tokens is not None:
@@ -48,10 +62,12 @@ def yearly_centralities(snw, year_list: list, focal_tokens: Optional[Union[list,
                         types: Optional[list] = ("PageRank", "normedPageRank"),
                         depth: Optional[int] = None, context: Optional[list] = None,
                         weight_cutoff: Optional[float] = None,
-                        max_degree: Optional[int] = 100,
+                        max_degree: Optional[int] = None,
                         symmetric: Optional[bool] = False, symmetric_method:Optional[str]=None,
-                        compositional: Optional[bool] = False,
-                        reverse: Optional[bool] = False, normalization: Optional[str] = None, prune_min_frequency: Optional[int] = None) -> Dict:
+                        compositional: Optional[bool] = False, batch_size: Optional[int] = 10000,
+                        reverse: Optional[bool] = False, normalization: Optional[str] = None,
+                        prune_min_frequency: Optional[int] = None, moving_average:Optional[tuple] = None,
+                        path: Optional[bool] = None, return_sentiment: Optional[bool]=True,) -> Dict:
     """
     Compute directly year-by-year centralities for provided list.
 
@@ -69,7 +85,19 @@ def yearly_centralities(snw, year_list: list, focal_tokens: Optional[Union[list,
         List of tokens of interest. If not provided, centralities for all tokens will be returned.
 
     types : list, optional
-        types of centrality to calculate. The default is ("PageRank", "normedPageRank").
+        Types of centrality to calculate.
+        "PageRank", "normedPageRank"
+            PageRank
+        "local_clustering"
+            for unweighted local clustering
+        "weighted_local_clustering"
+            for weighted local clustering
+        "frequency"
+            Nr. of occurrences of each token
+        "flow_betweenness"
+            Flow betweenness
+        "rev_flow_betweenness
+            Flow betweeness with weights = 1/weight
 
     depth : TYPE, optional - used when conditioning
         Maximal path length for ego network starting from focal token. The default is None.
@@ -102,6 +130,15 @@ def yearly_centralities(snw, year_list: list, focal_tokens: Optional[Union[list,
     reverse: bool, optional
         Reverse ties. See semantic_network.to_reverse()
 
+    batch_size: int, optional
+        Batch size of query
+
+    path: str, optional
+        Save the yearly graphs used in calculations as this file
+
+    return_sentiment: bool, optional
+        Query sentiment and subjectivity for ties
+
     Returns
     -------
 
@@ -112,7 +149,7 @@ def yearly_centralities(snw, year_list: list, focal_tokens: Optional[Union[list,
 
 
     if types is None:
-        types = ["PageRank", "normedPageRank"]
+        types = ["frequency","PageRank", "normedPageRank", "flow_betweenness", "rev_flow_betweenness", "local_clustering", "weighted_local_clustering"]
 
     cent_year = {}
     if not isinstance(year_list, list):
@@ -120,14 +157,31 @@ def yearly_centralities(snw, year_list: list, focal_tokens: Optional[Union[list,
 
     for year in year_list:
         snw.decondition()
-        logging.debug(
-            "Conditioning network on year {} with {} focal tokens and depth {}".format(year, len(focal_tokens), depth))
-        snw.condition(tokens=focal_tokens, times=[
-            year], depth=depth, context=context, weight_cutoff=weight_cutoff, max_degree=max_degree,prune_min_frequency=prune_min_frequency)
+
+        if moving_average is not None:
+            start_year = max(year_list[0], year - moving_average[0])
+            end_year = min(year_list[-1], year + moving_average[1])
+            ma_years = list(np.arange(start_year, end_year + 1))
+            logging.info(
+                "Calculating proximities for fixed relevant clusters for year {} with moving average -{} to {} over {}".format(
+                    year,
+                    moving_average[
+                        0],
+                    moving_average[
+                        1], ma_years))
+        else:
+            ma_years = [year]
+        logging.info(
+            "Conditioning network on year {} with {} focal tokens and depth {}".format(ma_years, len(focal_tokens), depth))
+        starttime=timer()
+        snw.condition(tokens=focal_tokens, times=ma_years, depth=depth, context=context, weight_cutoff=weight_cutoff, max_degree=max_degree,prune_min_frequency=prune_min_frequency,
+                      batchsize=batch_size, return_sentiment=return_sentiment)
+        end = timer()
+        logging.info("Conditioning finishined after {} seconds".format(end - starttime))
         if normalization == "sequences":
-            snw.norm_by_total_nr_sequences(times=year)
+            snw.norm_by_total_nr_sequences(times=ma_years)
         elif normalization == "occurrences":
-            snw.norm_by_total_nr_occurrences(times=year)
+            snw.norm_by_total_nr_occurrences(times=ma_years)
         elif normalization is not None:
             msg = "For yearly normalization, please either specify 'sequences' or 'occcurrences' or None"
             logging.error(msg)
@@ -139,9 +193,21 @@ def yearly_centralities(snw, year_list: list, focal_tokens: Optional[Union[list,
         if symmetric:
             snw.to_symmetric(technique=symmetric_method)
         if "frequency" in types:
-            snw.add_frequencies(times=year)
-        logging.debug("Computing centralities for year {}".format(year))
+            snw.add_frequencies(times=ma_years)
+        logging.debug("Computing centralities for year {}".format(ma_years))
         cent_measures = snw.centralities(focal_tokens=focal_tokens, types=types)
         cent_year.update({year: cent_measures})
+
+        try:
+            if path is not None:
+                logging.info("Saving graph for year {} to {}".format(year, path))
+                snw.export_gefx(path=path)
+
+                cent_df = snw.pd_format({'yearly_centrality': cent_year})[0]
+                ff=path+"/temp_df.xlsx"
+                cent_df.to_excel(ff, merge_cells=False)
+                logging.info("Saved temp DF to {}".format(ff))
+        except:
+            logging.error("Failed to save graph for year {} \n as  {] \n Continuing analysis...".format(year, path))
 
     return {'yearly_centrality': cent_year}

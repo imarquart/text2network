@@ -7,27 +7,146 @@ Created on Fri Dec 18 21:16:52 2020
 import itertools
 import logging
 from _collections import defaultdict
-from typing import Optional, Callable, Tuple, List, Dict, Union
-
+from typing import Optional, Callable, Tuple, List, Dict, Union, Iterable, TypedDict
+import numpy as np
 import networkx as nx
 from community import best_partition
-
 from text2network.functions.network_tools import make_symmetric
+import pandas as pd
+
+
+try:
+    from infomap import Infomap
+except:
+    Infomap=None
+
 
 # Type definition
-try:
-    from typing import TypedDict
+class GraphDict(TypedDict):
+    graph: nx.DiGraph
+    name: str
+    parent: int
+    level: int
+    measures: List
+    metadata: Union[Dict, defaultdict]
 
 
-    class GraphDict(TypedDict):
-        graph: nx.DiGraph
-        name: str
-        parent: int
-        level: int
-        measures: List
-        metadata: [Union[Dict, defaultdict]]
-except:
-    GraphDict = Dict[str, Union[str, int, Dict, List, defaultdict]]
+def get_cluster_dict(clusterlist:List[GraphDict], level:int, subset_name_list:Optional[list]=None, name_field:Optional[str]="name")-> (dict, list):
+    """
+    Takes a list of clusters and outputs a dictionary where
+    {cluster_name: [list of tokens]}
+    as well as a list of all nodes
+
+    Parameters
+    ----------
+    clusterlist: list of GraphDicts
+    level: level which to extract
+    subset_name_list: If given, extract only clusters with this name
+    name_field: Which field from GRaphDict to use as name
+
+    Returns
+    -------
+    Clusterdict and list of all nodes
+    """
+    all_nodes = []
+    clusterdict = {}
+    # Get clusters and tokens
+    for cl in clusterlist:
+        if cl["level"] == level:
+            if subset_name_list is not None:
+                if cl[name_field] in subset_name_list:
+                    clusterdict[cl[name_field]] = list(cl["graph"].nodes)
+                    all_nodes.extend(list(cl["graph"].nodes))
+            else:
+                clusterdict[cl[name_field]] = list(cl["graph"].nodes)
+                all_nodes.extend(list(cl["graph"].nodes))
+
+    all_nodes = list(set(all_nodes))
+    return clusterdict, all_nodes
+
+def distance_to_cluster():
+    pass
+
+
+def cluster_distances(graph:nx.Graph, clusterdict:dict)->nx.Graph:
+
+    cl_names = list(clusterdict.keys())
+
+    clustergraph = nx.DiGraph()
+    clustergraph.add_nodes_from(cl_names)
+
+    clustercombination = list(itertools.combinations(cl_names, 2))
+    logging.info("Finding cluster distances giving {} combinations".format(len(clustercombination)))
+    for focalcluster, altercluster in clustercombination:
+        focal_nodes = clusterdict[focalcluster]
+        alter_nodes = clusterdict[altercluster]
+        combination_nodes = focal_nodes + alter_nodes
+        combination_mat = nx.convert_matrix.to_pandas_adjacency(graph, nodelist=combination_nodes)
+
+        focal_mat = combination_mat.loc[focal_nodes,alter_nodes]
+        alter_mat = combination_mat.loc[alter_nodes, focal_nodes]
+
+        assert list(focal_mat.index) == list(alter_mat.columns)
+
+        focal_dict = {}
+        focal_dict["weight"] = focal_mat.mean().mean()
+        focal_dict["min"] = focal_mat.min().min()
+        focal_dict["max"] = focal_mat.max().max()
+        focal_dict["std0"] = focal_mat.std(axis=0).mean()
+        focal_dict["std1"] = focal_mat.std(axis=1).mean()
+        focal_dict["min_dyad"] = focal_mat.stack().idxmin()
+        focal_dict["max_dyad"] = focal_mat.stack().idxmax()
+        alter_dict = {}
+        alter_dict["weight"] = alter_mat.mean().mean()
+        alter_dict["min"] = alter_mat.min().min()
+        alter_dict["max"] = alter_mat.max().max()
+        alter_dict["std0"] = alter_mat.std(axis=0).mean()
+        alter_dict["std1"] = alter_mat.std(axis=1).mean()
+        alter_dict["min_dyad"] = alter_mat.stack().idxmin()
+        alter_dict["max_dyad"] = alter_mat.stack().idxmax()
+
+        clustergraph.add_edges_from([(focalcluster, altercluster, focal_dict)])
+        clustergraph.add_edges_from([(altercluster, focalcluster, alter_dict)])
+
+
+    return clustergraph # Use nx.convert_matrix.to_pandas_edgelist(clustergraph)
+
+def cluster_distances_from_clusterlist(clusterlist:List[GraphDict], level:int, subset_name_list:Optional[list]=None, name_field:Optional[str]="name"):
+
+    zerograph = clusterlist[0]["graph"]
+    clusterdict, all_nodes=get_cluster_dict(clusterlist=clusterlist, level=level, subset_name_list=subset_name_list, name_field=name_field)
+
+    return cluster_distances(zerograph, clusterdict) # Use nx.convert_matrix.to_pandas_edgelist(clustergraph)
+
+def infomap_cluster(graph, num_trials=100, seed=42, prefer_modular_solution =True, markov_time=1, accepted_min=3):
+    if Infomap is None:
+        logging.error("Could not load infomap package, using python louvain instead")
+        return louvain_cluster(graph)
+    else:
+        nr_n=len(graph.nodes)
+        pref_nr = int(nr_n/3)
+        im = Infomap(num_trials=num_trials,seed=seed,preferred_number_of_modules=pref_nr,prefer_modular_solution=prefer_modular_solution,silent=True, directed=True,two_level =True, markov_time=markov_time)
+        im.add_networkx_graph(graph, weight='weight')
+        im.run()
+        cluster_list=[]
+        cluster_ids=np.unique(list(im.getModules(-1).values()))
+        if len(cluster_ids) <=2 and markov_time-0.05 > 0 and len(graph.nodes) > accepted_min:
+            markov_time=markov_time-0.05
+            logging.debug("Infomap no new clusters for level, re-running with lower markov time scaling {}".format(markov_time))
+            return infomap_cluster(graph, num_trials=num_trials, seed=seed, prefer_modular_solution=prefer_modular_solution, markov_time=markov_time)
+        else:
+            logging.debug("Found {} clusters".format(len(cluster_ids)))
+            node_ids=np.array(list(im.getModules(-1).keys()))
+            clusters =np.array(list(im.getModules(-1).values()))
+            for cl in cluster_ids:
+                nodes=node_ids[np.where(clusters==cl)]
+                cluster_list.append([int(x) for x in nodes])
+
+        return cluster_list
+
+
+
+
 
 
 def louvain_cluster(graph):

@@ -131,7 +131,7 @@ def train(args, train_dataset, model, tokenizer):
     if args.local_rank in [-1, 0]:
         tb_writer = None #SummaryWriter()
 
-    logging.disable(args.logging_level)
+    #logging.disable(args.logging_level)
 
     args.train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
     train_sampler = RandomSampler(train_dataset) if args.local_rank == -1 else DistributedSampler(train_dataset)
@@ -223,11 +223,13 @@ def train(args, train_dataset, model, tokenizer):
     last_batch = train_dataloader.dataset[idx]
     last_batch = last_batch[0:10].tolist()
     last_batch = tokenizer.decode(last_batch)
-    logging.warning("Example Sentence before start: {}...".format(last_batch))
+    logging.warning("Example Sentence before start of training: {}...".format(last_batch))
+
+    check_every = int(len(train_dataloader) * args.logging_steps)
+    logging.warning("Will evaluate every {} Steps".format(check_every))
 
     for _ in train_iterator:
         descr = "Epoch %i, Batch: " % max(1, global_step / len(train_dataloader))
-
 
 
         epoch_iterator = tqdm(train_dataloader, desc=descr, leave=False, position=0,
@@ -269,7 +271,7 @@ def train(args, train_dataset, model, tokenizer):
                 scheduler.step()  # Update learning rate schedule
                 model.zero_grad()
                 global_step += 1
-                if args.local_rank in [-1, 0] and args.logging_steps > 0 and global_step % args.logging_steps == 0:
+                if args.local_rank in [-1, 0] and check_every > 0 and global_step % check_every == 0:
                     # Log metrics
                     if args.local_rank == -1 and args.evaluate_during_training:  # Only evaluate when single GPU otherwise metrics may not average well
                         results = evaluate(args, model, tokenizer)
@@ -351,7 +353,7 @@ def train(args, train_dataset, model, tokenizer):
 
 
 def evaluate(args, model, tokenizer, prefix=""):
-    logging.disable(args.logging_level)
+    #logging.disable(args.logging_level)
 
     # Loop to handle MNLI double evaluation (matched, mis-matched)
     eval_output_dir = args.output_dir
@@ -380,7 +382,7 @@ def evaluate(args, model, tokenizer, prefix=""):
 
     idx = int(len(eval_dataloader) / 2)
     last_batch = eval_dataloader.dataset[idx]
-    last_batch = last_batch[0:10].tolist()
+    last_batch = last_batch[0:15].tolist()
     last_batch = tokenizer.decode(last_batch)
     logging.warning("Example Sentence before eval: {}...".format(last_batch))
 
@@ -395,7 +397,7 @@ def evaluate(args, model, tokenizer, prefix=""):
             eval_loss += lm_loss.mean().item()
         nb_eval_steps += 1
 
-    last_batch=batch[0][0:10].tolist()
+    last_batch=batch[0][0:15].tolist()
     last_batch=tokenizer.decode(last_batch)
     logging.warning("Example Batch from Eval: {}".format(last_batch))
 
@@ -439,10 +441,10 @@ def run_bert(args, tokenizer=None, model=None):
     logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                         datefmt='%m/%d/%Y %H:%M:%S',
                         level=args.logging_level if args.local_rank in [-1, 0] else logging.WARN)
-    # logger.warning("Process rank: %s, device: %s, n_gpu: %s, distributed training: %s, 16-bits training: %s",
-    #              args.local_rank, device, args.n_gpu, bool(args.local_rank != -1), args.fp16)
-    logging.disable(args.logging_level)
-    logging.getLogger("transformers.modeling_utils").setLevel(args.logging_level)
+    logger.warning("Process rank: %s, device: %s, n_gpu: %s, distributed training: %s, 16-bits training: %s",
+                  args.local_rank, device, args.n_gpu, bool(args.local_rank != -1), args.fp16)
+    #logging.disable(args.logging_level)
+    #logging.getLogger("transformers.modeling_utils").setLevel(args.logging_level)
     # Set seed
     set_seed(args)
 
@@ -465,6 +467,7 @@ def run_bert(args, tokenizer=None, model=None):
     if args.block_size <= 0:
         args.block_size = tokenizer.max_len_single_sentence  # Our input block size will be the max possible for the model
     args.block_size = min(args.block_size, tokenizer.max_len_single_sentence)
+    logging.info("Pushing to device")
     model.to(args.device)
 
     if args.local_rank == 0:
@@ -474,12 +477,12 @@ def run_bert(args, tokenizer=None, model=None):
     if args.do_train:
         if args.local_rank not in [-1, 0]:
             torch.distributed.barrier()  # Barrier to make sure only the first process in distributed training process the dataset, and the others will use the cache
-
+        logging.info("Loading Dataset")
         train_dataset = load_and_cache_examples(args, tokenizer, evaluate=False)
 
         if args.local_rank == 0:
             torch.distributed.barrier()
-
+        logging.info("Beginning Training")
         global_step, tr_loss = train(args, train_dataset, model, tokenizer)
         logger.info(" global_step = %s, average loss = %s", global_step, tr_loss)
 

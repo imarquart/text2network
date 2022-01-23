@@ -3,7 +3,6 @@ import inspect
 import random
 from collections.abc import Sequence
 
-import numpy as np
 import pandas as pd
 from networkx import compose_all
 from tqdm import tqdm
@@ -216,14 +215,14 @@ class neo4j_network(Sequence):
     def condition_given_dyad(self, dyad_substitute: Optional[Union[int, str, list]],
                              dyad_occurring: Optional[Union[int, str, list]],
                              times: Optional[Union[int, list]] = None, focal_tokens: Union[list, int, str] = None,
-                             weight_cutoff: Optional[float] = None,
+                             contextual_relations: Optional[bool] = False,
+                             context_mode: Optional[str] = "bidirectional", dyad_mode: Optional[str] = "substitution",
                              depth: Optional[int] = None, max_degree: Optional[int] = None,
                              keep_only_tokens: Optional[bool] = False,
-                             batchsize: Optional[int] = None, context_mode: Optional[str] = "bidirectional",
-                             dyad_mode: Optional[str] = "substitution",
+                             batchsize: Optional[int] = None, weight_cutoff: Optional[float] = None,
                              post_cutoff: Optional[float] = None, post_norm: Optional[bool] = False,
                              compositional: Optional[bool] = False,
-                             reverse: Optional[bool] = False, ):
+                             reverse: Optional[bool] = False,  ):
         """
 
         Derive semantic similarity network by conditioning on tokens that are likely to substitute for each other
@@ -246,15 +245,17 @@ class neo4j_network(Sequence):
         dyad_mode: str, optional
             "substitution": A dyad is one where dyad_substitute substitutes the dyad_occurring
             "occurrence": Reverse of this
+            Note that this just flips the inputs
+
+        contextual_relations: bool, optional, Default False
+            If False, relations exist when (in the context of a dyad) two tokens substitute for each other (see context_mode)
+            If True, relations exist when (in context of a dyad) two tokens occurr or substitute for elements in the same sequence.
 
         context_mode: str, optional
             Designate how a token can appear "in context" of the dyad
             "occurrence": A token appears in context (with weight k) iff it appears k times in the sequence of the dyad
             "substitution": A token appears in context if it substitutes for some other tokens that occur in the sequence
             "bidirectional": A token appears with probability 1 if it occurs, and with the probability of substition if it substitutes for another token.
-
-        weight_cutoff: float, optinal
-            Ties below this cutoff value are discarded
 
         depth: int, optional
             The depth of the ego networks to consider.
@@ -270,6 +271,9 @@ class neo4j_network(Sequence):
 
         keep_only_tokens : bool, optional
             If True, the network will only include tokens provided in "tokens" and their ties (according to depth).
+
+        weight_cutoff: float, optinal
+            Ties below this cutoff value are discarded
 
         Technical Parameters
         ----------
@@ -304,17 +308,22 @@ class neo4j_network(Sequence):
         # Create Conditioning Dict to keep track of state and create filename
         cond_dict_list = [('type', "dyad_context"),
                           ('cutoff', weight_cutoff),
-                          ('depth', depth), ('max_degree', max_degree), ('dyad_mode', dyad_mode), ('context_mode', context_mode)]
+                          ('depth', depth), ('max_degree', max_degree), ('dyad_mode', dyad_mode),
+                          ('context_mode', context_mode)]
 
         self.cond_dict = self.__make_condition_dict(focal_tokens, times, cond_dict_list)
 
         if focal_tokens is None:
             logging.debug("Dyad Context Conditioning dispatch: Yearly")
-            self.__dyad_yearly_condition(dyad_substitute=dyad_substitute, dyad_occurring=dyad_occurring, times=times, max_degree=max_degree, dyad_mode=dyad_mode, context_mode= context_mode, weight_cutoff=weight_cutoff, batchsize=batchsize)
+            self.__dyad_yearly_condition(dyad_substitute=dyad_substitute, dyad_occurring=dyad_occurring, times=times,
+                                         max_degree=max_degree, contextual_relations=contextual_relations,
+                                         context_mode=context_mode, weight_cutoff=weight_cutoff, batchsize=batchsize)
         else:
             logging.debug("Dyad Context Conditioning dispatch: Ego")
-            self.__dyad_ego_conditioning(dyad_substitute=dyad_substitute, dyad_occurring=dyad_occurring,times=times, tokens=focal_tokens, weight_cutoff=weight_cutoff, depth=depth ,
-                                            max_degree=max_degree, dyad_mode=dyad_mode, context_mode= context_mode,  batchsize=batchsize)
+            self.__dyad_ego_conditioning(dyad_substitute=dyad_substitute, dyad_occurring=dyad_occurring, times=times,
+                                         tokens=focal_tokens, contextual_relations=contextual_relations,
+                                         weight_cutoff=weight_cutoff, depth=depth,
+                                         max_degree=max_degree, context_mode=context_mode, batchsize=batchsize)
         if keep_only_tokens:
             self.__prune_by_tokens(focal_tokens)
         self.__cut_and_norm(post_cutoff, post_norm)
@@ -431,6 +440,7 @@ class neo4j_network(Sequence):
                   max_degree: Optional[int] = None, prune_min_frequency: Optional[int] = None,
                   keep_only_tokens: Optional[bool] = False,
                   batchsize: Optional[int] = None, cond_type: Optional[str] = None,
+                  return_sentiment: Optional[bool]=True,
                   post_cutoff: Optional[float] = None, post_norm: Optional[bool] = False):
         """
 
@@ -470,6 +480,9 @@ class neo4j_network(Sequence):
 
         keep_only_tokens : bool, optional
             If True, the network will only include tokens provided in "tokens" and their ties (according to depth).
+
+        return_sentiment: bool, optional
+            Query sentiment and subjectivity for ties
 
         Technical Parameters
         ----------
@@ -527,7 +540,7 @@ class neo4j_network(Sequence):
         if tokens is None:
             logging.debug("Conditioning dispatch: Yearly")
             self.__year_condition(years=times, weight_cutoff=weight_cutoff, context=context, batchsize=batchsize,
-                                  max_degree=max_degree)
+                                  max_degree=max_degree, return_sentiment=return_sentiment)
         else:
             logging.debug("Conditioning dispatch: Ego")
             if depth is None:
@@ -535,7 +548,7 @@ class neo4j_network(Sequence):
             else:
                 checkdepth = depth
             if cond_type is None:
-                if checkdepth <= 2 and nr_tokens <= 5:
+                if checkdepth <= 5 and nr_tokens <= 5:
                     cond_type = "search"
                 elif checkdepth == 0:  # just need proximities
                     cond_type = "search"
@@ -545,12 +558,12 @@ class neo4j_network(Sequence):
                 logging.debug("Conditioning dispatch: Ego, subset, depth {}".format(depth))
                 self.__ego_condition_subset(years=times, token_ids=tokens, weight_cutoff=weight_cutoff, depth=depth,
                                             context=context, batchsize=batchsize,
-                                            max_degree=max_degree)
+                                            max_degree=max_degree, return_sentiment=return_sentiment)
             elif cond_type == "search":
                 logging.debug("Conditioning dispatch: Ego, search, depth {}".format(depth))
                 self.__ego_condition_search(years=times, token_ids=tokens, weight_cutoff=weight_cutoff, depth=depth,
                                             context=context, batchsize=batchsize,
-                                            max_degree=max_degree)
+                                            max_degree=max_degree, return_sentiment=return_sentiment)
             else:
                 msg = "Conditioning type {} requested. Please use either search or subset.".format(cond_type)
                 logging.debug(msg)
@@ -728,67 +741,96 @@ class neo4j_network(Sequence):
 
         return {'proximity': pd_dict}
 
-    def get_dyad_context(self, dyads: Optional[Union[list, tuple]] = None,
-                         occurrence: Optional[Union[list, str, int]] = None,
-                         replacement: Optional[Union[list, str, int]] = None, times: Union[int, list, dict] = None,
-                         weight_cutoff: Optional[float] = None, part_of_speech: Optional[str] = None,
-                         context_mode: Optional[str] = "bidirectional",
-                         return_sentiment: Optional[bool] = True) -> dict:
+    def get_dyad_context(self, focal_substitutes: Optional[Union[list, str, int]] = None,
+                         focal_occurrences: Optional[Union[list, str, int]] = None,
+                         context_pos: Optional[str] = None, times: Union[list, int] = None,
+                         context_mode: Optional[str] = "bidirectional", return_sentiment: Optional[bool] = True,
+                         tfidf: Optional[list] = None,
+                         weight_cutoff: Optional[float] = None) -> dict:
         """
-        Specify a dyad and get the distribution of contextual words.
-        dyads are tuples of (occurrence,replacement), that is, in the graph, ties that go replacement->occurrence.
-        You can pass a list of tuples.
-        You can also pass occurrences and replacement tokens as lists or individual tokens
+        This function returns a dataframe with a list of contextual tokens that appear in the context of another dyad.
+        The focal dyad can be specified by occurrence tokens, and substitute tokens, given as lists. The algorithm
+        will consider the combination of each element dyad=(occurrence, substitute).
+
+        For each such dyad, contextual tokens are returned, also from a dyad that occurs in the same sequence.
+        Which token gets returned, and with which weight, depends on the parameter context mode
+        If context_mode="occuring", give the likelihood that the token appears as written in the context of a substitution
+        If context_mode="bidirectional", give the likelihood that the token appears, or according to BERT could appear
+        If context_mode="substitution", give the likelihood that the token could appear when it does not
+
+        Values are aggregated across sequences with the substitution weight of the original dyad.
 
 
         Parameters
         ----------
-        dyads
-        occurrence
-        replacement
-        times
-        weight_cutoff
-        part_of_speech
-        context_mode
-        return_sentiment
+        snw : neo4j_network
+            Semantic Network
 
+        focal_substitutes: list, str, int, Optional
+            Terms that substitute for an occurring term in the focal dyad
 
-        Returns
-        -------
+        focal_occurrences:  list, str, int, Optional
+            Terms that occur in the focal dyad
+
+        context_pos: str, Optional
+            Only consider context terms, where the occurring word is classified as the given Part of Speech
+
+        times: list, Optional
+            Aggregate across these times
+
+        context_mode: str, Optional, Default "bidirectional"
+            If context_mode="occuring", give the likelihood that the token appears as written in the context of a substitution
+            If context_mode="bidirectional", give the likelihood that the token appears, or according to BERT could appear
+            If context_mode="substitution", give the likelihood that the token could appear when it does not
+
+        return_sentiment: bool, Optional, Default True
+            Return sentiment and subjectivity (Averaged) for the focal tie
+
+        tfidf: str, Optional, Default None
+            total_df["nweight"] = total_df.weight / total_df.weight.sum()
+            total_df["pmi"] = -np.log(total_df.tweight) + np.log(total_df.nweight)
+            total_df["cond_entropy"] = np.log(total_df.nweight/total_df.tweight)
+            total_df["pmi_weight"] = total_df["weight"] * total_df["pmi"]
+            total_df["rel_weight"] = total_df.nweight / total_df.tweight
+
+        weight_cutoff: float, Optional, Default None
+            Ignore any network ties that are less than this value in weight
 
         """
 
-        # Untangle dyad lists
-        if dyads is not None:
-            if isinstance(dyads, list):
-                occurrence = [x[0] for x in dyads]
-                replacement = [x[1] for x in dyads]
-            else:
-                occurrence = dyads[0]
-                replacement = dyads[1]
-        elif replacement is None or occurrence is None:
-            msg = "Please provide either dyads as list of tuples (occurrence, replacement) or individual lists of occurrences and replacements!"
+        if tfidf is not None or tfidf is not False:
+            tf_sel=True
+        else:
+            tf_sel=False
+        if tfidf == ["weight"]:
+            logging.warning("TFIDF set, but only weight requested. Setting TFIDF to False!")
+            tf_sel=False
+
+        if focal_substitutes is None and focal_occurrences is None:
+            msg = "Please provide either focal_substitutes and/or focal_occurrences from dyads!"
             logging.error(msg)
             raise AttributeError(msg)
 
         if times is None:
             times = self.get_times_list()
 
-        occurrence = input_check(tokens=occurrence)
-        replacement = input_check(tokens=replacement)
+        focal_occurrences = input_check(tokens=focal_occurrences)
+        focal_substitutes = input_check(tokens=focal_substitutes)
         times = input_check(times=times)
 
-        if isinstance(occurrence, (str, int)):
-            occurrence = [occurrence]
-        if isinstance(replacement, (str, int)):
-            replacement = [replacement]
+        if isinstance(focal_occurrences, (str, int)):
+            focal_occurrences = [focal_occurrences]
+        if isinstance(focal_substitutes, (str, int)):
+            focal_substitutes = [focal_substitutes]
 
-        occurrence = np.array(self.ensure_ids(occurrence)).tolist()
-        replacement = np.array(self.ensure_ids(replacement)).tolist()
+        if focal_occurrences is not None:
+            focal_occurrences = [int(x) for x in np.array(self.ensure_ids(focal_occurrences)).tolist()]
+        if focal_substitutes is not None:
+            focal_substitutes = [int(x) for x in np.array(self.ensure_ids(focal_substitutes)).tolist()]
 
-        pd_dict = self.db.query_tie_context(occurring=occurrence, replacing=replacement, times=times,
-                                            weight_cutoff=weight_cutoff, pos=part_of_speech,
-                                            return_sentiment=return_sentiment, context_mode=context_mode)
+        pd_dict = self.db.query_tie_context(occurring=focal_occurrences, replacing=focal_substitutes, times=times,
+                                            weight_cutoff=weight_cutoff, pos=context_pos,
+                                            return_sentiment=return_sentiment, context_mode=context_mode, tfidf=tf_sel)
 
         return {'dyad_context': pd_dict}
 
@@ -1106,7 +1148,7 @@ class neo4j_network(Sequence):
     # %% Conditioning sub-functions
 
     def __year_condition(self, years, weight_cutoff=None, context=None, batchsize=None,
-                         max_degree: Optional[int] = None):
+                         max_degree: Optional[int] = None, return_sentiment:Optional[bool] = True):
         """ Condition the entire network over all years """
 
         # Same for batchsize
@@ -1124,14 +1166,16 @@ class neo4j_network(Sequence):
             self.graph.add_nodes_from(worklist)
 
             # Loop batched over all tokens to condition
+            if weight_cutoff is not None:
+                logging.warning("Weight cutoff {}".format(weight_cutoff))
             for i in tqdm(range(0, len(worklist), batchsize), leave=False, position=0,
-                          desc="Querying {} nodes in batches of {}".format(len(worklist, batchsize))):
+                          desc="Querying {} nodes in batches of {}".format(len(worklist), batchsize)):
                 token_ids = worklist[i:i + batchsize]
                 logging.debug(
                     "Conditioning by query batch {} of {} tokens.".format(i, len(token_ids)))
                 # Query Neo4j
                 self.__add_edges(
-                    self.query_nodes(token_ids, context=context, times=years, weight_cutoff=weight_cutoff),
+                    self.query_nodes(token_ids, context=context, times=years, weight_cutoff=weight_cutoff, return_sentiment=return_sentiment),
                     max_degree=max_degree)
             try:
                 all_ids = list(self.graph.nodes)
@@ -1150,10 +1194,10 @@ class neo4j_network(Sequence):
         else:  # Remove conditioning and recondition
             self.decondition()
             self.__year_condition(years=years, weight_cutoff=weight_cutoff, context=context,
-                                  max_degree=max_degree)
+                                  max_degree=max_degree, return_sentiment=return_sentiment)
 
     def __ego_condition_subset(self, years, token_ids, weight_cutoff=None, depth=None, context=None,
-                               batchsize=None, max_degree: Optional[int] = None):
+                               batchsize=None, max_degree: Optional[int] = None, return_sentiment:Optional[bool] = True):
 
         # Same for batchsize
         if batchsize is None:
@@ -1162,7 +1206,7 @@ class neo4j_network(Sequence):
         # First, do a year conditioning
         logging.debug("Full year conditioning before ego subsetting.")
         self.__year_condition(years=years, weight_cutoff=weight_cutoff, context=context, batchsize=batchsize,
-                              max_degree=max_degree)
+                              max_degree=max_degree, return_sentiment=return_sentiment)
 
         if depth is not None:
             if depth > 0:
@@ -1181,7 +1225,7 @@ class neo4j_network(Sequence):
                                                              center=True, undirected=False)
 
     def __ego_condition_search(self, years, token_ids, weight_cutoff=None, depth=None, context=None,
-                               batchsize=None, max_degree: Optional[int] = None):
+                               batchsize=None, max_degree: Optional[int] = None,return_sentiment:Optional[bool] = True):
 
         # Same for batchsize
         if batchsize is None:
@@ -1203,6 +1247,8 @@ class neo4j_network(Sequence):
             ids_to_check = token_ids
             logging.debug(
                 "Start of Depth {} conditioning".format(or_depth))
+            if weight_cutoff is not None:
+                logging.warning("Weight cutoff {}".format(weight_cutoff))
             while depth > 0:
                 if not isinstance(ids_to_check, (list, np.ndarray)):
                     ids_to_check = [ids_to_check]
@@ -1223,6 +1269,7 @@ class neo4j_network(Sequence):
                 ids_to_check.reverse()
                 # Add starting nodes
                 self.graph.add_nodes_from(ids_to_check)
+
                 for i in tqdm(range(0, len(ids_to_check), batchsize), leave=False, position=0,
                               desc="Depth {} conditioning: {} new found tokens, where {} already added.".format(depth,
                                                                                                                 len(ids_to_check),
@@ -1236,7 +1283,7 @@ class neo4j_network(Sequence):
                     # Query Neo4j
                     try:
                         self.__add_edges(
-                            self.query_nodes(id_batch, context=context, times=years, weight_cutoff=weight_cutoff),
+                            self.query_nodes(id_batch, context=context, times=years, weight_cutoff=weight_cutoff, return_sentiment=return_sentiment),
                             max_degree=max_degree)
                     except:
                         logging.error("Could not condition graph by query method.")
@@ -1310,6 +1357,8 @@ class neo4j_network(Sequence):
             self.graph.add_nodes_from(worklist)
 
             # Loop batched over all tokens to condition
+            if weight_cutoff is not None:
+                logging.warning("Weight cutoff {}".format(weight_cutoff))
             for i in tqdm(range(0, len(worklist), batchsize), leave=False, position=0):
                 token_ids = worklist[i:i + batchsize]
                 logging.debug(
@@ -1386,6 +1435,8 @@ class neo4j_network(Sequence):
                     prev_queried_ids.extend(ids_to_check)
                     # Add starting nodes
                     self.graph.add_nodes_from(ids_to_check)
+                    if weight_cutoff is not None:
+                        logging.warning("Weight cutoff {}".format(weight_cutoff))
                     for i in tqdm(range(0, len(ids_to_check), batchsize), leave=False, position=0):
 
                         id_batch = ids_to_check[i:i + batchsize]
@@ -1506,8 +1557,7 @@ class neo4j_network(Sequence):
 
         return cond_dict
 
-    @staticmethod
-    def __create_filename(cond_dict):
+    def __create_filename(self,cond_dict):
 
         if cond_dict['type'] is not False:
             fn = str(cond_dict['type']) + "-"
@@ -1518,14 +1568,24 @@ class neo4j_network(Sequence):
             if not isinstance(cond_dict['tokens'], list):
                 cond_dict['tokens'] = [cond_dict['tokens']]
             fn = fn + "EGO-"
-            fn = fn + '-'.join([str(x) for x in cond_dict['tokens']]) + '-'
+            tokens = [str(self.ensure_tokens(x)) for x in cond_dict['tokens']][0:5]
+            if len(tokens) > 3:
+                tokens = [tokens[0], tokens[-1]]
+                fn = fn + '_to_'.join(tokens)
+            else:
+                fn = fn + '-'.join(tokens)
 
         if cond_dict['years'] != "ALL":
             if not isinstance(cond_dict['years'], list):
                 cond_dict['years'] = [cond_dict['years']]
-            fn = fn + 'Y-' + '-'.join([str(x) for x in cond_dict['years']])
+            years=[str(x) for x in cond_dict['years']]
+            if len(years)>3:
+                years=[years[0],years[-1]]
+                fn = fn + '-Y-' + '_to_'.join(years)
+            else:
+                fn = fn + '-Y-' + '-'.join(years)
         else:
-            fn = fn + 'Y-' + "ALL"
+            fn = fn + '-Y-' + "ALL"
 
         for key in cond_dict.keys():
             if cond_dict[key] is not None and cond_dict[key] is not False:
@@ -1536,7 +1596,12 @@ class neo4j_network(Sequence):
             if not isinstance(cond_dict['context'], list):
                 cond_dict['context'] = [cond_dict['context']]
             fn = "context-"
-            fn = fn + '-'.join([str(x) for x in cond_dict['context']])
+            tokens = [str(self.ensure_tokens(x)) for x in cond_dict['context']][0:5]
+            if len(tokens) > 3:
+                tokens = [tokens[0], tokens[-1]]
+                fn = fn + '_to_'.join(tokens)
+            else:
+                fn = fn + '-'.join(tokens)
 
         return fn
 
@@ -1622,15 +1687,30 @@ class neo4j_network(Sequence):
 
     def __add_edges(self, edges: dict, max_degree: Optional[int] = None):
 
-        if max_degree is not None:
-            # Create dataframe which is easier to group and sort
-            edge_df = pd.DataFrame(
-                [{'ego': int(edge[0]), 'alter': int(edge[1]), 'weight': edge[2]['weight'], 'dicto': edge[2]} for edge in
-                 edges])
-            edge_df = edge_df.set_index(['ego', 'alter'])
-            sel_df = edge_df.loc[
-                edge_df.groupby('ego')['weight'].nlargest(max_degree).index.droplevel(0).to_list()].reset_index()
-            edges = [(row['ego'], row['alter'], row['dicto']) for index, row in sel_df.iterrows()]
+        try:
+            if max_degree is not None:
+                # Create dataframe which is easier to group and sort
+                edge_df = pd.DataFrame(
+                    [{'ego': int(edge[0]), 'alter': int(edge[1]), 'weight': edge[2]['weight'], 'dicto': edge[2]} for edge in
+                     edges])
+                if len(edge_df)>0:
+                    sel_df= edge_df.sort_values(["ego", "weight"]).groupby("ego").tail(max_degree)
+
+                    egozero=edge_df.ego[0]
+                    test_df=edge_df[edge_df.ego == egozero].sort_values(by="weight", ascending=False)[0:max_degree]
+                    test_df=test_df[test_df.weight != test_df.weight.min()].sort_index()
+                    test_df2=sel_df[sel_df.ego==egozero].sort_values(by="weight", ascending=False).sort_index()
+                    test_df2 = test_df2[test_df2.weight != test_df2.weight.min()].sort_index()
+
+                    assert len(np.setdiff1d(test_df.alter,test_df2.alter))==0
+                    assert len(np.setdiff1d(test_df2.alter,test_df.alter))==0
+
+                    edges = [(row['ego'], row['alter'], row['dicto']) for index, row in sel_df.iterrows()]
+                else:
+                    edges = []
+        except:
+            logging.error("Could not cut edges. Edge df shape: {}, may_degree".format(edge_df.shape, max_degree))
+            raise
         try:
             self.graph.add_edges_from(edges)
         except:
@@ -1745,6 +1825,9 @@ class neo4j_network(Sequence):
                         "Found {} isolated nodes in graph, deleting.".format(len(isolates)))
                     cleaned_graph.remove_nodes_from(isolates)
                 nx.write_gexf(cleaned_graph, path)
+                logging.info(
+                    "Saving {} nodes, {} edges: \n {} as {}".format(len(cleaned_graph.nodes), len(cleaned_graph.edges),
+                                                                    self.filename, path))
 
             except:
                 raise SystemError("Could not save to %s " % path)
@@ -1783,6 +1866,9 @@ class neo4j_network(Sequence):
                         "Found {} isolated nodes in graph, deleting.".format(len(isolates)))
                     cleaned_graph.remove_nodes_from(isolates)
                 nx.write_edgelist(cleaned_graph, path, delimiter=",", data=True)
+                logging.info(
+                    "Saving {} nodes, {} edges: \n {} as {}".format(len(cleaned_graph.nodes), len(cleaned_graph.edges),
+                                                                    self.filename, path))
             except:
                 raise SystemError("Could not save to %s " % path)
 
@@ -1844,7 +1930,7 @@ class neo4j_network(Sequence):
         return self.db.query_context_of_node(ids=ids, times=times, weight_cutoff=weight_cutoff, occurrence=occurrence)
 
     def query_nodes(self, ids, context=None, times=None, weight_cutoff=None, pos=None, return_sentiment=True,
-                    context_mode="bidirectional", context_weight=True):
+                    context_mode="bidirectional", context_weight=True ):
         """
         Query multiple nodes by ID and over a set of time intervals, return distinct occurrences
         If provided with context, return under the condition that elements of context are present in the context element distribution of
@@ -1907,11 +1993,13 @@ class neo4j_network(Sequence):
         return self.query_nodes(ids, context, times, weight_cutoff)
 
     def __dyad_yearly_condition(self, dyad_substitute, dyad_occurring, times, dyad_mode, context_mode, weight_cutoff,
+                                contextual_relations,
                                 batchsize, max_degree):
         raise NotImplementedError("Currently, please condition on a subset of focal tokens for a given dyad.")
 
     def __dyad_ego_conditioning(self, dyad_substitute, dyad_occurring, times, tokens, weight_cutoff, depth, max_degree,
-                                dyad_mode, context_mode:Optional[str]="bidirectional", batchsize:Optional[int]=None):
+                                contextual_relations=None, context_mode: Optional[str] = "bidirectional",
+                                batchsize: Optional[int] = None):
 
         # Same for batchsize
         if batchsize is None:
@@ -1954,6 +2042,9 @@ class neo4j_network(Sequence):
                 ids_to_check.reverse()
                 # Add starting nodes
                 self.graph.add_nodes_from(ids_to_check)
+                if weight_cutoff is not None:
+                    logging.warning("Weight cutoff {}".format(weight_cutoff))
+                logging.info("Batch size selected is {}".format(batchsize))
                 for i in tqdm(range(0, len(ids_to_check), batchsize), leave=False, position=0,
                               desc="Depth {} conditioning: {} new found tokens, where {} already added.".format(depth,
                                                                                                                 len(ids_to_check),
@@ -1966,11 +2057,22 @@ class neo4j_network(Sequence):
                         "Conditioning by query batch {} of {} tokens.".format(i, len(ids_to_check)))
                     # Query Neo4j
                     try:
-                        self.__add_edges(
-                            self.db.query_nodes_in_dyadic_context(ids=id_batch, occurring=dyad_occurring, replacing=dyad_substitute,times=times, weight_cutoff=weight_cutoff),
-                            max_degree=max_degree)
+                        if contextual_relations:
+                            self.__add_edges(
+                                self.db.query_context_in_dyadic_context(ids=id_batch, occurring=dyad_occurring,context_mode=context_mode,
+                                                                        replacing=dyad_substitute, times=times,
+                                                                        weight_cutoff=weight_cutoff),
+                                max_degree=max_degree)
+                        else:
+                            self.__add_edges(
+                                self.db.query_substitution_in_dyadic_context(ids=id_batch, occurring=dyad_occurring,
+                                                                             replacing=dyad_substitute, times=times,
+                                                                             weight_cutoff=weight_cutoff),
+                                max_degree=max_degree)
                     except:
-                        logging.error("Could not condition given dyad by query method.")
+                        logging.error(
+                            "Could not condition given dyad by query method with contextual relations {} and context_mode {}.".format(
+                                contextual_relations, context_mode))
                         raise
 
                 # Delete disconnected nodes
@@ -2014,7 +2116,9 @@ class neo4j_network(Sequence):
 
         else:  # Remove conditioning and recondition
             self.decondition()
-            self.condition_given_dyad(dyad_substitute=dyad_substitute, dyad_occurring=dyad_occurring, times=times, tokens=tokens, weight_cutoff=weight_cutoff,
-                           depth=depth, dyad_mode=dyad_mode,context_mode=context_mode, max_degree=max_degree)
+            self.condition_given_dyad(dyad_substitute=dyad_substitute, dyad_occurring=dyad_occurring, times=times,
+                                      focal_tokens=tokens, weight_cutoff=weight_cutoff,
+                                      depth=depth, context_mode=context_mode, contextual_relations=contextual_relations,
+                                      max_degree=max_degree)
 
         # Continue conditioning
