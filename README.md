@@ -3,7 +3,7 @@
 ## Introduction
 
 Text2Network is a python package to generate "semantic networks" from arbitrary text sources using a (deep neural) PyTorch transformer model (e.g. BERT).
-Details for this procedure are available in the following research paper: (Coming soon)
+Details for this procedure are available in the following research paper: [https://arxiv.org/abs/2110.04151](https://arxiv.org/abs/2110.04151)
 
 Text2Network allows you to understand direct and higher-order linguistic relationships in your texts. Since these relationships are extracted directly from a sophisticated transformer model, they are more powerful than prior approaches. For example, once a text is represented as network, you can query each potential relation between words conditional on a certain context, such as other words that may appear in a sentence. You can also aggregate across arbitrary time periods or text pieces. The network is constructed in such a way that each conditioning operation leads to proper probability measures that are directly interpretable without further nuisance parameters and refer, correctly, to the language use of the subset in question - be it a given context, or a subset of the corpus.
 Using network techniques, such as centralities, distances and community structures, you can then analyze global structure of language as used in the text corpus.
@@ -23,6 +23,9 @@ The objects correspond to the four steps necessary to analyze a corpus:
 3. Processing: Using the trained language models, the each word in the corpus is analyzed in its context. For each such occurrence, ties representing probabilistic relations are created. Here, we use a Neo4j graph database to save this network.
 
 4. Analysis: The semantic_network class directly encapsulates the graph database and conditioning operations thereon. Networks created here can either be analyzed directly, or exported in gexf format.
+
+If you start with a trained Transformer model (i.e. from Hugginface / PyTorch transformers) and do not seek to
+fine-tune it, only points (3) and (4) apply.
 
 ## Prerequisites
 
@@ -49,7 +52,16 @@ conda install networkx pytables pandas nltk
 conda install -c conda-forge tensorboard
 ```
 
-Finally, a Neo4j server, http accessible, version 4.02, should be running for processing. We currently use a custom http connector, which is faster than the default interface. Sadly, the connector does not work for versions above 4.02. We are in the process of upgrading to a standard Bolt connector. You can choose the version of the database in the Neo4j Desktop App.
+Finally, a Neo4j server should be running for processing. We are currently in the process of also allowing the extraction
+into a networkX graph. However, as this package was tested on large corpora of text, a Neo4J graph database is currently required.
+
+You should be able to use any Neo4j instance, as we support the standard Bolt connector since it performance improved.
+
+~~We currently use a custom http connector, which is faster than the default interface. Sadly, the connector does not work for versions above 4.02. We are in the process of upgrading to a standard Bolt connector. You can choose the version of the database in the Neo4j Desktop App.~~
+
+## Code Examples:
+
+The .py files in the main folder of the repository show illustrate each step of the pipeline.
 
 ## Step by Step tutorial
 
@@ -58,11 +70,11 @@ Finally, a Neo4j server, http accessible, version 4.02, should be running for pr
 We use the standard python configuration parser to read an ini file.
 
 ```python
-from src.functions.file_helpers import check_create_folder
+from text2network.utils.file_helpers import check_create_folder
 import configparser
 
 # Load Configuration file
-configuration_path='/example/config/config.ini'
+configuration_path='/config/config.ini'
 config = configparser.ConfigParser()
 config.read(check_create_folder(configuration_path))
 ```
@@ -150,6 +162,10 @@ At this stage, we will also set up logging.
 from src.classes.nw_preprocessor import nw_preprocessor
 
 ```python
+from text2network.preprocessing.nw_preprocessor import nw_preprocessor
+from text2network.utils.file_helpers import check_create_folder, check_folder
+from text2network.utils.logging_helpers import setup_logger
+
 # Set up preprocessor
 preprocessor = nw_preprocessor(config)
 # Set up logging
@@ -161,7 +177,7 @@ takes optional parameters, if we want to overwrite the configuration file.
 This is the standard behavior for all modules. So for example one could instead do:
 
 ```python
-    preprocessor = nw_preprocessor(config, max_seq_length=50)
+preprocessor = nw_preprocessor(config, max_seq_length=50)
 ```
 
 Next, we can process the text files and create the database.
@@ -230,7 +246,7 @@ To train all BERTs, we initialize the trainer and run the training.
 Again, attributes may be given via the config file or as individual parameters.
 
 ```python
-from src.classes.bert_trainer import bert_trainer
+from text2network.training.bert_trainer import bert_trainer
 
 trainer=bert_trainer(config)
 trainer.train_berts()
@@ -240,24 +256,19 @@ trainer.train_berts()
 
 Having trained BERTs, we need to extract semantic networks. This involves running inference across the subdivisions of the corpus and saving network ties in the Neo4j database.
 
-All interfacing with Neo4j is done via the network class, which we initialize first.
 
-```python
-from src.classes.neo4jnw import neo4j_network
-neograph = neo4j_network(config)
-```
-
+The processor class will set-up a network for you.
 The network is, of course, entirely empty at this stage. To fill it, we also create a processer that takes the network interface as input.
 
 ```python
-from src.classes.nw_processor import nw_processor
-processor = nw_processor(config, neograph)
+from text2network.processing.nw_processor import nw_processor
+processor = nw_processor(config=config)
 ```
 
 Since all options are already specified in the configuration file, we can directly process our semantic networks.
 
 ```python
-processor.run_all_queries(delete_incomplete=True, delete_all=False)
+processor.run_all_queries(delete_incomplete_times=True, delete_all=False)
 ```
 
 Where we can specify whether we would like to clean the graph database first - in order not to duplicate ties - or not.
@@ -272,7 +283,9 @@ Conversely, `delete_all` cleans the graph entirely for a fresh start.
 Once initialized, the semantic network class represents and interface to the Neo4j graph database. It acts similar to a networkx graph and can query individual nodes directly. For example, to return a networkx-compatible list of ties for the token "president", you can use
 
 ```python
-semantic_network=sem_network(config)
+from text2network.classes.neo4jnw import neo4j_network
+
+semantic_network=neo4j_network(config)
 
 semantic_network['president']
 ```
@@ -310,46 +323,14 @@ semantic_network.to_backout()
 In addition, we provide a host of analysis functions and formatting options. For example, printing the centralities of the terms "president","tyrant","man" and "woman" from a pandas dataframe can be accomplished in two lines:
 
 ```python
-semantic_network=sem_network(config)
 
 centralities=semantic_network.centralities(focal_tokens=['president','tyrant','man', 'woman'], types=["PageRank"])
 
-print(pd_format(centralities))
+print(semantic_network.pd_format(centralities))
 ```
 
-where centralities computes centralities of different kind (here: PageRank) and pd_format transforms the output into a pandas DataFrame for easy printing and saving.
+where centralities computes centralities of different kind (here: PageRank) and semantic_network.pd_format transforms the output into a pandas DataFrame for easy printing and saving.
 
-If you instead want to print the centralities in a 2-step ego network with "tyrant" as its center, considering texts written in the year 2002, just write
-
-```python
-semantic_network=sem_network(config)
-
-centralities=semantic_network.centralities(focal_tokens=['president','tyrant','man', 'woman'], years=[2002], ego_nw_tokens="tyrant", depth=2)
-
-print(pd_format(centralities))
-```
-
-Or, if you want to do the same but restrict inference to contexts in which "USA" is likely to occur, do
-
-```python
-semantic_network=sem_network(config)
-
-centralities=semantic_network.centralities(focal_tokens=['president','tyrant','man', 'woman'], ego_nw_tokens="tyrant", depth=2, context=["USA"])
-
-print(pd_format(centralities))
-```
-
-Each time, the created network and its measures will be based on the correctly conditioned probability measures that the language model generates.
-
-If the network is already conditioned, this will be taken into account
-
-```python
-semantic_network.condition(years=[1992,2005], ego_nw_tokens="president", depth=2,weight_cutoff=0.05, context=['USA','China'])
-
-centralities=semantic_network.centralities(focal_tokens=['president','tyrant','man', 'woman']))
-
-print(pd_format(centralities))
-```
 
 ### Clustering
 
@@ -361,27 +342,18 @@ By default, the cluster function takes care of handling these details.
 For example, to cluster the semantic network, call
 
 ```python
-semantic_network=sem_network(config)
 
 clusters=semantic_network.cluster(levels=1)
 ```
 
 The clusters variable is a list of cluster containers, including the base graph amended by cluster identifiers for each node, as well as the subgraphs implied by the clustering algorithm.
 
-If the network is not already conditioned, you can also pass the usual parameters
-
-```python
-semantic_network=sem_network(config)
-
-clusters=semantic_network.cluster(levels=1,  ego_nw_tokens="tyrant", depth=2, context=["USA"])
-```
-
 You can automatically apply measures of choice on each cluster, which are saved as list of dictionaries in the cluster container
 
 ```python
 clusters=semantic_network.cluster(levels=1, to_measure=[proximity,centrality])
 
-print(pd_format(clusters[0]['measures']))
+print(semantic_network.pd_format(clusters[0]['measures']))
 ```
 
 Clusters keep track of their level and parent cluster, such that hierarchies become apparent
@@ -431,3 +403,8 @@ Note that the cluster function of the semantic network can condition if necessar
 ```python
 clusters=semantic_network.cluster(levels=1, name="Test", to_measure=[proximity,centrality], metadata={'years':[1992,2005], 'context':['USA','China']}, years=[1992,2005], weight_cutoff=0.05, context=['USA','China'])
 ```
+
+## Further options
+
+Many more analysis options are possible, and the network class provides an easy interface.
+See the analysis folder for further ideas.
