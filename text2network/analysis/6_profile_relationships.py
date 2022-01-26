@@ -91,12 +91,12 @@ keep_only_tokens_list = [True]
 contextual_relations_list = [True]
 
 keep_top_k_list = [100,200,1000]
-max_degree_list = [1000]
+max_degree_list = [100,200]
 cutoff_list = [0.1]
 post_cutoff_list = [0.01]
 
 #main_folder="profile_relationships_occ"
-main_folder="profile_relationships_"+"_".join(sub_mode_list)+"_"+"_".join(pos_list)
+main_folder="profile_relationships2_"+"_".join(sub_mode_list)+"_"+"_".join(pos_list)
 
 
 paraml1_list = product(cutoff_list, context_mode_list, tfidf_list)
