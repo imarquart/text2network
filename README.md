@@ -5,6 +5,12 @@
 Text2Network is a python package to generate "semantic networks" from arbitrary text sources using a (deep neural) PyTorch transformer model (e.g. BERT).
 Details for this procedure are available in the following research paper: [https://arxiv.org/abs/2110.04151](https://arxiv.org/abs/2110.04151)
 
+<p align="center">
+    <br>
+    <img src="https://raw.githubusercontent.com/IngoMarquart/text2network/Main/intro.PNG" />
+    <br>
+<p>
+
 Text2Network allows you to understand direct and higher-order linguistic relationships in your texts. Since these relationships are extracted directly from a sophisticated transformer model, they are more powerful than prior approaches. For example, once a text is represented as network, you can query each potential relation between words conditional on a certain context, such as other words that may appear in a sentence. You can also aggregate across arbitrary time periods or text pieces. The network is constructed in such a way that each conditioning operation leads to proper probability measures that are directly interpretable without further nuisance parameters and refer, correctly, to the language use of the subset in question - be it a given context, or a subset of the corpus.
 Using network techniques, such as centralities, distances and community structures, you can then analyze global structure of language as used in the text corpus.
 
