@@ -76,8 +76,8 @@ context_mode_list = ["occurring"]
 sub_mode_list = ["occurring"]#,"substitution"]#"bidirectional"
 context_mode_list = ["bidirectional"]
 sub_mode_list = ["bidirectional"]#,"substitution"]#"bidirectional"
-context_mode_list = ["substitution"]
-sub_mode_list = ["substitution"]#,"substitution"]#"bidirectional"
+#context_mode_list = ["substitution"]
+#sub_mode_list = ["substitution"]#,"substitution"]#"bidirectional"
 rev_list = [False]
 algo_list = [consensus_louvain]
 ma_list = [(2, 2)]
@@ -91,7 +91,7 @@ keep_only_tokens_list = [True]
 contextual_relations_list = [True]
 
 keep_top_k_list = [100,200,1000]
-max_degree_list = [100,200]
+max_degree_list = [100,200,1000]
 cutoff_list = [0.1]
 post_cutoff_list = [0.01]
 

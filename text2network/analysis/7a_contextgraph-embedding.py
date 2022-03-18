@@ -74,7 +74,6 @@ semantic_network = neo4j_network(config)
 
 
 years=list(range(1980,2021))
-main_folder="profile_relationships_substitution_ADJ_VERB_NOUN_ADV_ADP_done"
 focal_token = "leader"
 sym = False
 rev = False
@@ -92,6 +91,11 @@ max_degree = [50, 100,500][-1]
 level = 5#[15, 10, 8, 6, 4, 2][1]
 keep_only_tokens = [True, False][0]
 contextual_relations = [True, False][0]
+
+#main_folder="profile_relationships2_"+"_".join(sub_mode)+"_"+"_".join(pos_list)
+main_folder="profile_relationships_substitution_ADJ_VERB_NOUN_ADV_ADP_done"
+
+
 
 # %% Sub or Occ
 focal_substitutes = focal_token
