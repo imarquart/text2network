@@ -1,0 +1,57 @@
+1. Download the Git Repository as a Zip.
+
+2. Unzip to the main location
+
+3. Create empty "data" and "output" directories in this location
+
+4. Put the texts into the data directory, for example in "data/texts"
+
+5. Open the config.ini and make the appropriate changes to Paths
+
+5.a. We need a pretrained BERT. One is found at 
+E:\TrainedBerts\pretrained_bert
+
+6. Open Anaconda Navigator.
+Create a new Anaconda environment. Choose Python 3.8 or below for compatibility.
+
+6.a Install Spyder/VSCode/PyCharm or any other IDE within Anaconda
+
+7. Open the command terminal and navigate to the repository e.g. in Windows
+E: (enter)
+cd e:\NLPTutorial\text2network-Main
+
+8a. First, we need to install PyTorch WITH GPU support
+conda install pytorch==1.6.0 torchvision==0.7.0 cudatoolkit=10.2 -c pytorch
+
+8b. Install required packages. The following should work from the Anaconda main channel:
+conda install --file requirements.txt
+
+9. Run pipeline
+There are two options for this. First, to understand what is going on, you can open the file
+in your favorite IDE (Spyder, VSCode, PyCharm etc.) and run it line-by-line (as we did in the tutorial).
+For instance, run the lines in preprocessing.py
+
+Second, I have provided the same files in a server version, e.g. preprocessing_server.py. These files can 
+be run from the commandline (or from a SSH terminal), and you can supply the configuration as parameter.
+For example, you can run
+python preprocessing_server.py --config config/config.ini 
+
+The server versions have some additional checks and the ability to restart processing if it fails.
+
+
+Some advanced points:
+
+1. VSCODE:
+Note that the combination of firewall and local Anaconda is tricky. 
+Powershell, the default shell in VsCode, doesn't allow a working conda without further edits.
+To fix this, set the CMD as default shell!
+
+2. PyTorch / Transformers.
+Transformers MUST be 2.1.1, since newer versions run models differently.
+Even then, our code has custom bugfixes for the Transformers package in particular using a custom tokenizer class.
+This is necessary as we resize our vocab a lot and do not use word pieces (but keep the wordpiece algorithm intact).
+PyTorch 1.6. should work. Later versions might work as well, but there is no guarantee.
+
+3. Folders and subfolders
+Generally, our package will create one level of subfolders. So if you have output/config, but config does not exists, that is fine.
+But if you do something like output/test2/config and only output exists, then you will get errors
