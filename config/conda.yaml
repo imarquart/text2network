@@ -1,0 +1,4 @@
+maximum_sequence_length: 100
+split_symbol: "_"
+logging_level: 20
+other_loggers: 30
