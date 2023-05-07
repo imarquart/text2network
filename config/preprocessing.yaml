@@ -1,0 +1,7 @@
+maximum_sequence_length: 128
+max_json_length: 10000
+split_symbol: "_"
+logging_level: 10
+other_loggers: 30
+input_folder: "data/raw"
+output_folder: "data/preprocessed"

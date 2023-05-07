@@ -1,0 +1,2 @@
+python preprocessing.py --folder data/raw --output_folder data/preprocessed_data
+python preprocessing.py --config config/preprocessing.yaml

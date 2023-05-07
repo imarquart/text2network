@@ -5,7 +5,7 @@ import time
 
 import torch
 
-from text2network.datasets.text_dataset import bert_dataset
+from text2network.datasets.text_dataset_old import bert_dataset
 from text2network.utils.file_helpers import check_create_folder
 from text2network.functions.run_bert import run_bert
 from text2network.utils.bert_args import bert_args

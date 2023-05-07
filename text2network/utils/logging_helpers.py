@@ -57,8 +57,8 @@ def setup_logger(logging_path, logging_level, filename="log"):
     # Set up logging
     logging.info("Setting loggging level {}".format(logging_level))
 
-    logging.getLogger().setLevel(logging_level)
-    rootLogger = logging.getLogger()
+    logging.getLogger("t2n").setLevel(logging_level)
+    rootLogger = logging.getLogger("t2n")
     logFormatter = logging.Formatter(
         "%(asctime)s - %(levelname)s - %(name)s -   %(message)s"
     )
