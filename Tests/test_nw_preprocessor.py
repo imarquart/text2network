@@ -4,8 +4,7 @@ from pathlib import Path
 import pytest
 
 from text2network.utils.file_helpers import check_create_folder
-from text2network.preprocessing.nw_preprocessor_old import nw_preprocessor
-import tables
+from text2network.preprocessing.nw_preprocessor import nw_preprocessor
 
 
 @pytest.mark.usefixtures("test_config")
@@ -25,7 +24,9 @@ def test_text(test_db):
     with tables.open_file(db_file, mode="r") as table:
         data = table.root.textdata.table
         sentence1 = data.read_where('(year==2020) & (p1==b"vol1")')[0]["text"]
-        assert sentence1 == b"a good leader is a good communicator.", logging.error(
+        assert (
+            sentence1 == b"a good leader is a good communicator."
+        ), logging.error(
             "Sentence: {} \n Expected instead: {}".format(
                 sentence1, b"A good leader is a good communicator."
             )

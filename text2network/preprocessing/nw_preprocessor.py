@@ -1,11 +1,13 @@
+import json
 import logging
 import os
-import json
+import pickle
 import re
-from tqdm import tqdm
-from nltk import sent_tokenize
-from bs4 import BeautifulSoup
 import unicodedata
+
+from bs4 import BeautifulSoup
+from nltk import sent_tokenize
+from tqdm import tqdm
 
 from text2network.utils.file_helpers import check_create_folder
 from text2network.utils.logging_helpers import log, setup_logger
@@ -40,9 +42,7 @@ class TextPreprocessor:
         sentence_1 = sentence[:half].strip()
         sentence_2 = sentence[half:].strip()
 
-        return self._split_sentence(sentence_1) + self._split_sentence(
-            sentence_2
-        )
+        return self._split_sentence(sentence_1) + self._split_sentence(sentence_2)
 
     def _check_and_fix_encoding(self, text):
         return unicodedata.normalize("NFKD", text)
@@ -108,9 +108,7 @@ class TextPreprocessor:
                             metadata = {
                                 "filename": file,
                                 "year": year,
-                                "parameters": file.split(".txt")[0].split(
-                                    self.split_symbol
-                                ),
+                                "parameters": file.split(".txt")[0].split(self.split_symbol),
                                 "sentence": split_sentence,
                                 "index": total_index,
                                 "year_index": year_index,
@@ -124,21 +122,13 @@ class TextPreprocessor:
 
                             # Save the sentences in batches
                             if json_length_counter >= self.max_json_length:
-                                output_file = os.path.join(
-                                    output_folder, f"{year}/"
-                                )
-                                output_file = check_create_folder(
-                                    output_file, create_folder=True
-                                )
-                                output_file = os.path.join(
-                                    output_file, f"{json_file_counter}.json"
-                                )
+                                output_file = os.path.join(output_folder, f"{year}/")
+                                output_file = check_create_folder(output_file, create_folder=True)
+                                output_file = os.path.join(output_file, f"{json_file_counter}.json")
                                 logger.debug(
                                     f"Json length: {json_length_counter} reached, saving file to disk in {output_file}"
                                 )
-                                with open(
-                                    output_file, "w", encoding="utf-8"
-                                ) as f:
+                                with open(output_file, "w", encoding="utf-8") as f:
                                     json.dump(
                                         processed_sentences,
                                         f,
@@ -152,16 +142,19 @@ class TextPreprocessor:
             # Save the last sentences
             if len(processed_sentences) > 0:
                 output_file = os.path.join(output_folder, f"{year}/")
-                output_file = check_create_folder(
-                    output_file, create_folder=True
-                )
-                output_file = os.path.join(
-                    output_file, f"{json_file_counter}.json"
-                )
+                output_file = check_create_folder(output_file, create_folder=True)
+                output_file = os.path.join(output_file, f"{json_file_counter}.json")
                 logger.debug(
                     f"Sentences remaining: {len(processed_sentences)}. Saving to disk in {output_file}"
                 )
                 with open(output_file, "w", encoding="utf-8") as f:
-                    json.dump(
-                        processed_sentences, f, ensure_ascii=False, indent=4
-                    )
+                    json.dump(processed_sentences, f, ensure_ascii=False, indent=4)
+
+            # Create Metadata
+            metadata = {"year": year, "len_year": year_index, "json_files": json_file_counter}
+            # Pickle metadata
+            if year_index > 0:
+                output_file = os.path.join(output_folder, f"{year}/metadata.pkl")
+                output_file = check_create_folder(output_file, create_folder=True)
+                with open(output_file, "wb") as f:
+                    pickle.dump(metadata, f)
