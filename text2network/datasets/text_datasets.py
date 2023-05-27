@@ -20,7 +20,7 @@ from config.dataclasses import TrainDataConfig
 from text2network.utils.file_helpers import check_create_folder
 from text2network.utils.logging_helpers import log, setup_logger
 
-nltk.download("stopwords")
+# nltk.download("stopwords")
 
 
 # Setup logging
@@ -35,7 +35,9 @@ class PreTrainDataSet(object):
     """
 
     @log(logging_level=20, other_loggers=30)
-    def __init__(self, config: TrainDataConfig, logging_level=20, other_loggers=30):
+    def __init__(
+        self, config: TrainDataConfig, logging_level=20, other_loggers=30, fixed_llm: str = None
+    ):
         self.config = config
         self.data_path = config.data_path
         self.logging_level = logging_level
@@ -57,22 +59,34 @@ class PreTrainDataSet(object):
         self.dirs = self.dirs[1:]
         self.json_folders = {}
         self.llms = []
-        logger.info("Found {} directories in data path.".format(len(self.dirs)))
-        for i, dir in enumerate(self.dirs):
-            dir_name = dir.split("/")[-1]
-            logger.debug("Loading data in directory: {}".format(dir_name))
+        if fixed_llm is None:
+            logger.info("Found {} directories in data path.".format(len(self.dirs)))
+            for i, dir in enumerate(self.dirs):
+                dir_name = dir.split("/")[-1]
+                logger.debug("Loading data in directory: {}".format(dir_name))
+                json_files = [x[2] for x in os.walk(dir)][0]
+                json_files = [x for x in json_files if x.endswith(".json")]
+                if len(json_files) == 0:
+                    logger.warning(f"No json files found in directory {dir_name}. Continuing.")
+                    continue
+                else:
+                    logger.debug("Found {} json files in directory.".format(len(json_files)))
+                    self.json_folders[dir_name] = json_files
+                    self.llms.append(dir_name)
+
+            logger.info("Found {} LLMs to train.".format(len(self.llms)))
+            logger.debug("LLM: {}".format(self.llms))
+        else:
+            self.llms = [fixed_llm]
+            dir = os.path.join(self.data_path, fixed_llm)
             json_files = [x[2] for x in os.walk(dir)][0]
             json_files = [x for x in json_files if x.endswith(".json")]
             if len(json_files) == 0:
-                logger.warning(f"No json files found in directory {dir_name}. Continuing.")
-                continue
+                logger.error(f"No json files found in directory {fixed_llm}.")
+                raise AttributeError
             else:
                 logger.debug("Found {} json files in directory.".format(len(json_files)))
-                self.json_folders[dir_name] = json_files
-                self.llms.append(dir_name)
-
-        logger.info("Found {} LLMs to train.".format(len(self.llms)))
-        logger.debug("LLM: {}".format(self.llms))
+                self.json_folders[fixed_llm] = json_files
 
     @log()
     def make_dataset(self, llm: str, val_items=None, streaming=True) -> DatasetDict:
@@ -115,15 +129,28 @@ class PreTrainDataSet(object):
 
         if val_items > 0:
             logger.debug("Splitting dataset for LLM: {}".format(llm))
-            train_dataset = dataset["train"].skip(val_items)
-            val_dataset = dataset["train"].take(val_items)
+            if streaming:
+                train_dataset = dataset["train"].skip(val_items)
+                val_dataset = dataset["train"].take(val_items)
+            else:
+                train_dataset = dataset["train"].train_test_split(
+                    test_size=val_items, shuffle=False
+                )["train"]
+                val_dataset = dataset["train"].train_test_split(test_size=val_items, shuffle=False)[
+                    "test"
+                ]
             dataset["train"] = train_dataset
             dataset["validation"] = val_dataset
             logger.debug("Split dataset for LLM: {}".format(llm))
         return dataset
 
     @log()
-    def get_missing_tokens(self, llm_list: list[str], tokenizer: Tokenizer) -> list:
+    def compute_length(self, llm):
+        dataset = self.make_dataset(llm=llm, val_items=0, streaming=True)
+        return sum(1 for _ in dataset["train"])
+
+    @log()
+    def get_missing_tokens(self, llm_list: list[str], tokenizer: Tokenizer) -> pd.DataFrame:
         """Gets missing tokens for a list of llm to train
         and combines them into a single list, where frequency cutoff determines which to drop
         """

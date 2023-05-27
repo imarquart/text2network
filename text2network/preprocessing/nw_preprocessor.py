@@ -90,8 +90,7 @@ class TextPreprocessor:
             json_file_counter = 1
 
             logger.debug(f"Processing year {year}")
-
-            for file in files:
+            for file in tqdm(files, desc="Iterating files in {} ".format(folder), leave=False):
                 logger.debug(f"Processing file {file}")
                 file_index = 0
                 if file.endswith(".txt"):

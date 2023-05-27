@@ -23,35 +23,43 @@ class TrainDataConfig:
     llm: str | None = None
     new_word_cutoff: int = 10
     shuffle_buffer_size: int = 10_000
+    group_by_length: bool = True
     world_size: int = 1
-    dataloader_num_workers: int = 1
-    rank: int = -1
+    dataloader_num_workers: int = 0
+    dataloader_drop_last: bool = True
+    rank: int = 1
     seed: int = 42
 
 
 @dataclass
 class LLMConfig:
-    model_name_or_path: None | str = None
-    llm: str| None= None
+    model_name_or_path: str | None = None
+    tokenizer_name_or_path: str | None = None
+    llm: str | None = None
+    resume_from_checkpoint: str | None = None
+    model_output_folder: str = "trained_models"
 
 
 @dataclass
 class TrainingConfig:
     data: TrainDataConfig
-    model_path: str
-    output_folder: str
-    llm: LLMConfig | None = None
-    trainer_args: TrainingArguments | None = None
+    output_folder: str = "data/output/trained_models"
+    llm: LLMConfig = LLMConfig()
     logging_folder: str = "logs/training"
-    logging_level: int = 20
-    other_loggers: int = 30
+    logging_level: int = logging.DEBUG
+    other_loggers: int = logging.WARNING
     mlm_probability: float = 0.2
     max_seq_length: int = 40
     gpu_batch: int = 120
-    num_workers: int = 4
     epochs: int = 1000
+    max_steps: int = 10000000
+    num_train_epochs: int | None = None
+    max_eval_steps: int = 1000
     warmup_steps: int = 0
     save_steps: int = 500000
     eval_steps: int = 500
     eval_loss_limit: float = 0.5
     loss_limit: float = 0.45
+    pad_tokenizer: bool = True
+    fp16: bool = False
+    gradient_accumulation_steps: int = 1

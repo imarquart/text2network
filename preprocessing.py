@@ -1,20 +1,17 @@
 # %% Imports
 import argparse
-import configparser
-import json
 import logging
-import os
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
 
 import nltk
 import yaml
 
 from config.dataclasses import PreProcessConfig
-
 # Import components from our package
 from text2network.preprocessing.nw_preprocessor import TextPreprocessor
-from text2network.utils.file_helpers import check_create_folder, check_folder
-from text2network.utils.logging_helpers import log, setup_logger
+from text2network.utils.logging_helpers import setup_logger
+
+nltk.download("stopwords")
 
 
 def load_config(file_path):
@@ -37,6 +34,8 @@ def main(args):
             input_folder=args.folder if args.folder else "data/raw",
             output_folder=args.output_folder if args.output_folder else "data/preprocessed",
         )
+    setup_logger(logging_path = config.logging_folder ,logging_level=config.logging_level)
+
     preprocessor = TextPreprocessor(**asdict(config))
     preprocessor.preprocess(
         args.folder if args.folder else config.input_folder,

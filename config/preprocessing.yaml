@@ -5,3 +5,4 @@ logging_level: 10
 other_loggers: 30
 input_folder: "data/raw"
 output_folder: "data/preprocessed"
+logging_folder: logs/preprocessing
