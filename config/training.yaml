@@ -30,7 +30,7 @@ max_eval_steps: 1000
 max_seq_length: 40
 max_steps: 10000000
 mlm_probability: 0.2
-num_train_epochs: null
+num_train_epochs: 5
 other_loggers: 30
 output_folder: data/output/trained_models
 pad_tokenizer: true

@@ -9,7 +9,8 @@ from dataclasses import asdict, dataclass
 import nltk
 import yaml
 
-from config.dataclasses import PreProcessConfig, TrainingConfig
+from config.dataclasses import LLMConfig, PreProcessConfig, TrainDataConfig, TrainingConfig
+
 # Import components from our package
 from text2network.preprocessing.nw_preprocessor import TextPreprocessor
 from text2network.training.bert_trainer import model_trainer
@@ -22,17 +23,24 @@ nltk.download("stopwords")
 def load_config(file_path):
     with open(file_path, "r") as f:
         config_dict = yaml.safe_load(f)
+    data_config = TrainDataConfig(**config_dict["data"])
+    config_dict["data"] = data_config
+    llm_config = LLMConfig(**config_dict["llm"])
+    config_dict["llm"] = llm_config
     return TrainingConfig(**config_dict)
 
 
 def main(args):
-    config = load_config(args.config)
+    if args.config:
+        config = load_config(args.config)
+    else:
+        config = load_config("config/training.yaml")
     if args.logging_level:
         config.logging_level = args.logging_level
     if args.other_loggers:
         config.other_loggers = args.other_loggers
-    setup_logger(logging_path = config.logging_folder ,logging_level=config.logging_level)
-    trainer = model_trainer(**asdict(config))
+    setup_logger(logging_path=config.logging_folder, logging_level=config.logging_level)
+    trainer = model_trainer(config=config)
     trainer.train_models()
 
 

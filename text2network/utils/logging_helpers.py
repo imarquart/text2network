@@ -50,11 +50,6 @@ def setup_logger(logging_path, logging_level, filename="log"):
         datefmt="%m/%d/%Y %H:%M:%S",
         level=logging_level,
     )
-    logger.basicConfig(
-        format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
-        datefmt="%m/%d/%Y %H:%M:%S",
-        level=logging_level,
-    )
     # Logging path
     logging_path = check_create_folder(logging_path)
 
@@ -69,3 +64,5 @@ def setup_logger(logging_path, logging_level, filename="log"):
     )
     fileHandler.setFormatter(logFormatter)
     rootLogger.addHandler(fileHandler)
+    for x in logger.handlers:
+        x.setFormatter(logFormatter)
