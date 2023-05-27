@@ -1,5 +1,5 @@
 import logging
-from os import mkdir
+from os import mkdir, makedirs
 from os.path import exists, normpath
 from pathlib import Path
 
@@ -41,7 +41,7 @@ def check_create_folder(folder, create_folder=True):
         if create_folder:
             try:
                 logging.info("Folder {} does not exist. Creating folder.".format(db_folder))
-                mkdir(db_folder)
+                makedirs(db_folder)
             except:
                 msg = "Could not create folder {}".format(db_folder)
                 logging.error(msg)
