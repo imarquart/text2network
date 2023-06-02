@@ -324,6 +324,7 @@ class nw_processor():
         for batch, token_ids, index_vec, seq_id_vec, runindex_vec, year_vec, p1_vec, p2_vec, p3_vec, p4_vec, pos_vec, sentiment_vec, subject_vec in tqdm.tqdm(
                 dataloader,
                 desc="Iteration"):
+
             # batch, seq_ids, token_ids
             # Data spent on loading batch
             # load_time = time.time() - start_time
@@ -336,7 +337,9 @@ class nw_processor():
 
             unknown_token = self.tokenizer.unk_token_id
             # Deal with missing tokens due to elimination of word-pieces
-            not_missing = token_ids != 100
+            not_missing = token_ids != unknown_token
+            missing=token_ids == unknown_token
+            org_token = token_ids.clone()
             token_ids = token_ids[not_missing]
             index_vec = index_vec[not_missing]
             seq_id_vec = seq_id_vec[not_missing]
@@ -349,6 +352,7 @@ class nw_processor():
             pos_vec = pos_vec[not_missing]
             sentiment_vec = sentiment_vec[not_missing]
             subject_vec = subject_vec[not_missing]
+            predictions = predictions[not_missing,...]
 
             # %% Sequence Table
             # Iterate over sequences
@@ -374,8 +378,25 @@ class nw_processor():
                 # idx[0, :sequence_size] = token_ids[sequence_mask]
                 # Pad and add distributions per token, we need to save to maximum sequence size
                 dists = torch.zeros([self.MAX_SEQ_LENGTH, self.DICT_SIZE], requires_grad=False)
+                if sequence_mask.shape[0] != predictions.shape[0]:
+                    print("Error!")
+                    print(f"{not_missing}")
+                    print(f"{predictions.shape}")
+                    print(f"{not_missing.shape}")
+                    print(f"{sequence_mask.shape}")
+                    print(f"{batch}")
+                    print(f"{token_ids}")
+                    print(f"{org_token}")
+                    print(f"{run_index}")
+                    
+                    print(f"{runindex_vec.shape}")
+                    print(f"{predictions[missing,...]}")
 
+                
+                
                 dists[:sequence_size, :] = predictions[sequence_mask, :]
+                
+                #dists = predictions
 
                 # Context element selection matrix
                 seq_ce = torch.ones([sequence_size, sequence_size])
