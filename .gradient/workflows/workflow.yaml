@@ -1,0 +1,25 @@
+"on":
+  github:
+    branches:
+      only: feature/package_update
+jobs:
+  CloneRepo:
+    resources:
+      instance-type: C5
+    outputs:
+      repo:
+        type: volume
+    uses: git-checkout@v1
+    with:
+      url: context.event.github.url
+  HelloWorld:
+    resources:
+      instance-type: C5
+    needs:
+      - CloneRepo
+    inputs:
+      repo: CloneRepo.outputs.repo
+    uses: script@v1
+    with:
+      script: python /inputs/repo/preprocessing.py --config config/preprocessing.yaml
+      image: tensorflow/tensorflow:1.14.0-py3

@@ -1,0 +1,38 @@
+data:
+  cache_dir: cache
+  data_path: data/preprocessed/
+  dataloader_drop_last: true
+  dataloader_num_workers: 0
+  group_by_length: true
+  llm: null
+  new_word_cutoff: 10
+  rank: 1
+  seed: 42
+  shuffle_buffer_size: 10000
+  val_items: 1000
+  world_size: 1
+llm:
+  llm: null
+  model_name_or_path: bert-base-uncased
+  model_output_folder: default_output
+  resume_from_checkpoint: null
+  tokenizer_name_or_path: null
+epochs: 1000
+eval_loss_limit: 0.5
+eval_steps: 500
+fp16: false
+gpu_batch: 120
+gradient_accumulation_steps: 1
+logging_folder: logs/training
+logging_level: 10
+loss_limit: 0.45
+max_eval_steps: 1000
+max_seq_length: 40
+max_steps: 10000000
+mlm_probability: 0.2
+num_train_epochs: 5
+other_loggers: 30
+output_folder: data/output/trained_models
+pad_tokenizer: true
+save_steps: 500000
+warmup_steps: 0
