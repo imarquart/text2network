@@ -1,5 +1,5 @@
 import logging
-from os import mkdir, makedirs
+from os import makedirs, mkdir
 from os.path import exists, normpath
 from pathlib import Path
 
@@ -9,7 +9,7 @@ def check_folder(folder):
 
 
 import logging
-from os import mkdir, makedirs
+from os import makedirs, mkdir
 from os.path import exists, normpath
 from pathlib import Path
 
