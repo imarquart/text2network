@@ -9,15 +9,15 @@ from dataclasses import asdict, dataclass
 import nltk
 import yaml
 
-from config.dataclasses import LLMConfig, PreProcessConfig, TrainDataConfig, TrainingConfig
-
+from config.dataclasses import (LLMConfig, PreProcessConfig, TrainDataConfig,
+                                TrainingConfig)
 # Import components from our package
 from text2network.preprocessing.nw_preprocessor import TextPreprocessor
 from text2network.training.bert_trainer import model_trainer
 from text2network.utils.file_helpers import check_create_folder, check_folder
 from text2network.utils.logging_helpers import log, setup_logger
 
-nltk.download("stopwords")
+#nltk.download("stopwords")
 
 
 def load_config(file_path):
