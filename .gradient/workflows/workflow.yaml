@@ -21,5 +21,5 @@ jobs:
       repo: CloneRepo.outputs.repo
     uses: script@v1
     with:
-      script: python /inputs/repo/preprocessing.py --config config/preprocessing.yaml
+      script: python /inputs/repo/hello.py
       image: tensorflow/tensorflow:1.14.0-py3
