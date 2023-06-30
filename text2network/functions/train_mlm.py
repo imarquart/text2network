@@ -39,15 +39,44 @@ def train_mlm_simple(config: TrainingConfig):
 
     set_seed(config.data.seed)
 
-    # Load model and tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(
-        config.llm.tokenizer_name_or_path
-        if config.llm.tokenizer_name_or_path is not None
-        else config.llm.model_name_or_path
+    # Set up training args and accelerate
+    training_args = TrainingArguments(
+        output_dir=os.path.join(config.llm.model_output_folder, "checkpoints/"),
+        logging_dir=os.path.join(config.llm.model_output_folder, "logs/"),
+        logging_strategy="steps",
+        logging_steps=config.eval_steps,
+        overwrite_output_dir=True,
+        do_train=True,
+        do_eval=True,
+        evaluation_strategy="steps",
+        eval_steps=config.eval_steps,
+        seed=config.data.seed,
+        save_steps=config.save_steps,
+        gradient_accumulation_steps=config.gradient_accumulation_steps,
+        per_device_train_batch_size=config.gpu_batch,
+        per_device_eval_batch_size=config.gpu_batch,
+        dataloader_drop_last=config.data.dataloader_drop_last,
+        dataloader_num_workers=config.data.dataloader_num_workers,
+        max_steps=config.max_steps,
     )
-    model = AutoModelForMaskedLM.from_pretrained(config.llm.model_name_or_path)
-    # Dataset class
-    pts = PreTrainDataSet(config.data, fixed_llm=config.llm.llm)
+
+    logger.info(
+        f"Begin training for {config.data.llm}! \n "
+        f"Running in mode {training_args.parallel_mode}. \n "
+        f"Current process rank: {training_args.local_rank} of GPU {training_args.n_gpu} "
+        f"for world size {training_args.world_size}.   \n "
+    )
+
+    with training_args.main_process_first(desc="Grab model and dataset"):
+        # Load model and tokenizer
+        tokenizer = AutoTokenizer.from_pretrained(
+            config.llm.tokenizer_name_or_path
+            if config.llm.tokenizer_name_or_path is not None
+            else config.llm.model_name_or_path
+        )
+        model = AutoModelForMaskedLM.from_pretrained(config.llm.model_name_or_path)
+        # Dataset class
+        pts = PreTrainDataSet(config.data, fixed_llm=config.llm.llm)
     # Data collator
     # This one will take care of randomly masking the tokens.
     pad_to_multiple_of_8 = not config.pad_tokenizer
@@ -91,33 +120,14 @@ def train_mlm_simple(config: TrainingConfig):
     train_dataset = datasets["train"].with_format("torch")
     eval_dataset = datasets["validation"].with_format("torch")
 
-    train_dataset = train_dataset.map(
-        tokenize_function, batched=True, batch_size=config.data.shuffle_buffer_size
-    ).remove_columns(["sentence"])
+    with training_args.main_process_first(desc="Dataset map tokenization"):
+        train_dataset = train_dataset.map(
+            tokenize_function, batched=True, batch_size=config.data.shuffle_buffer_size
+        ).remove_columns(["sentence"])
 
-    eval_dataset = eval_dataset.map(
-        tokenize_function, batched=True, batch_size=config.data.shuffle_buffer_size
-    ).remove_columns(["sentence"])
-
-    training_args = TrainingArguments(
-        output_dir=os.path.join(config.llm.model_output_folder, "checkpoints/"),
-        logging_dir=os.path.join(config.llm.model_output_folder, "logs/"),
-        logging_strategy="steps",
-        logging_steps=config.eval_steps,
-        overwrite_output_dir=True,
-        do_train=True,
-        do_eval=True,
-        evaluation_strategy="steps",
-        eval_steps=config.eval_steps,
-        seed=config.data.seed,
-        save_steps=config.save_steps,
-        gradient_accumulation_steps=config.gradient_accumulation_steps,
-        per_device_train_batch_size=config.gpu_batch,
-        per_device_eval_batch_size=config.gpu_batch,
-        dataloader_drop_last=config.data.dataloader_drop_last,
-        dataloader_num_workers=config.data.dataloader_num_workers,
-        max_steps=config.max_steps,
-    )
+        eval_dataset = eval_dataset.map(
+            tokenize_function, batched=True, batch_size=config.data.shuffle_buffer_size
+        ).remove_columns(["sentence"])
 
     # Cut dataset size
     if isinstance(train_dataset, Dataset):
