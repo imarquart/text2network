@@ -1,7 +1,7 @@
 "on":
   github:
     branches:
-      only: feature/package_update
+      only: main
 jobs:
   CloneRepo:
     resources:
